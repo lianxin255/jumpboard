@@ -11,7 +11,7 @@ function renderExtra(extra: string | null, indent = '    '): string[] {
 }
 
 /** 公共：HTTP/HTTPS 转发头 */
-function proxyHeaders(indent = '        '): string[] {
+function proxyHeaders(indent = '      '): string[] {
   return [
     `${indent}proxy_set_header Host $host;`,
     `${indent}proxy_set_header X-Real-IP $remote_addr;`,

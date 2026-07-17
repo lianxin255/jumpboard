@@ -56,6 +56,11 @@ describe('renderHttpServer', () => {
     const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, serverNames: null, upstreamHost: '10.0.0.3', upstreamPort: 3000 }))
     expect(out.join('\n')).not.toContain('server_name')
   })
+  it('extraDirectives 在 location 块内正确缩进渲染', () => {
+    const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, upstreamHost: '10.0.0.3', upstreamPort: 3000, extraDirectives: 'proxy_buffering off;' }))
+    const conf = out.join('\n')
+    expect(conf).toContain('proxy_buffering off;')
+  })
 })
 
 describe('renderHttpsServer', () => {
@@ -80,5 +85,13 @@ describe('renderHttpsServer', () => {
       tlsCertPath: '/c.pem', tlsKeyPath: '/k.pem', redirectHttp: 0
     }))
     expect(out.join('\n')).not.toContain('listen 80;')
+  })
+  it('tlsCertPath 为 null 时省略 ssl_certificate 行', () => {
+    const out = renderHttpsServer(base({
+      protocol: 'https', serverNames: 's.local',
+      upstreamHost: '10.0.0.4', upstreamPort: 8443,
+      tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0
+    }))
+    expect(out.join('\n')).not.toContain('ssl_certificate')
   })
 })
