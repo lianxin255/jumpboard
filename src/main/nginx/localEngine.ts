@@ -1,4 +1,5 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
+import { dirname } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
 
@@ -26,21 +27,32 @@ export class LocalNginxEngine implements NginxEngine {
     for (const d of [this.cfg.logDir, this.cfg.tempDir]) {
       if (!existsSync(d)) mkdirSync(d, { recursive: true })
     }
-    // nginx 用 -g 'daemon off;' 前台运行，便于进程生命周期管理
+    // nginx 用 -g 'daemon off;' 前台运行，便于进程生命周期管理。
+    // -p prefix 指向 nginx 二进制所在目录（bundledNginxDir），这是 nginx 期望的"家目录"
+    // 结构（含 conf/mime.types 等相对路径基准）。conf/logs/temp/pid 用绝对路径在 conf 里指定。
+    const nginxDir = dirname(this.cfg.nginxPath)
     this.child = spawn(this.cfg.nginxPath, [
       '-c', this.cfg.confPath,
-      '-p', this.cfg.tempDir,
+      '-p', nginxDir,
       '-g', 'daemon off;'
     ], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     })
 
+    // 收集 stderr 用于错误诊断（nginx 启动失败的真实原因写在这里）
+    let stderrBuf = ''
+
     // 关键：必须监听 'error' 事件，否则 spawn 失败（EPERM/ENOENT 竞态等）
     // 会触发 unhandled 'error' event 导致 Electron main 进程崩溃
     await new Promise<void>((resolve, reject) => {
       const child = this.child!
       let settled = false
+
+      // 收集 stderr
+      if (child.stderr) {
+        child.stderr.on('data', (d: Buffer) => { stderrBuf += d.toString() })
+      }
 
       const onExit = (code: number | null) => {
         if (settled) return
@@ -50,10 +62,11 @@ export class LocalNginxEngine implements NginxEngine {
         // 启动窗口期内子进程就退出 = 启动失败。该 child 已死，
         // 必须清空 this.child，否则 status() 会因 killed=false 误报 running。
         if (this.child === child) this.child = null
+        const detail = stderrBuf.trim()
         if (code !== 0 && code !== null) {
-          reject(new Error(`nginx exited with code ${code}`))
+          reject(new Error(`nginx exited with code ${code}${detail ? '\n' + detail : ''}`))
         } else {
-          reject(new Error('nginx exited immediately after start'))
+          reject(new Error(`nginx exited immediately after start${detail ? '\n' + detail : ''}`))
         }
       }
 
@@ -111,7 +124,8 @@ export class LocalNginxEngine implements NginxEngine {
 
   async test(): Promise<EngineTestResult> {
     return new Promise((resolve) => {
-      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', this.cfg.tempDir],
+      const nginxDir = dirname(this.cfg.nginxPath)
+      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', nginxDir],
         (err: any, stdout: string, stderr: string) => {
           const output = (stdout + stderr).trim()
           if (err) resolve({ ok: false, output })
