@@ -1,0 +1,22 @@
+appId: com.nginx-jump-gui.app
+productName: Nginx跳板机
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!**/.DS_Store"
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  artifactName: NginxJump-${version}-portable.exe
+extraResources:
+  - from: resources/nginx
+    to: nginx
+    filter: ['**/*']
+  - from: src/main/templates/builtin
+    to: templates/builtin
+    filter: ['**/*.yml']

@@ -48,4 +48,12 @@ describe('paths', () => {
     expect(existsSync(join(dataDir, 'snapshots'))).toBe(true)
     expect(existsSync(join(dataDir, 'temp'))).toBe(true)
   })
+
+  it('PORTABLE_EXECUTABLE_DIR 优先于 production 分支', () => {
+    __setAppRootForTest(null)
+    process.env.PORTABLE_EXECUTABLE_DIR = '/fake/portable'
+    const p = resolvePaths()
+    expect(p.appRoot).toBe('/fake/portable')
+    delete process.env.PORTABLE_EXECUTABLE_DIR
+  })
 })

@@ -3,17 +3,21 @@ import { mkdirSync } from 'fs'
 
 let appRootForTest: string | null = null
 
-export function __setAppRootForTest(root: string): void {
+export function __setAppRootForTest(root: string | null): void {
   appRootForTest = root
 }
 
 function getAppRoot(): string {
   if (appRootForTest) return appRootForTest
-  // 生产环境：exe 所在目录；开发环境：项目根目录
+  // portable 模式：electron-builder 注入此环境变量，指向真正 exe 所在目录
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return process.env.PORTABLE_EXECUTABLE_DIR
+  }
+  // 生产环境（非 portable，如 nsis 安装版）：exe 所在目录
   if (process.env.NODE_ENV === 'production') {
-    // electron-builder portable 下，process.execPath 指向 exe
     return dirname(process.execPath)
   }
+  // 开发环境：项目根目录
   return process.cwd()
 }
 
