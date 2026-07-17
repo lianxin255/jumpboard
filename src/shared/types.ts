@@ -1,2 +1,95 @@
-// 共享类型定义 - 在后续 task 中填充
-export {}
+// ============ Host ============
+export type HostType = 'local' | 'remote'
+
+export interface Host {
+  id: string
+  name: string
+  type: HostType
+  isDefault: number // 0 | 1
+  localConfig: LocalHostConfig | null
+  remoteConfig: RemoteHostConfig | null
+  status: EngineStatus
+  createdAt: number
+}
+
+export interface LocalHostConfig {
+  nginxPath: string       // 可空，空则用 bundled
+  confDir: string         // 可空，空则用 data/nginx-conf
+  logDir: string          // 可空
+}
+
+export interface RemoteHostConfig {
+  host: string
+  port: number            // SSH 端口，默认 22
+  username: string
+  authType: 'password' | 'key'
+  passwordEncrypted: string | null  // safeStorage 加密后 base64
+  keyPath: string | null
+  nginxPath: string
+  confPath: string        // 远程 conf 主文件路径
+  reloadCmd: string       // 默认 nginx -s reload
+  testCmd: string         // 默认 nginx -t
+}
+
+// ============ Mapping ============
+export type Protocol = 'tcp' | 'udp' | 'http' | 'https'
+export type HealthStatus = 'healthy' | 'unhealthy' | 'unknown' | 'checking'
+
+export interface Mapping {
+  id: string
+  hostId: string
+  name: string
+  enabled: number         // 0 | 1
+  protocol: Protocol
+  listenPort: number | null
+  serverNames: string | null
+  listenPath: string | null
+  upstreamHost: string
+  upstreamPort: number
+  tlsCertPath: string | null
+  tlsKeyPath: string | null
+  redirectHttp: number    // 0 | 1
+  extraDirectives: string | null
+  healthCheckEnabled: number
+  healthCheckIntervalSec: number
+  healthCheckTargetPath: string | null
+  healthCheckExpectedStatus: number | null
+  healthStatus: HealthStatus
+  lastCheckedAt: number | null
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
+
+// 输入用（无 id/时间戳/healthStatus，由后端填）
+export type MappingInput = Omit<Mapping, 'id' | 'createdAt' | 'updatedAt' | 'healthStatus' | 'lastCheckedAt' | 'sortOrder'>
+
+// ============ Nginx Engine ============
+export type EngineStatus = 'running' | 'stopped' | 'unknown'
+
+export interface EngineTestResult {
+  ok: boolean
+  output: string
+}
+
+// ============ IPC 通道 ============
+export const IPC = {
+  // Host
+  HOST_LIST: 'host:list',
+  HOST_CREATE: 'host:create',
+  HOST_UPDATE: 'host:update',
+  HOST_DELETE: 'host:delete',
+  // Mapping
+  MAPPING_LIST: 'mapping:list',
+  MAPPING_CREATE: 'mapping:create',
+  MAPPING_UPDATE: 'mapping:update',
+  MAPPING_DELETE: 'mapping:delete',
+  // Engine
+  ENGINE_START: 'engine:start',
+  ENGINE_STOP: 'engine:stop',
+  ENGINE_RELOAD: 'engine:reload',
+  ENGINE_TEST: 'engine:test',
+  ENGINE_STATUS: 'engine:status',
+} as const
+
+export type IpcChannel = typeof IPC[keyof typeof IPC]
