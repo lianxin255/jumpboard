@@ -78,6 +78,14 @@ async function save() {
   if (isStream.value && !form.value.listenPort) { error.value = '请填写监听端口'; return }
   if (isHttps.value && (!form.value.tlsCertPath || !form.value.tlsKeyPath)) { error.value = 'HTTPS 需要证书和私钥路径'; return }
 
+  // 端口占用检测（仅 stream/http 监听端口）
+  if ((isStream.value || isHttp.value) && form.value.listenPort) {
+    const available = await api.checkPort(form.value.listenPort)
+    if (!available) {
+      if (!confirm(`端口 ${form.value.listenPort} 已被占用，仍要保存吗？`)) return
+    }
+  }
+
   saving.value = true
   try {
     const f = form.value

@@ -8,10 +8,13 @@ import MappingList from '@renderer/components/MappingList.vue'
 import MappingForm from '@renderer/components/MappingForm.vue'
 import TemplatePicker from '@renderer/components/TemplatePicker.vue'
 import EngineControl from '@renderer/components/EngineControl.vue'
+import LogViewer from '@renderer/components/LogViewer.vue'
+import HistoryPanel from '@renderer/components/HistoryPanel.vue'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
 const templates = useTemplatesStore()
+const currentView = ref<'mappings' | 'logs' | 'history'>('mappings')
 const showForm = ref(false)
 const showPicker = ref(false)
 const pickedTemplate = ref<Template | null>(null)
@@ -55,10 +58,17 @@ async function onSaved() {
       <select v-model="hosts.currentHostId">
         <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</option>
       </select>
+      <div class="nav-tabs">
+        <button :class="{ active: currentView === 'mappings' }" @click="currentView = 'mappings'">映射</button>
+        <button :class="{ active: currentView === 'logs' }" @click="currentView = 'logs'">日志</button>
+        <button :class="{ active: currentView === 'history' }" @click="currentView = 'history'">历史</button>
+      </div>
       <EngineControl ref="engineRef" />
     </header>
     <main>
-      <MappingList @new="openNew" @edit="openEdit" />
+      <MappingList v-if="currentView === 'mappings'" @new="openNew" @edit="openEdit" />
+      <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
+      <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
     </main>
     <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
     <MappingForm v-if="showForm"
@@ -77,4 +87,7 @@ async function onSaved() {
 h1 { font-size: 18px; margin: 0; font-weight: 600; }
 select { padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; }
 main { flex: 1; overflow-y: auto; }
+.nav-tabs { display: flex; gap: 4px; margin-left: 8px; }
+.nav-tabs button { padding: 6px 14px; border: none; border-radius: 8px; background: transparent; color: #555; cursor: pointer; font-size: 14px; }
+.nav-tabs button.active { background: #0A84FF; color: #fff; }
 </style>
