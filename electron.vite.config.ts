@@ -2,8 +2,13 @@ import { defineConfig } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+const sharedDir = resolve(__dirname, 'src/shared')
+const rendererDir = resolve(__dirname, 'src/renderer')
+
+// alias 对象 key 不带尾斜杠时，Vite（@rollup/plugin-alias）会自动做前缀匹配，
+// 因此 '@shared' 能匹配 '@shared/types'，'@renderer' 能匹配 '@renderer/...'。
 const sharedAlias = {
-  '@shared': resolve(__dirname, 'src/shared')
+  '@shared': sharedDir
 }
 
 export default defineConfig({
@@ -33,7 +38,7 @@ export default defineConfig({
     resolve: {
       alias: {
         ...sharedAlias,
-        '@renderer': resolve(__dirname, 'src/renderer')
+        '@renderer': rendererDir
       }
     },
     plugins: [vue()]
