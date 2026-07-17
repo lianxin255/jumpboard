@@ -12,6 +12,11 @@ export interface ElectronAPI {
   reloadEngine(): Promise<{ ok: boolean; output: string }>
   testEngine(): Promise<{ ok: boolean; output: string }>
   engineStatus(): Promise<string>
+  // Template
+  listTemplates(): Promise<any[]>
+  listBuiltinTemplates(): Promise<any[]>
+  saveCustomTemplate(tpl: any): Promise<boolean>
+  deleteCustomTemplate(id: string): Promise<boolean>
 }
 
 declare global {
