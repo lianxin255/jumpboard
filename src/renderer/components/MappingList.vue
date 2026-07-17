@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { PlusOutlined } from '@antdv-next/icons'
 import { useMappingsStore } from '@renderer/stores/mappings'
 const store = useMappingsStore()
 const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
@@ -15,10 +16,13 @@ const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
         <div class="name">{{ m.name }}</div>
         <div class="meta">{{ m.protocol.toUpperCase() }} · {{ m.listenPort }} → {{ m.upstreamHost }}:{{ m.upstreamPort }}</div>
       </div>
-      <input type="checkbox" :checked="m.enabled === 1"
-        @click.stop @change="store.toggle(m.id, m.enabled === 1 ? 0 : 1)" />
+      <a-switch size="small" :checked="m.enabled === 1"
+        @click.stop @change="store.toggle(m.id, $event ? 1 : 0)" />
     </div>
-    <button class="new-btn btn btn-primary" @click="emit('new')">+ 新建映射</button>
+    <a-button class="new-btn" type="primary" @click="emit('new')">
+      <template #icon><PlusOutlined /></template>
+      新建映射
+    </a-button>
   </div>
 </template>
 
