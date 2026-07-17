@@ -13,8 +13,8 @@
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "build:portable": "electron-vite build && electron-builder --win portable",
-    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
