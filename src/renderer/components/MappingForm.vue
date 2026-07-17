@@ -3,7 +3,8 @@ import { ref, computed } from 'vue'
 import { api } from '@renderer/api/ipc'
 import type { Template } from '@renderer/stores/templates'
 
-const props = defineProps<{ hostId: string; mappingId?: string; template?: Template | null }>()
+// 注意：prop 名不能用 template（与 Vue SFC <template> 标签 + 保留字冲突，会导致模板内引用异常）
+const props = defineProps<{ hostId: string; mappingId?: string; templateData?: Template | null }>()
 const emit = defineEmits<{ (e: 'saved'): void; (e: 'cancel'): void }>()
 
 interface FormState {
@@ -41,7 +42,7 @@ function templateToForm(tpl: Template | null | undefined): FormState {
   }
 }
 
-const form = ref<FormState>(templateToForm(props.template))
+const form = ref<FormState>(templateToForm(props.templateData))
 
 // 编辑模式：加载已有 mapping（覆盖模板预填）
 async function loadExisting() {
@@ -128,7 +129,7 @@ async function save() {
 <template>
   <div class="form-overlay" @click.self="emit('cancel')">
     <div class="form-card glass-card">
-      <h3>{{ mappingId ? '编辑映射' : (template ? '从模板新建' : '新建映射') }}</h3>
+      <h3>{{ mappingId ? '编辑映射' : (templateData ? '从模板新建' : '新建映射') }}</h3>
       <label>名称<input v-model="form.name" class="glass-input" placeholder="如：MySQL 内库" /></label>
       <label>协议
         <select v-model="form.protocol" class="glass-input">

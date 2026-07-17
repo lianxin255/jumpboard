@@ -80,7 +80,7 @@ async function onSaved() {
     <MappingForm v-if="showForm"
       :host-id="hosts.currentHostId!"
       :mapping-id="editingId"
-      :template="pickedTemplate"
+      :template-data="pickedTemplate"
       @saved="onSaved"
       @cancel="showForm = false" />
   </div>

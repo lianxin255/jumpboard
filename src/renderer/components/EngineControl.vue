@@ -9,13 +9,21 @@ const error = ref('')
 async function refresh() { try { status.value = await api.engineStatus() } catch (e: any) { error.value = e.message } }
 async function start() {
   busy.value = true; error.value = ''
-  try { status.value = await api.startEngine() }
+  try {
+    const r = await api.startEngine()
+    status.value = r.status
+    if (r.error) { error.value = r.error; alert('启动失败:\n' + r.error) }
+  }
   catch (e: any) { error.value = e.message; alert('启动失败:\n' + e.message) }
   finally { busy.value = false }
 }
 async function stop() {
   busy.value = true; error.value = ''
-  try { status.value = await api.stopEngine() }
+  try {
+    const r = await api.stopEngine()
+    status.value = r.status
+    if (r.error) { error.value = r.error; alert('停止失败:\n' + r.error) }
+  }
   catch (e: any) { error.value = e.message; alert('停止失败:\n' + e.message) }
   finally { busy.value = false }
 }

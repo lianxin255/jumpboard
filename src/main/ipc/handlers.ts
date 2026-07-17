@@ -49,8 +49,26 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.MAPPING_DELETE, (_e, id: string) => { deleteMapping(id); return true })
 
   // Engine
-  ipcMain.handle(IPC.ENGINE_START, async () => { const eng = getActiveEngine(); if (eng) await eng.start(); return eng?.status() ?? 'unknown' })
-  ipcMain.handle(IPC.ENGINE_STOP, async () => { const eng = getActiveEngine(); if (eng) await eng.stop(); return eng?.status() ?? 'unknown' })
+  ipcMain.handle(IPC.ENGINE_START, async () => {
+    const eng = getActiveEngine()
+    if (!eng) return { status: 'unknown', error: '没有活动的 nginx 引擎（未选中主机或主机非本地类型）' }
+    try {
+      await eng.start()
+      return { status: eng.status(), error: null }
+    } catch (e: any) {
+      return { status: eng.status(), error: e?.message ?? String(e) }
+    }
+  })
+  ipcMain.handle(IPC.ENGINE_STOP, async () => {
+    const eng = getActiveEngine()
+    if (!eng) return { status: 'unknown', error: null }
+    try {
+      await eng.stop()
+      return { status: eng.status(), error: null }
+    } catch (e: any) {
+      return { status: eng.status(), error: e?.message ?? String(e) }
+    }
+  })
   ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
     const eng = getActiveEngine()
     if (!eng) return { ok: false, output: 'no active engine' }

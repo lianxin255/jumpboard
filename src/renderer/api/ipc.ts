@@ -7,8 +7,8 @@ export interface ElectronAPI {
   createMapping(input: any): Promise<any>
   updateMapping(id: string, patch: any): Promise<any>
   deleteMapping(id: string): Promise<boolean>
-  startEngine(): Promise<string>
-  stopEngine(): Promise<string>
+  startEngine(): Promise<{ status: string; error: string | null }>
+  stopEngine(): Promise<{ status: string; error: string | null }>
   reloadEngine(): Promise<{ ok: boolean; output: string }>
   testEngine(): Promise<{ ok: boolean; output: string }>
   engineStatus(): Promise<string>
