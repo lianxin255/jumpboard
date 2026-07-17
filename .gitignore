@@ -4,6 +4,3 @@ dist/
 data/
 *.log
 .DS_Store
-
-# TypeScript composite build artifacts
-*.tsbuildinfo
