@@ -13,6 +13,7 @@ win:
       arch:
         - x64
   artifactName: NginxJump-${version}-portable.exe
+  icon: build/icon.ico
 extraResources:
   - from: resources/nginx
     to: nginx
