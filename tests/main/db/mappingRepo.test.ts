@@ -89,4 +89,50 @@ describe('mappingRepo', () => {
     const b = createMapping(tcpInput(hostId, { name: 'b' }))
     expect(b.sortOrder).toBeGreaterThan(a.sortOrder)
   })
+
+  it('updateMapping 不影响 sortOrder/healthStatus/createdAt', () => {
+    const m = createMapping(tcpInput(hostId))
+    const origSort = m.sortOrder
+    const origCreated = m.createdAt
+    updateMapping(m.id, { listenPort: 7777, name: 'changed' })
+    const got = getMapping(m.id)
+    expect(got?.sortOrder).toBe(origSort)
+    expect(got?.healthStatus).toBe('unknown')
+    expect(got?.createdAt).toBe(origCreated)
+    expect(got?.listenPort).toBe(7777)
+    expect(got?.name).toBe('changed')
+  })
+
+  it('全字段往返：createMapping 的所有字段都能通过 getMapping 读回', () => {
+    const input = tcpInput(hostId, {
+      name: '全字段',
+      enabled: 1,
+      protocol: 'tcp',
+      listenPort: 12345,
+      serverNames: null,
+      listenPath: null,
+      upstreamHost: '10.0.0.5',
+      upstreamPort: 5432,
+      tlsCertPath: null,
+      tlsKeyPath: null,
+      redirectHttp: 0,
+      extraDirectives: 'proxy_timeout 2h;',
+      healthCheckEnabled: 1,
+      healthCheckIntervalSec: 60,
+      healthCheckTargetPath: null,
+      healthCheckExpectedStatus: null,
+    })
+    const m = createMapping(input)
+    const got = getMapping(m.id)
+    expect(got).toBeDefined()
+    expect(got?.name).toBe('全字段')
+    expect(got?.protocol).toBe('tcp')
+    expect(got?.listenPort).toBe(12345)
+    expect(got?.upstreamHost).toBe('10.0.0.5')
+    expect(got?.upstreamPort).toBe(5432)
+    expect(got?.extraDirectives).toBe('proxy_timeout 2h;')
+    expect(got?.healthCheckEnabled).toBe(1)
+    expect(got?.healthCheckIntervalSec).toBe(60)
+    expect(got?.hostId).toBe(hostId)
+  })
 })
