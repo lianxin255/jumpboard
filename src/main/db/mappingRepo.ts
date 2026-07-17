@@ -97,3 +97,9 @@ export function updateMapping(id: string, patch: Partial<MappingInput>): void {
 export function deleteMapping(id: string): void {
   getDb().prepare('DELETE FROM mappings WHERE id = ?').run(id)
 }
+
+/** 健康检查服务专用：只更新 healthStatus + lastCheckedAt，不动其他字段 */
+export function updateHealthStatus(id: string, healthStatus: HealthStatus, lastCheckedAt: number): void {
+  getDb().prepare(`UPDATE mappings SET health_status = ?, last_checked_at = ? WHERE id = ?`)
+    .run(healthStatus, lastCheckedAt, id)
+}

@@ -1,6 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { applyMappings } from '@main/nginx/applyFlow'
+import { createSnapshot } from '@main/db/snapshotRepo'
+import { logger } from '@main/services/logger'
 import type { Mapping, EngineTestResult } from '@shared/types'
+
+vi.mock('@main/db/snapshotRepo', () => ({
+  createSnapshot: vi.fn(),
+  trimSnapshots: vi.fn(),
+}))
+vi.mock('@main/services/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+}))
 
 function mapping(over: Partial<Mapping> = {}): Mapping {
   return {
@@ -34,6 +44,10 @@ function makeEngine(opts: {
 }
 
 describe('applyMappings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('test 通过 → writeConf + reload', async () => {
     const eng = makeEngine()
     const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
@@ -64,5 +78,19 @@ describe('applyMappings', () => {
     const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
     expect(result.conf).toContain('stream {')
     expect(result.conf).toContain('listen 9000;')
+  })
+
+  it('成功时存配置快照（hostId 提供时）', async () => {
+    const eng = makeEngine()
+    await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
+    expect(createSnapshot).toHaveBeenCalledWith(expect.objectContaining({ hostId: 'h1', reason: 'reload' }))
+    expect(logger.info).toHaveBeenCalled()
+  })
+
+  it('校验失败时写 warn 日志不存快照', async () => {
+    const eng = makeEngine({ testResult: { ok: false, output: 'bad config' } })
+    await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
+    expect(logger.warn).toHaveBeenCalled()
+    expect(createSnapshot).not.toHaveBeenCalled()
   })
 })

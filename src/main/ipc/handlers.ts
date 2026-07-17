@@ -35,7 +35,8 @@ export function registerIpcHandlers(): void {
     const mappings = listEnabledMappings(host.id)
     const result = await applyMappings(eng, mappings, {
       nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir
+      nginxTempDir: paths.tempDir,
+      hostId: host.id
     })
     return { ok: result.ok, output: result.output }
   })
