@@ -1,5 +1,5 @@
 import { join, dirname } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { mkdirSync } from 'fs'
 
 let appRootForTest: string | null = null
 
@@ -33,9 +33,7 @@ export interface AppPaths {
 export function resolvePaths(): AppPaths {
   const appRoot = getAppRoot()
   const dataDir = join(appRoot, 'data')
-  const resourcesDir = process.env.NODE_ENV === 'production'
-    ? join(appRoot, 'resources')
-    : join(appRoot, 'resources')
+  const resourcesDir = join(appRoot, 'resources')
 
   return {
     appRoot,
@@ -57,7 +55,7 @@ export function resolvePaths(): AppPaths {
         join(dataDir, 'snapshots'),
         join(dataDir, 'temp')
       ]) {
-        if (!existsSync(d)) mkdirSync(d, { recursive: true })
+        mkdirSync(d, { recursive: true })
       }
     }
   }
