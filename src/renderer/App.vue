@@ -11,11 +11,12 @@ import EngineControl from '@renderer/components/EngineControl.vue'
 import LogViewer from '@renderer/components/LogViewer.vue'
 import HistoryPanel from '@renderer/components/HistoryPanel.vue'
 import HostManager from '@renderer/components/HostManager.vue'
+import SettingsPanel from '@renderer/components/SettingsPanel.vue'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
 const templates = useTemplatesStore()
-const currentView = ref<'mappings' | 'logs' | 'history' | 'hosts'>('mappings')
+const currentView = ref<'mappings' | 'logs' | 'history' | 'hosts' | 'settings'>('mappings')
 const showForm = ref(false)
 const showPicker = ref(false)
 const pickedTemplate = ref<Template | null>(null)
@@ -64,6 +65,7 @@ async function onSaved() {
         <button :class="{ active: currentView === 'logs' }" @click="currentView = 'logs'">日志</button>
         <button :class="{ active: currentView === 'history' }" @click="currentView = 'history'">历史</button>
         <button :class="{ active: currentView === 'hosts' }" @click="currentView = 'hosts'">主机</button>
+        <button :class="{ active: currentView === 'settings' }" @click="currentView = 'settings'">设置</button>
       </div>
       <EngineControl ref="engineRef" />
     </header>
@@ -72,6 +74,7 @@ async function onSaved() {
       <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
       <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
       <HostManager v-else-if="currentView === 'hosts'" />
+      <SettingsPanel v-else-if="currentView === 'settings'" />
     </main>
     <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
     <MappingForm v-if="showForm"
