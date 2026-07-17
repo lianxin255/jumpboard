@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Modal, message } from 'antdv-next'
+import { ReloadOutlined, RollbackOutlined } from '@antdv-next/icons'
 import { useSnapshotsStore } from '@renderer/stores/snapshots'
 import { api } from '@renderer/api/ipc'
 
@@ -23,18 +25,26 @@ async function viewContent(id: string) {
   selectedContent.value = snap?.content ?? ''
 }
 
-async function rollback() {
+function rollback() {
   if (!selectedId.value) return
-  if (!confirm('确定回滚到选中的配置？当前配置将被覆盖。')) return
-  rolling.value = true
-  try {
-    const result = await store.rollback(selectedId.value)
-    if (!result.ok) { alert('回滚失败:\n' + result.output); return }
-    emit('rolled-back')
-    await refresh()
-  } finally {
-    rolling.value = false
-  }
+  Modal.confirm({
+    title: '确认回滚',
+    content: '当前配置将被覆盖。',
+    okType: 'danger',
+    okText: '回滚',
+    cancelText: '取消',
+    onOk: async () => {
+      rolling.value = true
+      try {
+        const result = await store.rollback(selectedId.value!)
+        if (!result.ok) { message.error('回滚失败: ' + result.output); return }
+        emit('rolled-back')
+        await refresh()
+      } finally {
+        rolling.value = false
+      }
+    },
+  })
 }
 
 function formatTime(ts: number): string {
@@ -46,8 +56,14 @@ function formatTime(ts: number): string {
   <div class="history-panel">
     <div class="toolbar">
       <h3>配置历史</h3>
-      <button class="btn btn-ghost" @click="refresh">刷新</button>
-      <button class="btn btn-primary" :disabled="!selectedId || rolling" @click="rollback">回滚到选中</button>
+      <a-button @click="refresh">
+        <template #icon><ReloadOutlined /></template>
+        刷新
+      </a-button>
+      <a-button danger :disabled="!selectedId || rolling" @click="rollback">
+        <template #icon><RollbackOutlined /></template>
+        回滚到选中
+      </a-button>
     </div>
     <div class="body">
       <div class="snap-list">
