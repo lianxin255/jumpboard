@@ -60,7 +60,7 @@ export function getHost(id: string): Host | undefined {
 export function updateHost(id: string, patch: Partial<CreateHostInput>): void {
   const cur = getHost(id)
   if (!cur) throw new Error(`Host not found: ${id}`)
-  const merged = { ...cur, ...patch } as CreateHostInput & Host
+  const merged: Host = { ...cur, ...patch }
   getDb().prepare(`UPDATE hosts SET name=?, type=?, is_default=?, local_config=?, remote_config=? WHERE id=?`)
     .run(merged.name, merged.type, merged.isDefault,
       merged.localConfig ? JSON.stringify(merged.localConfig) : null,
@@ -81,6 +81,6 @@ export function setDefaultHost(id: string): void {
 }
 
 export function getDefaultHost(): Host | undefined {
-  const row = getDb().prepare('SELECT * FROM hosts WHERE is_default = 1 LIMIT 1').get() as HostRow | undefined
+  const row = getDb().prepare('SELECT * FROM hosts WHERE is_default = 1 ORDER BY created_at LIMIT 1').get() as HostRow | undefined
   return row ? rowToHost(row) : undefined
 }
