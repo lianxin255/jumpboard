@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
+import { copyFileSync, existsSync } from 'fs'
 import { resolvePaths } from './paths'
 import { openDb, closeDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -46,6 +47,18 @@ async function initEngineForDefaultHost() {
     engine = new LocalNginxEngine({
       nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir
     })
+    // 把内置 mime.types 复制到 nginx 工作目录，让 `include mime.types;` 能解析。
+    // Windows nginx 对 include 的相对路径是相对 `-p` prefix（即 tempDir）解析的，
+    // 而不是相对 conf 文件目录。tempDir 和 nginxConfDir 都覆盖（belt-and-suspenders），
+    // 确保无论 nginx 以哪种解析方式都能找到。
+    // 注意：此处依赖 whenReady 中已调用过 paths.ensureDataDirs()，tempDir/nginxConfDir 已存在。
+    const bundledMime = join(paths.bundledNginxDir, 'mime.types')
+    if (existsSync(bundledMime)) {
+      for (const targetDir of [paths.tempDir, paths.nginxConfDir]) {
+        const dest = join(targetDir, 'mime.types')
+        try { copyFileSync(bundledMime, dest) } catch { /* 忽略，可能已存在或目标只读 */ }
+      }
+    }
     // local：生成初始 conf（即使没 mapping，也要有最小 conf）
     const mappings = listEnabledMappings(host.id)
     const conf = generateFullConf(mappings, {

@@ -14,13 +14,17 @@ import { resolvePaths } from '../paths'
  * 先用 `__dirname/builtin` 这条最稳的路径探测；找不到再回退到编译模式的相对路径。
  */
 function getBuiltinDir(): string {
-  if (process.env.NODE_ENV === 'production') {
-    return join(process.resourcesPath, 'templates', 'builtin')
+  // 打包环境（含 portable）：electron-builder 把模板复制到 resources/templates/builtin，
+  // Electron 注入 process.resourcesPath 指向 app 的 resources 目录。
+  // 注意：NODE_ENV 在 portable 下不一定被设，用 process.resourcesPath 检测更可靠。
+  if (process.resourcesPath && process.resourcesPath !== 'None') {
+    const packaged = join(process.resourcesPath, 'templates', 'builtin')
+    if (existsSync(packaged)) return packaged
   }
   // vitest 运行源文件时 __dirname 是 src/main/templates，内置模板就在 ./builtin
   const fromHere = join(__dirname, 'builtin')
   if (existsSync(fromHere)) return fromHere
-  // electron-vite 编译后 __dirname 是 out/main，回溯到项目根再进 src
+  // electron-vite 编译后（开发模式 npm run dev）__dirname 是 out/main，回溯到 src
   return join(__dirname, '..', '..', '..', 'src', 'main', 'templates', 'builtin')
 }
 

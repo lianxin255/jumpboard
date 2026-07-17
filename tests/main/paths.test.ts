@@ -53,7 +53,14 @@ describe('paths', () => {
     __setAppRootForTest(null)
     process.env.PORTABLE_EXECUTABLE_DIR = '/fake/portable'
     const p = resolvePaths()
-    expect(p.appRoot).toBe('/fake/portable')
+    expect(p.dataRoot).toBe('/fake/portable')
+    expect(p.dataDir).toBe('/fake/portable/data')
     delete process.env.PORTABLE_EXECUTABLE_DIR
+  })
+
+  it('resourcesDir 在开发模式下基于 dataRoot/resources', () => {
+    const p = resolvePaths()
+    expect(p.resourcesDir).toBe(join(testRoot, 'resources'))
+    expect(p.bundledNginxDir).toBe(join(testRoot, 'resources', 'nginx'))
   })
 })
