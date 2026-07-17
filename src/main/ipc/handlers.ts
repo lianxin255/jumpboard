@@ -1,8 +1,11 @@
 import { ipcMain } from 'electron'
+import { join } from 'path'
+import { rmSync, existsSync } from 'fs'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
 import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
 import { listMappings, createMapping, updateMapping, deleteMapping, listEnabledMappings, getMapping } from '../db/mappingRepo'
+import { closeDb } from '../db/connection'
 import { setActiveEngine, getActiveEngine, refreshActiveStatus } from '../nginx/engineRegistry'
 import { listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate } from '../templates/templateRepo'
 import { applyMappings } from '../nginx/applyFlow'
@@ -11,6 +14,7 @@ import { listLogs } from '../db/logRepo'
 import { listSnapshots, getSnapshot } from '../db/snapshotRepo'
 import { isPortAvailable } from '../services/portCheck'
 import { checkMapping } from '../services/healthCheck'
+import { exportData, importData } from '../services/dataTransfer'
 import { SshClient } from '../ssh/client'
 import { encryptPassword, decryptPassword } from '../crypto'
 
@@ -134,5 +138,41 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.ENGINE_REFRESH_STATUS, async () => {
     await refreshActiveStatus()
     return getActiveEngine()?.status() ?? 'unknown'
+  })
+
+  // 一键清除所有痕迹
+  ipcMain.handle(IPC.DATA_WIPE, async () => {
+    try {
+      const eng = getActiveEngine()
+      if (eng && eng.status() === 'running') {
+        await eng.stop()
+      }
+      const paths = resolvePaths()
+      closeDb()
+      for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates']) {
+        const p = join(paths.dataDir, sub)
+        if (existsSync(p)) {
+          rmSync(p, { recursive: true, force: true })
+        }
+      }
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, output: e?.message ?? String(e) }
+    }
+  })
+
+  // 导出配置
+  ipcMain.handle(IPC.DATA_EXPORT, () => {
+    return exportData()
+  })
+
+  // 导入配置
+  ipcMain.handle(IPC.DATA_IMPORT, (_e, payload: any) => {
+    try {
+      const result = importData(payload)
+      return { ok: true, ...result }
+    } catch (e: any) {
+      return { ok: false, output: e?.message ?? String(e) }
+    }
   })
 }

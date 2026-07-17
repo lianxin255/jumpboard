@@ -36,6 +36,10 @@ const api = {
   // Host 管理
   testHostConnection: (remoteConfig: any) => ipcRenderer.invoke(IPC.HOST_TEST_CONNECTION, remoteConfig),
   refreshEngineStatus: () => ipcRenderer.invoke(IPC.ENGINE_REFRESH_STATUS),
+  // 数据管理
+  wipeAllData: () => ipcRenderer.invoke(IPC.DATA_WIPE),
+  exportData: () => ipcRenderer.invoke(IPC.DATA_EXPORT),
+  importData: (payload: any) => ipcRenderer.invoke(IPC.DATA_IMPORT, payload),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

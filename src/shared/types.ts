@@ -109,6 +109,10 @@ export const IPC = {
   // Host 管理
   HOST_TEST_CONNECTION: 'host:test-connection',
   ENGINE_REFRESH_STATUS: 'engine:refresh-status',
+  // 数据管理
+  DATA_WIPE: 'data:wipe',
+  DATA_EXPORT: 'data:export',
+  DATA_IMPORT: 'data:import',
 } as const
 
 // ============ Log ============

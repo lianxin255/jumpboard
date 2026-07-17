@@ -30,6 +30,10 @@ export interface ElectronAPI {
   // Host 管理
   testHostConnection(remoteConfig: any): Promise<{ ok: boolean; output: string }>
   refreshEngineStatus(): Promise<string>
+  // 数据管理
+  wipeAllData(): Promise<{ ok: boolean; output?: string }>
+  exportData(): Promise<any>
+  importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number }>
 }
 
 declare global {
