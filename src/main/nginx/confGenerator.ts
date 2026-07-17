@@ -1,26 +1,21 @@
 import type { Mapping } from '@shared/types'
+import { renderTcpServer, renderUdpServer, renderHttpServer, renderHttpsServer } from './renderers'
 
 export interface ConfGenOptions {
   nginxLogDir: string
   nginxTempDir: string
-  // httpPort / httpsPort 可扩展，本 plan 不用
 }
 
-/**
- * 生成完整的 nginx.conf。
- * 本 plan 只处理 tcp（stream）。udp/http/https 留到 Plan 2。
- */
 export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): string {
   const enabled = mappings.filter(m => m.enabled)
 
   const tcpMappings = enabled.filter(m => m.protocol === 'tcp')
-  // 预留，Plan 2 实现
   const udpMappings = enabled.filter(m => m.protocol === 'udp')
-  const httpMappings = enabled.filter(m => m.protocol === 'http' || m.protocol === 'https')
+  const httpMappings = enabled.filter(m => m.protocol === 'http')
+  const httpsMappings = enabled.filter(m => m.protocol === 'https')
 
-  // UDP 渲染留到 Plan 2；在此之前 hasStream 只看 TCP，避免输出空 stream {} 块
-  const hasStream = tcpMappings.length > 0
-  const hasHttp = httpMappings.length > 0
+  const hasStream = tcpMappings.length > 0 || udpMappings.length > 0
+  const hasHttp = httpMappings.length > 0 || httpsMappings.length > 0
 
   const lines: string[] = []
   lines.push('# 由 nginx-jump-gui 自动生成，请勿手动编辑')
@@ -40,39 +35,25 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
     lines.push('  client_body_temp_path ' + opts.nginxTempDir + '/client_body;')
     lines.push('  proxy_temp_path ' + opts.nginxTempDir + '/proxy;')
     lines.push('  include mime.types;')
-    lines.push('  # http/https server 块在 Plan 2 实现')
+    if (httpMappings.length > 0) {
+      lines.push('  # ---------- HTTP server 块 ----------')
+      for (const m of httpMappings) lines.push(...renderHttpServer(m))
+    }
+    if (httpsMappings.length > 0) {
+      lines.push('  # ---------- HTTPS server 块 ----------')
+      for (const m of httpsMappings) lines.push(...renderHttpsServer(m))
+    }
     lines.push('}')
     lines.push('')
   }
 
   if (hasStream) {
     lines.push('stream {')
-    for (const m of tcpMappings) {
-      lines.push(...renderTcpServer(m))
-    }
-    // udp 在 Plan 2
+    for (const m of tcpMappings) lines.push(...renderTcpServer(m))
+    for (const m of udpMappings) lines.push(...renderUdpServer(m))
     lines.push('}')
     lines.push('')
   }
 
   return lines.join('\n')
-}
-
-function renderTcpServer(m: Mapping): string[] {
-  if (m.listenPort == null) {
-    // listenPort 为空的 TCP 映射无法生成有效配置，跳过（不应发生，表单会校验）
-    return []
-  }
-  const out: string[] = []
-  out.push(`  # mapping: ${m.name}`)
-  out.push('  server {')
-  out.push(`    listen ${m.listenPort};`)
-  out.push(`    proxy_pass ${m.upstreamHost}:${m.upstreamPort};`)
-  if (m.extraDirectives && m.extraDirectives.trim()) {
-    for (const line of m.extraDirectives.split('\n')) {
-      if (line.trim()) out.push('    ' + line.trim())
-    }
-  }
-  out.push('  }')
-  return out
 }

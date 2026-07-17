@@ -72,4 +72,29 @@ describe('confGenerator TCP', () => {
     expect(conf).not.toContain('listen null;')
     expect(conf).not.toContain('server {')
   })
+
+  it('UDP only 时生成 stream 块含 listen udp', () => {
+    const conf = generateFullConf([tcpMapping({ protocol: 'udp', listenPort: 5353, upstreamPort: 53 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    expect(conf).toContain('stream {')
+    expect(conf).toContain('listen 5353 udp;')
+    expect(conf).not.toContain('\nhttp {')
+  })
+
+  it('HTTP 映射生成 http 块', () => {
+    const conf = generateFullConf([tcpMapping({ protocol: 'http', listenPort: 8080, serverNames: 'a.local', listenPath: '/', upstreamPort: 3000 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    expect(conf).toContain('http {')
+    expect(conf).toContain('server_name a.local;')
+    expect(conf).toContain('proxy_pass http://')
+    expect(conf).not.toContain('stream {')
+  })
+
+  it('混合 TCP + HTTPS 同时生成 stream 和 http 块', () => {
+    const conf = generateFullConf([
+      tcpMapping({ protocol: 'tcp', listenPort: 9000, upstreamPort: 3306 }),
+      tcpMapping({ protocol: 'https', listenPort: null, serverNames: 's.local', tlsCertPath: '/c.pem', tlsKeyPath: '/k.pem', upstreamPort: 8443, redirectHttp: 1 })
+    ], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    expect(conf).toContain('stream {')
+    expect(conf).toContain('http {')
+    expect(conf).toContain('listen 443 ssl;')
+  })
 })
