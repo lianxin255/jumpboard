@@ -1,4 +1,4 @@
-import { defineConfig } from 'electron-vite'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
@@ -13,6 +13,10 @@ const sharedAlias = {
 
 export default defineConfig({
   main: {
+    // externalizeDepsPlugin 把 package.json 的 dependencies（含 native 模块 better-sqlite3）
+    // 标记为 external，运行时从 node_modules 加载，避免 native .node 文件被 rollup
+    // 尝试 bundle 导致 "Could not dynamically require '*.node'" 错误。
+    plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts') }
@@ -21,6 +25,7 @@ export default defineConfig({
     resolve: { alias: sharedAlias }
   },
   preload: {
+    plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') }
@@ -44,3 +49,4 @@ export default defineConfig({
     plugins: [vue()]
   }
 })
+
