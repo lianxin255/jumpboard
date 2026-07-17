@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+data/
+*.log
+.DS_Store
+
+# TypeScript composite build artifacts
+*.tsbuildinfo
