@@ -7,6 +7,19 @@ export interface Host {
   name: string
   type: 'local' | 'remote'
   isDefault: number
+  remoteConfig?: {
+    host?: string
+    port?: number
+    username?: string
+    authType?: string
+    passwordEncrypted?: string | null
+    keyPath?: string | null
+    nginxPath?: string
+    confPath?: string
+    reloadCmd?: string
+    testCmd?: string
+  } | null
+  localConfig?: { nginxPath?: string; confDir?: string; logDir?: string } | null
 }
 
 export const useHostsStore = defineStore('hosts', () => {
@@ -21,5 +34,24 @@ export const useHostsStore = defineStore('hosts', () => {
 
   function setCurrent(id: string) { currentHostId.value = id }
 
-  return { hosts, currentHostId, load, setCurrent }
+  async function create(input: any) {
+    await api.createHost(input)
+    await load()
+  }
+  async function update(id: string, patch: any) {
+    await api.updateHost(id, patch)
+    await load()
+  }
+  async function remove(id: string) {
+    await api.deleteHost(id)
+    await load()
+  }
+  async function testConnection(remoteConfig: any) {
+    return await api.testHostConnection(remoteConfig)
+  }
+  async function refreshStatus() {
+    return await api.refreshEngineStatus()
+  }
+
+  return { hosts, currentHostId, load, setCurrent, create, update, remove, testConnection, refreshStatus }
 })
