@@ -1,9 +1,12 @@
 import { ipcMain } from 'electron'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
-import { listHosts, createHost, updateHost, deleteHost, type CreateHostInput } from '../db/hostRepo'
-import { listMappings, createMapping, updateMapping, deleteMapping } from '../db/mappingRepo'
+import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
+import { listMappings, createMapping, updateMapping, deleteMapping, listEnabledMappings } from '../db/mappingRepo'
 import { setActiveEngine, getActiveEngine } from '../nginx/engineRegistry'
+import { listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate } from '../templates/templateRepo'
+import { applyMappings } from '../nginx/applyFlow'
+import { resolvePaths } from '../paths'
 
 export { setActiveEngine }
 
@@ -23,7 +26,25 @@ export function registerIpcHandlers(): void {
   // Engine
   ipcMain.handle(IPC.ENGINE_START, async () => { const eng = getActiveEngine(); if (eng) await eng.start(); return eng?.status() ?? 'unknown' })
   ipcMain.handle(IPC.ENGINE_STOP, async () => { const eng = getActiveEngine(); if (eng) await eng.stop(); return eng?.status() ?? 'unknown' })
-  ipcMain.handle(IPC.ENGINE_RELOAD, async () => { const eng = getActiveEngine(); if (eng) await eng.reload(); return true })
+  ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
+    const eng = getActiveEngine()
+    if (!eng) return { ok: false, output: 'no active engine' }
+    const host = getDefaultHost()
+    if (!host) return { ok: false, output: 'no default host' }
+    const paths = resolvePaths()
+    const mappings = listEnabledMappings(host.id)
+    const result = await applyMappings(eng, mappings, {
+      nginxLogDir: paths.nginxLogDir,
+      nginxTempDir: paths.tempDir
+    })
+    return { ok: result.ok, output: result.output }
+  })
   ipcMain.handle(IPC.ENGINE_TEST, async () => { const eng = getActiveEngine(); return eng ? eng.test() : { ok: false, output: 'no engine' } })
   ipcMain.handle(IPC.ENGINE_STATUS, () => getActiveEngine()?.status() ?? 'unknown')
+
+  // Template
+  ipcMain.handle(IPC.TEMPLATE_LIST, () => listAllTemplates())
+  ipcMain.handle(IPC.TEMPLATE_LIST_BUILTIN, () => listBuiltinTemplates())
+  ipcMain.handle(IPC.TEMPLATE_SAVE_CUSTOM, (_e, tpl: any) => { saveCustomTemplate(tpl); return true })
+  ipcMain.handle(IPC.TEMPLATE_DELETE_CUSTOM, (_e, id: string) => { deleteCustomTemplate(id); return true })
 }

@@ -24,7 +24,8 @@ async function reload() {
   try {
     const r = await api.testEngine()
     if (!r.ok) { alert('配置校验失败:\n' + r.output); return }
-    await api.reloadEngine()
+    const result = await api.reloadEngine()
+    if (!result.ok) { alert('应用失败:\n' + result.output); return }
     status.value = await api.engineStatus()
   } catch (e: any) { error.value = e.message; alert('应用失败:\n' + e.message) }
   finally { busy.value = false }

@@ -18,6 +18,11 @@ const api = {
   reloadEngine: () => ipcRenderer.invoke(IPC.ENGINE_RELOAD),
   testEngine: () => ipcRenderer.invoke(IPC.ENGINE_TEST),
   engineStatus: () => ipcRenderer.invoke(IPC.ENGINE_STATUS),
+  // Template
+  listTemplates: () => ipcRenderer.invoke(IPC.TEMPLATE_LIST),
+  listBuiltinTemplates: () => ipcRenderer.invoke(IPC.TEMPLATE_LIST_BUILTIN),
+  saveCustomTemplate: (tpl: any) => ipcRenderer.invoke(IPC.TEMPLATE_SAVE_CUSTOM, tpl),
+  deleteCustomTemplate: (id: string) => ipcRenderer.invoke(IPC.TEMPLATE_DELETE_CUSTOM, id),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

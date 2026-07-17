@@ -9,7 +9,7 @@ export interface ElectronAPI {
   deleteMapping(id: string): Promise<boolean>
   startEngine(): Promise<string>
   stopEngine(): Promise<string>
-  reloadEngine(): Promise<boolean>
+  reloadEngine(): Promise<{ ok: boolean; output: string }>
   testEngine(): Promise<{ ok: boolean; output: string }>
   engineStatus(): Promise<string>
 }
