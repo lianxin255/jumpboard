@@ -1,3 +1,7 @@
+/* 毛玻璃工具类。组合 backdrop-filter + 半透明 + 细边框 + 阴影。
+   antd 组件的玻璃质感由 glassTheme.ts 的 ConfigProvider classes 注入，
+   这里只保留自定义容器（非 antd 组件）用的 .glass-card / .glass-panel。 */
+
 .glass-card {
   background: var(--bg-glass);
   backdrop-filter: blur(var(--blur-md)) saturate(1.5);
@@ -13,51 +17,3 @@
   -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.8);
   border: 1px solid var(--border-subtle);
 }
-
-.glass-input {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--font-size-base);
-  padding: var(--space-2) var(--space-3);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.glass-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
-}
-
-.glass-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.btn {
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: var(--font-size-base);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.btn-primary {
-  background: var(--color-accent);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); }
-
-.btn-ghost {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.btn-ghost:hover:not(:disabled) { background: var(--border-subtle); }
-
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
