@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { ConfigProvider } from 'antdv-next'
+import { ThemeProvider } from 'antdv-style'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
 import { useTemplatesStore } from '@renderer/stores/templates'
 import type { Template } from '@renderer/stores/templates'
+import useGlassTheme from './glassTheme'
 import MappingList from '@renderer/components/MappingList.vue'
 import MappingForm from '@renderer/components/MappingForm.vue'
 import TemplatePicker from '@renderer/components/TemplatePicker.vue'
@@ -13,6 +16,8 @@ import HistoryPanel from '@renderer/components/HistoryPanel.vue'
 import HostManager from '@renderer/components/HostManager.vue'
 import SettingsPanel from '@renderer/components/SettingsPanel.vue'
 
+const configProps = useGlassTheme()
+
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
 const templates = useTemplatesStore()
@@ -21,7 +26,6 @@ const showForm = ref(false)
 const showPicker = ref(false)
 const pickedTemplate = ref<Template | null>(null)
 const editingId = ref<string | undefined>()
-const engineRef = ref()
 
 async function reloadAll() {
   await hosts.load()
@@ -54,36 +58,44 @@ async function onSaved() {
 </script>
 
 <template>
-  <div class="layout">
-    <header class="topbar glass-panel">
-      <h1>跳板机</h1>
-      <select v-model="hosts.currentHostId">
-        <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</option>
-      </select>
-      <div class="nav-tabs">
-        <button :class="{ active: currentView === 'mappings' }" @click="currentView = 'mappings'">映射</button>
-        <button :class="{ active: currentView === 'logs' }" @click="currentView = 'logs'">日志</button>
-        <button :class="{ active: currentView === 'history' }" @click="currentView = 'history'">历史</button>
-        <button :class="{ active: currentView === 'hosts' }" @click="currentView = 'hosts'">主机</button>
-        <button :class="{ active: currentView === 'settings' }" @click="currentView = 'settings'">设置</button>
+  <ConfigProvider v-bind="configProps">
+    <ThemeProvider>
+      <div class="layout">
+        <header class="topbar glass-panel">
+          <h1>跳板机</h1>
+          <a-select
+            v-model:value="hosts.currentHostId"
+            style="width: 160px"
+            placeholder="选择主机"
+          >
+            <a-select-option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
+          </a-select>
+          <a-tabs v-model:activeKey="currentView" type="card" class="nav-tabs" size="small">
+            <a-tab-pane key="mappings" tab="映射" />
+            <a-tab-pane key="logs" tab="日志" />
+            <a-tab-pane key="history" tab="历史" />
+            <a-tab-pane key="hosts" tab="主机" />
+            <a-tab-pane key="settings" tab="设置" />
+          </a-tabs>
+          <EngineControl ref="engineRef" />
+        </header>
+        <main>
+          <MappingList v-if="currentView === 'mappings'" @new="openNew" @edit="openEdit" />
+          <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
+          <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
+          <HostManager v-else-if="currentView === 'hosts'" />
+          <SettingsPanel v-else-if="currentView === 'settings'" />
+        </main>
+        <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
+        <MappingForm v-if="showForm"
+          :host-id="hosts.currentHostId!"
+          :mapping-id="editingId"
+          :template-data="pickedTemplate"
+          @saved="onSaved"
+          @cancel="showForm = false" />
       </div>
-      <EngineControl ref="engineRef" />
-    </header>
-    <main>
-      <MappingList v-if="currentView === 'mappings'" @new="openNew" @edit="openEdit" />
-      <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
-      <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
-      <HostManager v-else-if="currentView === 'hosts'" />
-      <SettingsPanel v-else-if="currentView === 'settings'" />
-    </main>
-    <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
-    <MappingForm v-if="showForm"
-      :host-id="hosts.currentHostId!"
-      :mapping-id="editingId"
-      :template-data="pickedTemplate"
-      @saved="onSaved"
-      @cancel="showForm = false" />
-  </div>
+    </ThemeProvider>
+  </ConfigProvider>
 </template>
 
 <style scoped>
@@ -100,46 +112,15 @@ h1 {
   font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: -0.02em;
-}
-
-.topbar select {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+  margin: 0;
 }
 
 main { flex: 1; overflow-y: auto; }
 
 .nav-tabs {
-  display: flex;
-  gap: var(--space-1);
-  margin-left: var(--space-2);
-  padding: var(--space-1);
-  background: var(--bg-hover);
-  border-radius: var(--radius-md);
+  flex: 1;
 }
-
-.nav-tabs button {
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: var(--font-size-base);
-  font-family: var(--font-sans);
-  font-weight: 500;
-  transition: all var(--transition-fast);
-}
-
-.nav-tabs button:hover { color: var(--text-primary); }
-
-.nav-tabs button.active {
-  background: var(--bg-glass-strong);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+.nav-tabs :deep(.ant-tabs-nav) {
+  margin: 0;
 }
 </style>
