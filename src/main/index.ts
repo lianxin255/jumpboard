@@ -8,6 +8,7 @@ import { LocalNginxEngine } from './nginx/localEngine'
 import { getDefaultHost, listHosts, createHost, setDefaultHost } from './db/hostRepo'
 import { listEnabledMappings } from './db/mappingRepo'
 import { generateFullConf } from './nginx/confGenerator'
+import { startHealthCheckLoop, stopHealthCheckLoop } from './services/healthCheck'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -71,6 +72,7 @@ app.whenReady().then(async () => {
     registerIpcHandlers()
     await initEngineForDefaultHost()
     createWindow()
+    startHealthCheckLoop()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -106,5 +108,6 @@ app.on('before-quit', (e) => {
       .finally(() => app.quit())
     return
   }
+  stopHealthCheckLoop()
   closeDb()
 })

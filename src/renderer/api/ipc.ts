@@ -17,6 +17,16 @@ export interface ElectronAPI {
   listBuiltinTemplates(): Promise<any[]>
   saveCustomTemplate(tpl: any): Promise<boolean>
   deleteCustomTemplate(id: string): Promise<boolean>
+  // Log
+  listLogs(hostId: string | null, limit: number): Promise<any[]>
+  // Snapshot
+  listSnapshots(hostId: string): Promise<any[]>
+  getSnapshot(id: string): Promise<any>
+  rollbackSnapshot(snapshotId: string): Promise<{ ok: boolean; output: string }>
+  // Health check
+  checkMappingNow(mappingId: string): Promise<string>
+  // Port check
+  checkPort(port: number): Promise<boolean>
 }
 
 declare global {

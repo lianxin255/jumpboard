@@ -23,6 +23,16 @@ const api = {
   listBuiltinTemplates: () => ipcRenderer.invoke(IPC.TEMPLATE_LIST_BUILTIN),
   saveCustomTemplate: (tpl: any) => ipcRenderer.invoke(IPC.TEMPLATE_SAVE_CUSTOM, tpl),
   deleteCustomTemplate: (id: string) => ipcRenderer.invoke(IPC.TEMPLATE_DELETE_CUSTOM, id),
+  // Log
+  listLogs: (hostId: string | null, limit: number) => ipcRenderer.invoke(IPC.LOG_LIST, hostId, limit),
+  // Snapshot
+  listSnapshots: (hostId: string) => ipcRenderer.invoke(IPC.SNAPSHOT_LIST, hostId),
+  getSnapshot: (id: string) => ipcRenderer.invoke(IPC.SNAPSHOT_GET, id),
+  rollbackSnapshot: (snapshotId: string) => ipcRenderer.invoke(IPC.SNAPSHOT_ROLLBACK, snapshotId),
+  // Health check
+  checkMappingNow: (mappingId: string) => ipcRenderer.invoke(IPC.HEALTH_CHECK_NOW, mappingId),
+  // Port check
+  checkPort: (port: number) => ipcRenderer.invoke(IPC.PORT_CHECK, port),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
