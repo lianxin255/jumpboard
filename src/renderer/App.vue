@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { ConfigProvider } from 'antdv-next'
-import { ThemeProvider } from 'antdv-style'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
 import { useTemplatesStore } from '@renderer/stores/templates'
 import type { Template } from '@renderer/stores/templates'
-import useGlassTheme from './glassTheme'
 import MappingList from '@renderer/components/MappingList.vue'
 import MappingForm from '@renderer/components/MappingForm.vue'
 import TemplatePicker from '@renderer/components/TemplatePicker.vue'
@@ -15,8 +12,6 @@ import LogViewer from '@renderer/components/LogViewer.vue'
 import HistoryPanel from '@renderer/components/HistoryPanel.vue'
 import HostManager from '@renderer/components/HostManager.vue'
 import SettingsPanel from '@renderer/components/SettingsPanel.vue'
-
-const configProps = useGlassTheme()
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
@@ -58,44 +53,40 @@ async function onSaved() {
 </script>
 
 <template>
-  <ConfigProvider v-bind="configProps">
-    <ThemeProvider>
-      <div class="layout">
-        <header class="topbar glass-panel">
-          <h1>跳板机</h1>
-          <a-select
-            v-model:value="hosts.currentHostId"
-            style="width: 160px"
-            placeholder="选择主机"
-          >
-            <a-select-option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
-          </a-select>
-          <a-tabs v-model:activeKey="currentView" type="card" class="nav-tabs" size="small">
-            <a-tab-pane key="mappings" tab="映射" />
-            <a-tab-pane key="logs" tab="日志" />
-            <a-tab-pane key="history" tab="历史" />
-            <a-tab-pane key="hosts" tab="主机" />
-            <a-tab-pane key="settings" tab="设置" />
-          </a-tabs>
-          <EngineControl ref="engineRef" />
-        </header>
-        <main>
-          <MappingList v-if="currentView === 'mappings'" @new="openNew" @edit="openEdit" />
-          <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
-          <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
-          <HostManager v-else-if="currentView === 'hosts'" />
-          <SettingsPanel v-else-if="currentView === 'settings'" />
-        </main>
-        <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
-        <MappingForm v-if="showForm"
-          :host-id="hosts.currentHostId!"
-          :mapping-id="editingId"
-          :template-data="pickedTemplate"
-          @saved="onSaved"
-          @cancel="showForm = false" />
-      </div>
-    </ThemeProvider>
-  </ConfigProvider>
+  <div class="layout">
+    <header class="topbar glass-panel">
+      <h1>跳板机</h1>
+      <a-select
+        v-model:value="hosts.currentHostId"
+        style="width: 160px"
+        placeholder="选择主机"
+      >
+        <a-select-option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
+      </a-select>
+      <a-tabs v-model:activeKey="currentView" type="card" class="nav-tabs" size="small">
+        <a-tab-pane key="mappings" tab="映射" />
+        <a-tab-pane key="logs" tab="日志" />
+        <a-tab-pane key="history" tab="历史" />
+        <a-tab-pane key="hosts" tab="主机" />
+        <a-tab-pane key="settings" tab="设置" />
+      </a-tabs>
+      <EngineControl ref="engineRef" />
+    </header>
+    <main>
+      <MappingList v-if="currentView === 'mappings'" @new="openNew" @edit="openEdit" />
+      <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
+      <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
+      <HostManager v-else-if="currentView === 'hosts'" />
+      <SettingsPanel v-else-if="currentView === 'settings'" />
+    </main>
+    <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
+    <MappingForm v-if="showForm"
+      :host-id="hosts.currentHostId!"
+      :mapping-id="editingId"
+      :template-data="pickedTemplate"
+      @saved="onSaved"
+      @cancel="showForm = false" />
+  </div>
 </template>
 
 <style scoped>
