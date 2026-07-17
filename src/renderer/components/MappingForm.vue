@@ -18,6 +18,8 @@ interface FormState {
   tlsKeyPath: string
   redirectHttp: boolean
   extraDirectives: string
+  healthCheckEnabled: boolean
+  healthCheckIntervalSec: number
 }
 
 function templateToForm(tpl: Template | null | undefined): FormState {
@@ -33,7 +35,9 @@ function templateToForm(tpl: Template | null | undefined): FormState {
     tlsCertPath: m.tlsCertPath ?? '',
     tlsKeyPath: m.tlsKeyPath ?? '',
     redirectHttp: m.redirectHttp === 1,
-    extraDirectives: tpl?.extraDirectives ?? m.extraDirectives ?? ''
+    extraDirectives: tpl?.extraDirectives ?? m.extraDirectives ?? '',
+    healthCheckEnabled: m.healthCheckEnabled === 1,
+    healthCheckIntervalSec: m.healthCheckIntervalSec ?? 30,
   }
 }
 
@@ -56,7 +60,9 @@ async function loadExisting() {
       tlsCertPath: m.tlsCertPath ?? '',
       tlsKeyPath: m.tlsKeyPath ?? '',
       redirectHttp: m.redirectHttp === 1,
-      extraDirectives: m.extraDirectives ?? ''
+      extraDirectives: m.extraDirectives ?? '',
+      healthCheckEnabled: m.healthCheckEnabled === 1,
+      healthCheckIntervalSec: m.healthCheckIntervalSec ?? 30,
     }
   }
 }
@@ -103,8 +109,8 @@ async function save() {
       tlsKeyPath: isHttps.value ? f.tlsKeyPath : null,
       redirectHttp: isHttps.value && f.redirectHttp ? 1 : 0,
       extraDirectives: f.extraDirectives || null,
-      healthCheckEnabled: 0,
-      healthCheckIntervalSec: 30,
+      healthCheckEnabled: f.healthCheckEnabled ? 1 : 0,
+      healthCheckIntervalSec: f.healthCheckIntervalSec,
       healthCheckTargetPath: null,
       healthCheckExpectedStatus: null,
     }
@@ -121,11 +127,11 @@ async function save() {
 
 <template>
   <div class="form-overlay" @click.self="emit('cancel')">
-    <div class="form-card">
+    <div class="form-card glass-card">
       <h3>{{ mappingId ? '编辑映射' : (template ? '从模板新建' : '新建映射') }}</h3>
-      <label>名称<input v-model="form.name" placeholder="如：MySQL 内库" /></label>
+      <label>名称<input v-model="form.name" class="glass-input" placeholder="如：MySQL 内库" /></label>
       <label>协议
-        <select v-model="form.protocol">
+        <select v-model="form.protocol" class="glass-input">
           <option value="tcp">TCP</option>
           <option value="udp">UDP</option>
           <option value="http">HTTP</option>
@@ -134,45 +140,103 @@ async function save() {
       </label>
 
       <!-- TCP/UDP: 监听端口 -->
-      <label v-if="isStream">监听端口<input v-model.number="form.listenPort" type="number" placeholder="9000" /></label>
+      <label v-if="isStream">监听端口<input v-model.number="form.listenPort" type="number" class="glass-input" placeholder="9000" /></label>
 
       <!-- HTTP: 监听端口 + 域名 + 路径 -->
-      <label v-if="isHttp">监听端口<input v-model.number="form.listenPort" type="number" placeholder="80" /></label>
-      <label v-if="isHttp || isHttps">域名 (server_name)<input v-model="form.serverNames" placeholder="app1.gw.local（可留空）" /></label>
-      <label v-if="isHttp || isHttps">路径前缀 (location)<input v-model="form.listenPath" placeholder="/" /></label>
+      <label v-if="isHttp">监听端口<input v-model.number="form.listenPort" type="number" class="glass-input" placeholder="80" /></label>
+      <label v-if="isHttp || isHttps">域名 (server_name)<input v-model="form.serverNames" class="glass-input" placeholder="app1.gw.local（可留空）" /></label>
+      <label v-if="isHttp || isHttps">路径前缀 (location)<input v-model="form.listenPath" class="glass-input" placeholder="/" /></label>
 
       <!-- HTTPS: 证书 + 跳转 -->
       <template v-if="isHttps">
-        <label>证书路径 (ssl_certificate)<input v-model="form.tlsCertPath" placeholder="/data/cert.pem" /></label>
-        <label>私钥路径 (ssl_certificate_key)<input v-model="form.tlsKeyPath" placeholder="/data/key.pem" /></label>
+        <label>证书路径 (ssl_certificate)<input v-model="form.tlsCertPath" class="glass-input" placeholder="/data/cert.pem" /></label>
+        <label>私钥路径 (ssl_certificate_key)<input v-model="form.tlsKeyPath" class="glass-input" placeholder="/data/key.pem" /></label>
         <label class="checkbox"><input type="checkbox" v-model="form.redirectHttp" /> HTTP→HTTPS 自动跳转</label>
       </template>
 
-      <label>目标主机<input v-model="form.upstreamHost" placeholder="192.168.1.10" /></label>
-      <label>目标端口<input v-model.number="form.upstreamPort" type="number" placeholder="3306" /></label>
-      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2" placeholder="proxy_timeout 1h;"></textarea></label>
+      <label>目标主机<input v-model="form.upstreamHost" class="glass-input" placeholder="192.168.1.10" /></label>
+      <label>目标端口<input v-model.number="form.upstreamPort" type="number" class="glass-input" placeholder="3306" /></label>
+      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2" class="glass-input" placeholder="proxy_timeout 1h;"></textarea></label>
+      <label class="checkbox"><input type="checkbox" v-model="form.healthCheckEnabled" /> 启用健康检查</label>
+      <label v-if="form.healthCheckEnabled">检查间隔（秒）<input v-model.number="form.healthCheckIntervalSec" type="number" min="5" class="glass-input" /></label>
       <div v-if="error" class="error">{{ error }}</div>
       <div class="actions">
-        <button class="ghost" @click="emit('cancel')">取消</button>
-        <button :disabled="saving" @click="save">保存</button>
+        <button class="btn btn-ghost" @click="emit('cancel')">取消</button>
+        <button class="btn btn-primary" :disabled="saving" @click="save">保存</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.form-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex;
-  align-items: center; justify-content: center; z-index: 10; }
-.form-card { background: #fff; border-radius: 16px; padding: 24px; width: 480px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
-h3 { margin: 0 0 16px; }
-label { display: block; margin-bottom: 12px; font-size: 13px; color: #555; }
-label.checkbox { display: flex; align-items: center; gap: 6px; }
-input, select, textarea { display: block; width: 100%; margin-top: 4px; padding: 8px;
-  border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
-label.checkbox input { width: auto; margin: 0; }
-.error { color: #ff3b30; font-size: 13px; margin-bottom: 8px; }
-.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-button { padding: 8px 16px; border: none; border-radius: 8px; background: #0A84FF; color: #fff; cursor: pointer; }
-button.ghost { background: #eee; color: #333; }
-button:disabled { opacity: 0.5; }
+.form-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.form-card {
+  padding: var(--space-6);
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+h3 {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-lg);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+label.checkbox input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+/* glass-input provides the input styling globally; here only margin-top spacing */
+input.glass-input, select.glass-input, textarea.glass-input {
+  margin-top: var(--space-1);
+}
+
+textarea.glass-input {
+  resize: vertical;
+  min-height: 48px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-2);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
 </style>
