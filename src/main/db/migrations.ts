@@ -1,6 +1,7 @@
 import type { Database } from 'better-sqlite3'
 
 export function runMigrations(db: Database): void {
+  db.pragma('foreign_keys = ON')
   db.pragma('journal_mode = WAL')
 
   db.exec(`
@@ -51,6 +52,8 @@ export function runMigrations(db: Database): void {
       created_at INTEGER NOT NULL
     );
 
+    CREATE INDEX IF NOT EXISTS idx_snapshots_host_time ON config_snapshots(host_id, created_at);
+
     CREATE TABLE IF NOT EXISTS app_logs (
       id TEXT PRIMARY KEY,
       host_id TEXT,
@@ -59,5 +62,7 @@ export function runMigrations(db: Database): void {
       message TEXT NOT NULL,
       timestamp INTEGER NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_logs_host_time ON app_logs(host_id, timestamp);
   `)
 }

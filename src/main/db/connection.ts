@@ -21,7 +21,12 @@ export function openDb(): DB {
   if (dbInstance) return dbInstance
   const path = resolveDbPath()
   const db = new Database(path)
-  runMigrations(db)
+  try {
+    runMigrations(db)
+  } catch (e) {
+    db.close()
+    throw e
+  }
   dbInstance = db
   return db
 }
