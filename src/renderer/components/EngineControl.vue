@@ -40,21 +40,51 @@ defineExpose({ refresh })
     <span class="status-dot" :class="status"></span>
     <span class="status-text">{{ status }}</span>
     <span v-if="error" class="error-text" :title="error">⚠</span>
-    <button :disabled="busy || status === 'running'" @click="start">启动</button>
-    <button :disabled="busy || status !== 'running'" @click="reload">应用</button>
-    <button :disabled="busy || status !== 'running'" @click="stop">停止</button>
+    <button class="btn btn-primary" :disabled="busy || status === 'running'" @click="start">启动</button>
+    <button class="btn btn-primary" :disabled="busy || status !== 'running'" @click="reload">应用</button>
+    <button class="btn btn-primary" :disabled="busy || status !== 'running'" @click="stop">停止</button>
   </div>
 </template>
 
 <style scoped>
-.engine-ctrl { display: flex; align-items: center; gap: 8px; padding: 8px 16px;
-  background: #f5f5f7; border-radius: 12px; }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
-.status-dot.running { background: #34c759; }
-.status-dot.stopped { background: #ff3b30; }
-.status-text { font-size: 13px; color: #555; margin-right: 8px; }
-.error-text { color: #ff3b30; font-size: 14px; cursor: help; }
-button { padding: 6px 12px; border: none; border-radius: 6px; background: #0A84FF;
-  color: #fff; font-size: 13px; cursor: pointer; }
-button:disabled { opacity: 0.4; }
+.engine-ctrl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  margin-left: auto;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.status-dot.running { background: var(--color-success); }
+.status-dot.stopped { background: var(--color-danger); }
+
+.status-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-right: var(--space-2);
+}
+
+.error-text {
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
+  cursor: help;
+}
+
+/* 覆盖 .btn 默认 padding，让引擎控制按钮更紧凑 */
+.engine-ctrl .btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+}
 </style>
