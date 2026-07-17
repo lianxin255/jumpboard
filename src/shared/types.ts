@@ -95,6 +95,39 @@ export const IPC = {
   TEMPLATE_LIST_BUILTIN: 'template:list-builtin',
   TEMPLATE_SAVE_CUSTOM: 'template:save-custom',
   TEMPLATE_DELETE_CUSTOM: 'template:delete-custom',
+  // Log
+  LOG_LIST: 'log:list',
+  LOG_ADD: 'log:add',
+  // Snapshot
+  SNAPSHOT_LIST: 'snapshot:list',
+  SNAPSHOT_GET: 'snapshot:get',
+  SNAPSHOT_ROLLBACK: 'snapshot:rollback',
+  // Health check
+  HEALTH_CHECK_NOW: 'health:check-now',
+  // Port check
+  PORT_CHECK: 'port:check',
 } as const
+
+// ============ Log ============
+export type LogLevel = 'info' | 'warn' | 'error'
+export type LogSource = 'app' | 'nginx-access' | 'nginx-error'
+
+export interface LogEntry {
+  id: string
+  hostId: string | null
+  level: LogLevel
+  source: LogSource
+  message: string
+  timestamp: number
+}
+
+// ============ ConfigSnapshot ============
+export interface ConfigSnapshot {
+  id: string
+  hostId: string
+  content: string
+  reason: string
+  createdAt: number
+}
 
 export type IpcChannel = typeof IPC[keyof typeof IPC]
