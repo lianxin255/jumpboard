@@ -11,6 +11,8 @@ export class LocalNginxEngine implements NginxEngine {
   }
 
   status(): EngineStatus {
+    // 注意：nginx 自身崩溃时，killed 标志仍为 false，直到 exit 事件触发置空 this.child。
+    // 此窗口期（通常 <10ms）status 可能短暂报告 running。GUI 通过错误日志反映真实崩溃。
     return this.child && !this.child.killed ? 'running' : 'stopped'
   }
 
@@ -34,33 +36,69 @@ export class LocalNginxEngine implements NginxEngine {
       stdio: ['ignore', 'pipe', 'pipe']
     })
 
-    this.child.on('exit', () => { this.child = null })
-
-    // 等待一小段时间确认进程还在（没立即崩）
+    // 关键：必须监听 'error' 事件，否则 spawn 失败（EPERM/ENOENT 竞态等）
+    // 会触发 unhandled 'error' event 导致 Electron main 进程崩溃
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (this.child && !this.child.killed) resolve()
-        else reject(new Error('nginx exited immediately after start'))
-      }, 500)
-      this.child!.once('exit', (code) => {
+      const child = this.child!
+      let settled = false
+
+      const onExit = (code: number | null) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        child.removeListener('error', onError)
+        // 启动窗口期内子进程就退出 = 启动失败。该 child 已死，
+        // 必须清空 this.child，否则 status() 会因 killed=false 误报 running。
+        if (this.child === child) this.child = null
         if (code !== 0 && code !== null) {
-          clearTimeout(timer)
           reject(new Error(`nginx exited with code ${code}`))
+        } else {
+          reject(new Error('nginx exited immediately after start'))
         }
-      })
+      }
+
+      const onError = (err: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        child.removeListener('exit', onExit)
+        this.child = null
+        reject(err)
+      }
+
+      const timer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        // 启动成功：500ms 后进程仍存活。移除一次性监听器，保留长期的 exit 监听用于状态跟踪
+        child.removeListener('exit', onExit)
+        child.removeListener('error', onError)
+        resolve()
+      }, 500)
+
+      child.once('exit', onExit)
+      child.once('error', onError)
     })
+
+    // 注册长期 exit 监听，用于 status() 跟踪进程是否退出
+    // 关键：捕获具体的子进程实例 c，并用 identity 守卫。
+    // 否则旧子进程的 exit 晚到（SIGKILL 是异步的）会误 null 已经指向新子进程的 this.child。
+    const c = this.child!
+    c.on('exit', () => { if (this.child === c) this.child = null })
   }
 
   async stop(): Promise<void> {
     if (!this.child) return
-    this.child.kill('SIGTERM')
+    // 捕获本次要停止的子进程实例 c。SIGTERM/SIGKILL 发给 c，
+    // null 时必须校验 this.child === c，避免晚到的 exit 误清新子进程引用。
+    const c = this.child
+    c.kill('SIGTERM')
     await new Promise<void>((resolve) => {
       const t = setTimeout(() => {
-        if (this.child) this.child!.kill('SIGKILL')
+        if (this.child === c) this.child!.kill('SIGKILL')
         resolve()
       }, 3000)
-      const onExit = () => { clearTimeout(t); this.child = null; resolve() }
-      this.child!.once('exit', onExit)
+      const onExit = () => { clearTimeout(t); if (this.child === c) this.child = null; resolve() }
+      c.once('exit', onExit)
     })
   }
 
