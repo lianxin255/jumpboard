@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ReloadOutlined } from '@antdv-next/icons'
 import { useLogsStore } from '@renderer/stores/logs'
 const store = useLogsStore()
 const props = defineProps<{ hostId: string }>()
@@ -22,7 +23,10 @@ function formatTime(ts: number): string {
   <div class="log-viewer">
     <div class="toolbar">
       <h3>日志</h3>
-      <button class="btn btn-ghost" @click="refresh">刷新</button>
+      <a-button @click="refresh">
+        <template #icon><ReloadOutlined /></template>
+        刷新
+      </a-button>
     </div>
     <div class="log-list">
       <div v-for="log in store.list" :key="log.id" class="log-line">
