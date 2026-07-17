@@ -1,0 +1,55 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { LocalNginxEngine } from '@main/nginx/localEngine'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+
+// 本测试需要一个能跑的 nginx.exe，CI 环境用 mock；本地有 nginx 时跑真实验证。
+// 这里用脚本假装 nginx，验证进程生命周期管理逻辑。
+describe('LocalNginxEngine 进程管理', () => {
+  let workDir: string
+  let fakeNginx: string
+
+  beforeEach(() => {
+    workDir = join(tmpdir(), `nginx-engine-${Date.now()}`)
+    mkdirSync(workDir, { recursive: true })
+    // 写一个假 nginx 脚本：保持运行直到收到信号
+    if (process.platform === 'win32') {
+      fakeNginx = join(workDir, 'fake-nginx.bat')
+      writeFileSync(fakeNginx, '@echo off\n:loop\ntimeout /t 1 >nul\ngoto loop\n')
+    } else {
+      fakeNginx = join(workDir, 'fake-nginx.sh')
+      writeFileSync(fakeNginx, '#!/bin/bash\nwhile true; do sleep 1; done\n')
+      require('fs').chmodSync(fakeNginx, 0o755)
+    }
+  })
+
+  afterEach(() => {
+    rmSync(workDir, { recursive: true, force: true })
+  })
+
+  it('status 初始为 stopped', () => {
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    expect(eng.status()).toBe('stopped')
+  })
+
+  it('start 后变 running，stop 后变 stopped', async () => {
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    await eng.start()
+    expect(eng.status()).toBe('running')
+    await eng.stop()
+    expect(eng.status()).toBe('stopped')
+  })
+
+  it('重复 start 抛错', async () => {
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    await eng.start()
+    await expect(eng.start()).rejects.toThrow()
+    await eng.stop()
+  })
+
+  it('stop 未运行的引擎不报错', async () => {
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    await expect(eng.stop()).resolves.toBeUndefined()
+  })
+})
