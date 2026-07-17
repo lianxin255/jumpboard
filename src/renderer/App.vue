@@ -35,7 +35,7 @@ async function onSaved() {
   <div class="layout">
     <header class="topbar">
       <h1>跳板机</h1>
-      <select v-model="hosts.currentHostId" @change="mappings.load(hosts.currentHostId!)">
+      <select v-model="hosts.currentHostId">
         <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</option>
       </select>
       <EngineControl ref="engineRef" />

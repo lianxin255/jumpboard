@@ -35,7 +35,16 @@ export const useMappingsStore = defineStore('mappings', () => {
   }
 
   async function toggle(id: string, enabled: number) {
-    await api.updateMapping(id, { enabled })
+    // 乐观更新：先改本地状态，UI 立即响应
+    const item = list.value.find(m => m.id === id)
+    if (item) item.enabled = enabled
+    try {
+      await api.updateMapping(id, { enabled })
+    } catch (e) {
+      // 失败则回滚
+      if (item) item.enabled = enabled === 1 ? 0 : 1
+      throw e
+    }
   }
 
   return { list, loading, load, create, remove, toggle }
