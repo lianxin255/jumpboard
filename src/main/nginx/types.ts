@@ -10,6 +10,9 @@ export interface NginxEngine {
   status(): EngineStatus
   writeConf(content: string): Promise<void>
   readConf(): Promise<string>
+
+  /** 可选：清理资源（如 SSH 连接）。LocalEngine 不需要，RemoteEngine 需要。 */
+  close?(): void
 }
 
 export interface LocalEngineConfig {

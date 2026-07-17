@@ -5,6 +5,7 @@ import { openDb, closeDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
 import { setActiveEngine, getActiveEngine } from './nginx/engineRegistry'
 import { LocalNginxEngine } from './nginx/localEngine'
+import { RemoteNginxEngine } from './nginx/remoteEngine'
 import { getDefaultHost, listHosts, createHost, setDefaultHost } from './db/hostRepo'
 import { listEnabledMappings } from './db/mappingRepo'
 import { generateFullConf } from './nginx/confGenerator'
@@ -33,21 +34,44 @@ function createWindow() {
 
 async function initEngineForDefaultHost() {
   const host = getDefaultHost()
-  if (!host || host.type !== 'local') return
+  if (!host) return
   const paths = resolvePaths()
-  const nginxPath = host.localConfig?.nginxPath
-    || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
-  const confPath = join(paths.nginxConfDir, 'nginx.conf')
-  const engine = new LocalNginxEngine({
-    nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir
-  })
-  // 生成初始 conf（即使没 mapping，也要有最小 conf）
-  const mappings = listEnabledMappings(host.id)
-  const conf = generateFullConf(mappings, {
-    nginxLogDir: paths.nginxLogDir,
-    nginxTempDir: paths.tempDir
-  })
-  await engine.writeConf(conf)
+
+  let engine: LocalNginxEngine | RemoteNginxEngine
+  if (host.type === 'local') {
+    const nginxPath = host.localConfig?.nginxPath
+      || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
+    const confPath = join(paths.nginxConfDir, 'nginx.conf')
+    engine = new LocalNginxEngine({
+      nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir
+    })
+    // local：生成初始 conf（即使没 mapping，也要有最小 conf）
+    const mappings = listEnabledMappings(host.id)
+    const conf = generateFullConf(mappings, {
+      nginxLogDir: paths.nginxLogDir,
+      nginxTempDir: paths.tempDir
+    })
+    await engine.writeConf(conf)
+  } else if (host.type === 'remote' && host.remoteConfig) {
+    // remote：不自动写 conf（远程 conf 由远程自己维护），只建连接 + 异步刷新状态
+    engine = new RemoteNginxEngine({
+      host: host.remoteConfig.host,
+      port: host.remoteConfig.port,
+      username: host.remoteConfig.username,
+      passwordEncrypted: host.remoteConfig.passwordEncrypted,
+      privateKeyPath: host.remoteConfig.keyPath,
+      nginxPath: host.remoteConfig.nginxPath,
+      confPath: host.remoteConfig.confPath,
+      reloadCmd: host.remoteConfig.reloadCmd,
+      testCmd: host.remoteConfig.testCmd
+    })
+    // 异步刷新状态（不 await，不阻塞启动）
+    if (engine instanceof RemoteNginxEngine) {
+      engine.refreshStatus().catch(() => {})
+    }
+  } else {
+    return
+  }
   setActiveEngine(engine)
 }
 
