@@ -53,7 +53,7 @@ async function onSaved() {
 
 <template>
   <div class="layout">
-    <header class="topbar">
+    <header class="topbar glass-panel">
       <h1>跳板机</h1>
       <select v-model="hosts.currentHostId">
         <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</option>
@@ -81,13 +81,59 @@ async function onSaved() {
 </template>
 
 <style scoped>
-.layout { display: flex; flex-direction: column; height: 100vh; background: #f5f5f7; }
-.topbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px;
-  background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0,0,0,0.06); }
-h1 { font-size: 18px; margin: 0; font-weight: 600; }
-select { padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; }
+.layout { display: flex; flex-direction: column; height: 100vh; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+}
+
+h1 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.topbar select {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
 main { flex: 1; overflow-y: auto; }
-.nav-tabs { display: flex; gap: 4px; margin-left: 8px; }
-.nav-tabs button { padding: 6px 14px; border: none; border-radius: 8px; background: transparent; color: #555; cursor: pointer; font-size: 14px; }
-.nav-tabs button.active { background: #0A84FF; color: #fff; }
+
+.nav-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  padding: var(--space-1);
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+}
+
+.nav-tabs button {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.nav-tabs button:hover { color: var(--text-primary); }
+
+.nav-tabs button.active {
+  background: var(--bg-glass-strong);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
 </style>
