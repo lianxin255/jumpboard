@@ -102,7 +102,7 @@ async function removeHost(id: string) {
   <div class="host-manager">
     <div class="toolbar">
       <h3>主机管理</h3>
-      <button class="btn btn-primary" @click="openNew">+ 添加主机</button>
+      <a-button type="primary" @click="openNew">+ 添加主机</a-button>
     </div>
     <div class="host-list">
       <div v-for="h in store.hosts" :key="h.id" class="host-item glass-card">
@@ -112,44 +112,86 @@ async function removeHost(id: string) {
           <div v-else class="meta">本机 nginx</div>
         </div>
         <div class="actions">
-          <button class="btn btn-ghost" @click="store.setCurrent(h.id)">切换</button>
-          <button class="btn btn-ghost" @click="openEdit(h)">编辑</button>
-          <button class="btn btn-ghost" @click="removeHost(h.id)">删除</button>
+          <a-button size="small" @click="store.setCurrent(h.id)">切换</a-button>
+          <a-button size="small" @click="openEdit(h)">编辑</a-button>
+          <a-button size="small" danger @click="removeHost(h.id)">删除</a-button>
         </div>
       </div>
     </div>
 
-    <div v-if="showForm" class="form-overlay" @click.self="showForm = false">
-      <div class="form-card glass-card">
-        <h3>{{ editingId ? '编辑主机' : '添加主机' }}</h3>
-        <label>名称<input v-model="form.name" class="glass-input" placeholder="如：生产网关" /></label>
-        <label>类型
-          <select v-model="form.type" class="glass-input">
-            <option value="local">本机</option>
-            <option value="remote">远程（SSH）</option>
-          </select>
-        </label>
+    <a-modal
+      v-model:open="showForm"
+      :title="editingId ? '编辑主机' : '添加主机'"
+      :footer="null"
+      :width="520"
+    >
+      <div class="form-body">
+        <div class="field">
+          <div class="field-label">名称</div>
+          <a-input v-model:value="form.name" placeholder="如：生产网关" />
+        </div>
+        <div class="field">
+          <div class="field-label">类型</div>
+          <a-select v-model:value="form.type" style="width: 100%">
+            <a-select-option value="local">本机</a-select-option>
+            <a-select-option value="remote">远程（SSH）</a-select-option>
+          </a-select>
+        </div>
         <template v-if="form.type === 'remote'">
-          <label>主机地址<input v-model="form.host" class="glass-input" placeholder="192.168.1.100" /></label>
-          <label>SSH 端口<input v-model.number="form.port" type="number" class="glass-input" /></label>
-          <label>用户名<input v-model="form.username" class="glass-input" /></label>
-          <label>密码（留空则不修改）<input v-model="form.password" type="password" class="glass-input" placeholder="******" /></label>
-          <label>nginx 路径<input v-model="form.nginxPath" class="glass-input" /></label>
-          <label>conf 路径<input v-model="form.confPath" class="glass-input" /></label>
-          <label>reload 命令<input v-model="form.reloadCmd" class="glass-input" /></label>
-          <label>test 命令<input v-model="form.testCmd" class="glass-input" /></label>
-          <button class="btn btn-ghost" :disabled="testing" @click="testConn">{{ testing ? '测试中...' : '测试连接' }}</button>
-          <div v-if="testResult" class="test-result" :class="{ ok: testResult.ok }">
-            {{ testResult.ok ? '✓ 连接成功' : '✗ ' + testResult.output }}
+          <div class="field">
+            <div class="field-label">主机地址</div>
+            <a-input v-model:value="form.host" placeholder="192.168.1.100" />
           </div>
+          <div class="field">
+            <div class="field-label">SSH 端口</div>
+            <a-input-number v-model:value="form.port" style="width: 100%" />
+          </div>
+          <div class="field">
+            <div class="field-label">用户名</div>
+            <a-input v-model:value="form.username" />
+          </div>
+          <div class="field">
+            <div class="field-label">密码（留空则不修改）</div>
+            <a-input-password v-model:value="form.password" placeholder="******" />
+          </div>
+          <div class="field">
+            <div class="field-label">nginx 路径</div>
+            <a-input v-model:value="form.nginxPath" />
+          </div>
+          <div class="field">
+            <div class="field-label">conf 路径</div>
+            <a-input v-model:value="form.confPath" />
+          </div>
+          <div class="field">
+            <div class="field-label">reload 命令</div>
+            <a-input v-model:value="form.reloadCmd" />
+          </div>
+          <div class="field">
+            <div class="field-label">test 命令</div>
+            <a-input v-model:value="form.testCmd" />
+          </div>
+          <a-button :loading="testing" @click="testConn">{{ testing ? '测试中...' : '测试连接' }}</a-button>
+          <a-alert
+            v-if="testResult"
+            :type="testResult.ok ? 'success' : 'error'"
+            :message="testResult.ok ? '✓ 连接成功' : testResult.output"
+            show-icon
+            style="margin-top: var(--space-3)"
+          />
         </template>
-        <div v-if="error" class="error">{{ error }}</div>
+        <a-alert
+          v-if="error"
+          type="error"
+          :message="error"
+          show-icon
+          style="margin-top: var(--space-3)"
+        />
         <div class="form-actions">
-          <button class="btn btn-ghost" @click="showForm = false">取消</button>
-          <button class="btn btn-primary" @click="save">保存</button>
+          <a-button @click="showForm = false">取消</a-button>
+          <a-button type="primary" @click="save">保存</a-button>
         </div>
       </div>
-    </div>
+    </a-modal>
   </div>
 </template>
 
@@ -164,14 +206,9 @@ h3 { font-size: var(--font-size-lg); }
 .badge { font-size: var(--font-size-xs); background: var(--bg-hover); padding: 1px var(--space-1); border-radius: var(--radius-sm); color: var(--text-secondary); }
 .meta { font-size: var(--font-size-sm); color: var(--text-secondary); margin-top: 2px; }
 .actions { display: flex; gap: var(--space-1); }
-.actions .btn { padding: var(--space-1) var(--space-2); font-size: var(--font-size-sm); }
-.form-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.25); backdrop-filter: blur(var(--blur-sm)); display: flex; align-items: center; justify-content: center; z-index: 10; }
-.form-card { padding: var(--space-6); width: 480px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
-.form-card h3 { margin-bottom: var(--space-4); }
-label { display: block; margin-bottom: var(--space-3); font-size: var(--font-size-sm); color: var(--text-secondary); }
-label input, label select { margin-top: var(--space-1); }
-.test-result { margin: var(--space-2) 0; padding: var(--space-2); border-radius: var(--radius-sm); font-size: var(--font-size-sm); background: var(--bg-hover); color: var(--color-danger); }
-.test-result.ok { color: var(--color-success); }
-.error { color: var(--color-danger); font-size: var(--font-size-sm); margin-bottom: var(--space-2); }
+
+.form-body { display: flex; flex-direction: column; }
+.field { display: block; margin-bottom: var(--space-3); }
+.field-label { font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--space-1); }
 .form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 </style>

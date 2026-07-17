@@ -15,6 +15,7 @@ declare module 'vue' {
     AButton: typeof import('antdv-next')['Button']
     AInput: typeof import('antdv-next')['Input']
     AInputNumber: typeof import('antdv-next')['InputNumber']
+    AInputPassword: typeof import('antdv-next')['InputPassword']
     AModal: typeof import('antdv-next')['Modal']
     ASelect: typeof import('antdv-next')['Select']
     ASelectOption: typeof import('antdv-next')['SelectOption']
