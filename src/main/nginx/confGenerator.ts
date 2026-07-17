@@ -18,7 +18,8 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
   const udpMappings = enabled.filter(m => m.protocol === 'udp')
   const httpMappings = enabled.filter(m => m.protocol === 'http' || m.protocol === 'https')
 
-  const hasStream = tcpMappings.length > 0 || udpMappings.length > 0
+  // UDP 渲染留到 Plan 2；在此之前 hasStream 只看 TCP，避免输出空 stream {} 块
+  const hasStream = tcpMappings.length > 0
   const hasHttp = httpMappings.length > 0
 
   const lines: string[] = []
@@ -58,6 +59,10 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
 }
 
 function renderTcpServer(m: Mapping): string[] {
+  if (m.listenPort == null) {
+    // listenPort 为空的 TCP 映射无法生成有效配置，跳过（不应发生，表单会校验）
+    return []
+  }
   const out: string[] = []
   out.push(`  # mapping: ${m.name}`)
   out.push('  server {')
