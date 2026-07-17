@@ -1,0 +1,10 @@
+id: udp
+name: UDP 转发
+icon: network
+category: 网络层
+description: UDP 端口转发，适用于 DNS/Game Server 等
+mapping:
+  protocol: udp
+  listenPort: null
+  upstreamHost: null
+  upstreamPort: null
