@@ -1,0 +1,92 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
+import { createHost } from '@main/db/hostRepo'
+import {
+  createMapping, listMappings, getMapping, updateMapping, deleteMapping, listEnabledMappings
+} from '@main/db/mappingRepo'
+import type { MappingInput } from '@shared/types'
+import { existsSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+
+function tcpInput(hostId: string, over: Partial<MappingInput> = {}): MappingInput {
+  return {
+    hostId,
+    name: 'test',
+    enabled: 1,
+    protocol: 'tcp',
+    listenPort: 9000,
+    serverNames: null,
+    listenPath: null,
+    upstreamHost: '192.168.1.10',
+    upstreamPort: 3306,
+    tlsCertPath: null,
+    tlsKeyPath: null,
+    redirectHttp: 0,
+    extraDirectives: null,
+    healthCheckEnabled: 0,
+    healthCheckIntervalSec: 30,
+    healthCheckTargetPath: null,
+    healthCheckExpectedStatus: null,
+    ...over
+  }
+}
+
+describe('mappingRepo', () => {
+  let dbPath: string
+  let hostId: string
+
+  beforeEach(() => {
+    dbPath = join(tmpdir(), `test-${Date.now()}.db`)
+    __setDbPathForTest(dbPath)
+    openDb()
+    const h = createHost({ name: 'h', type: 'local', isDefault: 1, localConfig: null, remoteConfig: null })
+    hostId = h.id
+  })
+
+  afterEach(() => {
+    closeDb()
+    if (existsSync(dbPath)) rmSync(dbPath)
+  })
+
+  it('createMapping 创建 TCP 映射', () => {
+    const m = createMapping(tcpInput(hostId))
+    expect(m.id).toBeTruthy()
+    expect(m.protocol).toBe('tcp')
+    expect(m.healthStatus).toBe('unknown')
+    expect(m.sortOrder).toBe(0)
+  })
+
+  it('listMappings 按 hostId 过滤', () => {
+    createMapping(tcpInput(hostId, { name: 'a' }))
+    createMapping(tcpInput(hostId, { name: 'b' }))
+    expect(listMappings(hostId)).toHaveLength(2)
+    expect(listMappings('other-id')).toHaveLength(0)
+  })
+
+  it('listEnabledMappings 只返回 enabled=1', () => {
+    createMapping(tcpInput(hostId, { enabled: 1, name: 'on' }))
+    createMapping(tcpInput(hostId, { enabled: 0, name: 'off' }))
+    const list = listEnabledMappings(hostId)
+    expect(list).toHaveLength(1)
+    expect(list[0].name).toBe('on')
+  })
+
+  it('updateMapping 改端口', () => {
+    const m = createMapping(tcpInput(hostId))
+    updateMapping(m.id, { listenPort: 8888 })
+    expect(getMapping(m.id)?.listenPort).toBe(8888)
+  })
+
+  it('deleteMapping 删除', () => {
+    const m = createMapping(tcpInput(hostId))
+    deleteMapping(m.id)
+    expect(getMapping(m.id)).toBeUndefined()
+  })
+
+  it('sortOrder 自增', () => {
+    const a = createMapping(tcpInput(hostId, { name: 'a' }))
+    const b = createMapping(tcpInput(hostId, { name: 'b' }))
+    expect(b.sortOrder).toBeGreaterThan(a.sortOrder)
+  })
+})
