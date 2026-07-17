@@ -19,7 +19,8 @@
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "pinia": "^2.2.0",
-    "vue": "^3.4.0"
+    "vue": "^3.4.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",

@@ -90,6 +90,11 @@ export const IPC = {
   ENGINE_RELOAD: 'engine:reload',
   ENGINE_TEST: 'engine:test',
   ENGINE_STATUS: 'engine:status',
+  // Template
+  TEMPLATE_LIST: 'template:list',
+  TEMPLATE_LIST_BUILTIN: 'template:list-builtin',
+  TEMPLATE_SAVE_CUSTOM: 'template:save-custom',
+  TEMPLATE_DELETE_CUSTOM: 'template:delete-custom',
 } as const
 
 export type IpcChannel = typeof IPC[keyof typeof IPC]
