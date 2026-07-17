@@ -33,6 +33,9 @@ const api = {
   checkMappingNow: (mappingId: string) => ipcRenderer.invoke(IPC.HEALTH_CHECK_NOW, mappingId),
   // Port check
   checkPort: (port: number) => ipcRenderer.invoke(IPC.PORT_CHECK, port),
+  // Host 管理
+  testHostConnection: (remoteConfig: any) => ipcRenderer.invoke(IPC.HOST_TEST_CONNECTION, remoteConfig),
+  refreshEngineStatus: () => ipcRenderer.invoke(IPC.ENGINE_REFRESH_STATUS),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

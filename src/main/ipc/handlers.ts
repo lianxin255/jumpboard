@@ -3,7 +3,7 @@ import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
 import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
 import { listMappings, createMapping, updateMapping, deleteMapping, listEnabledMappings, getMapping } from '../db/mappingRepo'
-import { setActiveEngine, getActiveEngine } from '../nginx/engineRegistry'
+import { setActiveEngine, getActiveEngine, refreshActiveStatus } from '../nginx/engineRegistry'
 import { listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate } from '../templates/templateRepo'
 import { applyMappings } from '../nginx/applyFlow'
 import { resolvePaths } from '../paths'
@@ -11,14 +11,31 @@ import { listLogs } from '../db/logRepo'
 import { listSnapshots, getSnapshot } from '../db/snapshotRepo'
 import { isPortAvailable } from '../services/portCheck'
 import { checkMapping } from '../services/healthCheck'
+import { SshClient } from '../ssh/client'
+import { encryptPassword, decryptPassword } from '../crypto'
 
 export { setActiveEngine }
+
+/** 拦截 remoteConfig.passwordEncrypted 的 PLAIN: 前缀，存储前加密 */
+function encryptPlainPassword(input: any): any {
+  if (input?.remoteConfig?.passwordEncrypted?.startsWith('PLAIN:')) {
+    const plain = input.remoteConfig.passwordEncrypted.slice(6)
+    return {
+      ...input,
+      remoteConfig: {
+        ...input.remoteConfig,
+        passwordEncrypted: plain ? encryptPassword(plain) : null
+      }
+    }
+  }
+  return input
+}
 
 export function registerIpcHandlers(): void {
   // Host
   ipcMain.handle(IPC.HOST_LIST, () => listHosts())
-  ipcMain.handle(IPC.HOST_CREATE, (_e, input: CreateHostInput) => createHost(input))
-  ipcMain.handle(IPC.HOST_UPDATE, (_e, id: string, patch: Partial<CreateHostInput>) => updateHost(id, patch))
+  ipcMain.handle(IPC.HOST_CREATE, (_e, input: CreateHostInput) => createHost(encryptPlainPassword(input)))
+  ipcMain.handle(IPC.HOST_UPDATE, (_e, id: string, patch: Partial<CreateHostInput>) => updateHost(id, encryptPlainPassword(patch)))
   ipcMain.handle(IPC.HOST_DELETE, (_e, id: string) => { deleteHost(id); return true })
 
   // Mapping
@@ -89,4 +106,33 @@ export function registerIpcHandlers(): void {
 
   // Port check
   ipcMain.handle(IPC.PORT_CHECK, (_e, port: number) => isPortAvailable(port))
+
+  // Host: 测试 SSH 连接
+  ipcMain.handle(IPC.HOST_TEST_CONNECTION, async (_e, remoteConfig: any) => {
+    try {
+      let password: string | undefined
+      if (remoteConfig.passwordEncrypted?.startsWith('PLAIN:')) {
+        password = remoteConfig.passwordEncrypted.slice(6)
+      } else if (remoteConfig.passwordEncrypted) {
+        password = decryptPassword(remoteConfig.passwordEncrypted)
+      }
+      const client = new SshClient({
+        host: remoteConfig.host,
+        port: remoteConfig.port,
+        username: remoteConfig.username,
+        password
+      })
+      const r = await client.exec('echo ok')
+      client.close()
+      return { ok: r.code === 0, output: r.stdout + r.stderr }
+    } catch (e: any) {
+      return { ok: false, output: e?.message ?? String(e) }
+    }
+  })
+
+  // Engine: 刷新 active engine 状态
+  ipcMain.handle(IPC.ENGINE_REFRESH_STATUS, async () => {
+    await refreshActiveStatus()
+    return getActiveEngine()?.status() ?? 'unknown'
+  })
 }

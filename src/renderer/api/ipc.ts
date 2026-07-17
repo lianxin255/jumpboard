@@ -27,6 +27,9 @@ export interface ElectronAPI {
   checkMappingNow(mappingId: string): Promise<string>
   // Port check
   checkPort(port: number): Promise<boolean>
+  // Host 管理
+  testHostConnection(remoteConfig: any): Promise<{ ok: boolean; output: string }>
+  refreshEngineStatus(): Promise<string>
 }
 
 declare global {

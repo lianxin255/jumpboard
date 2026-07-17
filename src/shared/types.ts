@@ -106,6 +106,9 @@ export const IPC = {
   HEALTH_CHECK_NOW: 'health:check-now',
   // Port check
   PORT_CHECK: 'port:check',
+  // Host 管理
+  HOST_TEST_CONNECTION: 'host:test-connection',
+  ENGINE_REFRESH_STATUS: 'engine:refresh-status',
 } as const
 
 // ============ Log ============
