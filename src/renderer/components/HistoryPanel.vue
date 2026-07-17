@@ -46,8 +46,8 @@ function formatTime(ts: number): string {
   <div class="history-panel">
     <div class="toolbar">
       <h3>配置历史</h3>
-      <button @click="refresh">刷新</button>
-      <button :disabled="!selectedId || rolling" @click="rollback">回滚到选中</button>
+      <button class="btn btn-ghost" @click="refresh">刷新</button>
+      <button class="btn btn-primary" :disabled="!selectedId || rolling" @click="rollback">回滚到选中</button>
     </div>
     <div class="body">
       <div class="snap-list">
@@ -69,18 +69,48 @@ function formatTime(ts: number): string {
 
 <style scoped>
 .history-panel { display: flex; flex-direction: column; height: 100%; }
-.toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e5e5e5; }
-h3 { margin: 0; font-size: 16px; }
-button { padding: 4px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; }
-button:disabled { opacity: 0.4; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+h3 { font-size: var(--font-size-lg); }
+
 .body { flex: 1; display: flex; overflow: hidden; }
-.snap-list { width: 240px; border-right: 1px solid #e5e5e5; overflow-y: auto; }
-.snap-item { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
-.snap-item:hover { background: #f5f5f7; }
-.snap-item.active { background: #e8f2ff; }
-.snap-time { font-size: 12px; color: #555; }
-.snap-reason { font-size: 11px; color: #888; margin-top: 2px; }
-.snap-content { flex: 1; overflow: auto; padding: 12px; }
-pre { margin: 0; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
-.empty { color: #888; padding: 32px; text-align: center; }
+
+.snap-list {
+  width: 240px;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.snap-item {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.snap-item:hover { background: var(--bg-hover); }
+.snap-item.active { background: var(--color-accent-soft); }
+
+.snap-time { font-size: var(--font-size-sm); color: var(--text-secondary); }
+.snap-reason { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 2px; }
+
+.snap-content { flex: 1; overflow: auto; padding: var(--space-3); }
+
+pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+
+.empty { color: var(--text-tertiary); padding: var(--space-8); text-align: center; }
 </style>
