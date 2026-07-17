@@ -2,19 +2,26 @@
 import { ref, onMounted, watch } from 'vue'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
+import { useTemplatesStore } from '@renderer/stores/templates'
+import type { Template } from '@renderer/stores/templates'
 import MappingList from '@renderer/components/MappingList.vue'
 import MappingForm from '@renderer/components/MappingForm.vue'
+import TemplatePicker from '@renderer/components/TemplatePicker.vue'
 import EngineControl from '@renderer/components/EngineControl.vue'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
+const templates = useTemplatesStore()
 const showForm = ref(false)
+const showPicker = ref(false)
+const pickedTemplate = ref<Template | null>(null)
 const editingId = ref<string | undefined>()
 const engineRef = ref()
 
 async function reloadAll() {
   await hosts.load()
   if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
+  await templates.load()
 }
 
 onMounted(reloadAll)
@@ -23,10 +30,20 @@ watch(() => hosts.currentHostId, async (id) => {
   if (id) await mappings.load(id)
 })
 
-function openNew() { editingId.value = undefined; showForm.value = true }
+function openNew() {
+  pickedTemplate.value = null
+  editingId.value = undefined
+  showPicker.value = true
+}
+function onPick(tpl: Template) {
+  pickedTemplate.value = tpl
+  showPicker.value = false
+  showForm.value = true
+}
 function openEdit(id: string) { editingId.value = id; showForm.value = true }
 async function onSaved() {
   showForm.value = false
+  pickedTemplate.value = null
   if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
 }
 </script>
@@ -43,9 +60,11 @@ async function onSaved() {
     <main>
       <MappingList @new="openNew" @edit="openEdit" />
     </main>
+    <TemplatePicker v-if="showPicker" @pick="onPick" @cancel="showPicker = false" />
     <MappingForm v-if="showForm"
       :host-id="hosts.currentHostId!"
       :mapping-id="editingId"
+      :template="pickedTemplate"
       @saved="onSaved"
       @cancel="showForm = false" />
   </div>
