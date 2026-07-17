@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { message } from 'antdv-next'
+import { PlayCircleOutlined, ReloadOutlined, PauseCircleOutlined } from '@antdv-next/icons'
 import { api } from '@renderer/api/ipc'
 
 const status = ref('unknown')
@@ -12,9 +14,9 @@ async function start() {
   try {
     const r = await api.startEngine()
     status.value = r.status
-    if (r.error) { error.value = r.error; alert('启动失败:\n' + r.error) }
+    if (r.error) { error.value = r.error; message.error('启动失败: ' + r.error) }
   }
-  catch (e: any) { error.value = e.message; alert('启动失败:\n' + e.message) }
+  catch (e: any) { error.value = e.message; message.error('启动失败: ' + e.message) }
   finally { busy.value = false }
 }
 async function stop() {
@@ -22,20 +24,20 @@ async function stop() {
   try {
     const r = await api.stopEngine()
     status.value = r.status
-    if (r.error) { error.value = r.error; alert('停止失败:\n' + r.error) }
+    if (r.error) { error.value = r.error; message.error('停止失败: ' + r.error) }
   }
-  catch (e: any) { error.value = e.message; alert('停止失败:\n' + e.message) }
+  catch (e: any) { error.value = e.message; message.error('停止失败: ' + e.message) }
   finally { busy.value = false }
 }
 async function reload() {
   busy.value = true; error.value = ''
   try {
     const r = await api.testEngine()
-    if (!r.ok) { alert('配置校验失败:\n' + r.output); return }
+    if (!r.ok) { message.error('配置校验失败: ' + r.output); return }
     const result = await api.reloadEngine()
-    if (!result.ok) { alert('应用失败:\n' + result.output); return }
+    if (!result.ok) { message.error('应用失败: ' + result.output); return }
     status.value = await api.engineStatus()
-  } catch (e: any) { error.value = e.message; alert('应用失败:\n' + e.message) }
+  } catch (e: any) { error.value = e.message; message.error('应用失败: ' + e.message) }
   finally { busy.value = false }
 }
 
@@ -48,9 +50,18 @@ defineExpose({ refresh })
     <span class="status-dot" :class="status"></span>
     <span class="status-text">{{ status }}</span>
     <span v-if="error" class="error-text" :title="error">⚠</span>
-    <button class="btn btn-primary" :disabled="busy || status === 'running'" @click="start">启动</button>
-    <button class="btn btn-primary" :disabled="busy || status !== 'running'" @click="reload">应用</button>
-    <button class="btn btn-primary" :disabled="busy || status !== 'running'" @click="stop">停止</button>
+    <a-button type="primary" size="small" :disabled="busy || status === 'running'" @click="start">
+      <template #icon><PlayCircleOutlined /></template>
+      启动
+    </a-button>
+    <a-button size="small" :disabled="busy || status !== 'running'" @click="reload">
+      <template #icon><ReloadOutlined /></template>
+      应用
+    </a-button>
+    <a-button danger size="small" :disabled="busy || status !== 'running'" @click="stop">
+      <template #icon><PauseCircleOutlined /></template>
+      停止
+    </a-button>
   </div>
 </template>
 
@@ -88,11 +99,5 @@ defineExpose({ refresh })
   color: var(--color-danger);
   font-size: var(--font-size-md);
   cursor: help;
-}
-
-/* 覆盖 .btn 默认 padding，让引擎控制按钮更紧凑 */
-.engine-ctrl .btn {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--font-size-sm);
 }
 </style>
