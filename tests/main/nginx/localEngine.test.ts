@@ -29,12 +29,12 @@ describe('LocalNginxEngine 进程管理', () => {
   })
 
   it('status 初始为 stopped', () => {
-    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     expect(eng.status()).toBe('stopped')
   })
 
   it('start 后变 running，stop 后变 stopped', async () => {
-    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     expect(eng.status()).toBe('running')
     await eng.stop()
@@ -42,14 +42,14 @@ describe('LocalNginxEngine 进程管理', () => {
   })
 
   it('重复 start 抛错', async () => {
-    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     await expect(eng.start()).rejects.toThrow()
     await eng.stop()
   })
 
   it('stop 未运行的引擎不报错', async () => {
-    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await expect(eng.stop()).resolves.toBeUndefined()
   })
 
@@ -58,14 +58,15 @@ describe('LocalNginxEngine 进程管理', () => {
       nginxPath: join(workDir, 'definitely-does-not-exist'),
       confPath: join(workDir, 'nginx.conf'),
       logDir: workDir,
-      tempDir: workDir
+      tempDir: workDir,
+      prefixDir: workDir
     })
     await expect(eng.start()).rejects.toThrow()
     expect(eng.status()).toBe('stopped')
   })
 
   it('start→stop→start→stop 循环不会让旧进程的 exit 误清新进程引用', async () => {
-    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     expect(eng.status()).toBe('running')
     await eng.stop()
@@ -84,7 +85,7 @@ describe('LocalNginxEngine 进程管理', () => {
     const exitFast = join(workDir, 'exit-fast.sh')
     writeFileSync(exitFast, '#!/bin/bash\nexit 1\n')
     require('fs').chmodSync(exitFast, 0o755)
-    const eng = new LocalNginxEngine({ nginxPath: exitFast, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir })
+    const eng = new LocalNginxEngine({ nginxPath: exitFast, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await expect(eng.start()).rejects.toThrow()
     expect(eng.status()).toBe('stopped')
   })

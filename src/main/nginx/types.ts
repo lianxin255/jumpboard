@@ -18,6 +18,7 @@ export interface NginxEngine {
 export interface LocalEngineConfig {
   nginxPath: string      // nginx.exe 路径（bundled 或用户指定）
   confPath: string       // 主 conf 路径
-  logDir: string
-  tempDir: string
+  logDir: string         // nginx error/access log 目录
+  tempDir: string        // nginx pid + temp 文件目录
+  prefixDir: string      // nginx -p prefix（家目录，需可写，含 logs/ + mime.types）
 }

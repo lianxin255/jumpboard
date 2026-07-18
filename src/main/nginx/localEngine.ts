@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
 
@@ -24,20 +24,17 @@ export class LocalNginxEngine implements NginxEngine {
     if (!existsSync(this.cfg.nginxPath)) {
       throw new Error(`nginx binary not found: ${this.cfg.nginxPath}`)
     }
-    for (const d of [this.cfg.logDir, this.cfg.tempDir]) {
+    for (const d of [this.cfg.logDir, this.cfg.tempDir, this.cfg.prefixDir]) {
       if (!existsSync(d)) mkdirSync(d, { recursive: true })
     }
-    // nginx 用 -g 'daemon off;' 前台运行，便于进程生命周期管理。
-    // -p prefix 指向 nginx 二进制所在目录（bundledNginxDir），这是 nginx 期望的"家目录"
-    // 结构（含 conf/mime.types 等相对路径基准）。conf/logs/temp/pid 用绝对路径在 conf 里指定。
-    const nginxDir = dirname(this.cfg.nginxPath)
-    // nginx 启动早期（读 conf 之前）会用默认 prefix/logs/error.log 记日志，
-    // 必须确保 nginxDir/logs 存在，否则报 alert "could not open error log file"。
-    const nginxDefaultLogDir = join(nginxDir, 'logs')
-    if (!existsSync(nginxDefaultLogDir)) mkdirSync(nginxDefaultLogDir, { recursive: true })
+    // nginx -p prefix 指向 prefixDir（data/nginx-home，跟 exe 走、可写、持久）。
+    // 不再用 nginx.exe 所在目录（portable 下在临时解压目录，可能只读/被清理）。
+    // nginx 启动早期用 <prefix>/logs/error.log 记日志，必须确保 logs 子目录存在。
+    const prefixLogsDir = join(this.cfg.prefixDir, 'logs')
+    if (!existsSync(prefixLogsDir)) mkdirSync(prefixLogsDir, { recursive: true })
     this.child = spawn(this.cfg.nginxPath, [
       '-c', this.cfg.confPath,
-      '-p', nginxDir,
+      '-p', this.cfg.prefixDir,
       '-g', 'daemon off;'
     ], {
       windowsHide: true,
@@ -128,8 +125,7 @@ export class LocalNginxEngine implements NginxEngine {
 
   async test(): Promise<EngineTestResult> {
     return new Promise((resolve) => {
-      const nginxDir = dirname(this.cfg.nginxPath)
-      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', nginxDir],
+      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', this.cfg.prefixDir],
         (err: any, stdout: string, stderr: string) => {
           const output = (stdout + stderr).trim()
           if (err) resolve({ ok: false, output })
