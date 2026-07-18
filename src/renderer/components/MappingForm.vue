@@ -79,10 +79,10 @@ const error = ref('')
 
 async function save() {
   error.value = ''
-  if (!form.value.name) { error.value = '请填写名称'; return }
-  if (!form.value.upstreamHost) { error.value = '请填写目标主机'; return }
-  if (!form.value.upstreamPort) { error.value = '请填写目标端口'; return }
-  if (isStream.value && !form.value.listenPort) { error.value = '请填写监听端口'; return }
+  if (!form.value.name) { error.value = '请填写规则名称'; return }
+  if (!form.value.upstreamHost) { error.value = '请填写内网服务 IP 地址'; return }
+  if (!form.value.upstreamPort) { error.value = '请填写内网服务端口'; return }
+  if (isStream.value && !form.value.listenPort) { error.value = '请填写对外开放端口'; return }
   if (isHttps.value && (!form.value.tlsCertPath || !form.value.tlsKeyPath)) { error.value = 'HTTPS 需要证书和私钥路径'; return }
 
   // 端口占用检测（仅 stream/http 监听端口）
@@ -136,49 +136,61 @@ async function save() {
     @cancel="emit('cancel')"
   >
     <div class="form-body">
+      <a-alert
+        type="info"
+        show-icon
+        banner
+        message="把内网服务通过跳板机暴露给外部访问"
+        description="填写内网服务的 IP 和端口，选择对外开发的端口，外部就能通过跳板机访问内网服务。"
+        style="margin-bottom: var(--space-3)"
+      />
       <div class="field">
         <div class="field-label">名称</div>
-        <a-input v-model:value="form.name" placeholder="如：MySQL 内库" />
+        <a-input v-model:value="form.name" placeholder="如：内网 MySQL、研发服务器 SSH" />
       </div>
       <div class="field">
         <div class="field-label">协议</div>
         <a-select v-model:value="form.protocol" style="width: 100%">
-          <a-select-option value="tcp">TCP</a-select-option>
-          <a-select-option value="udp">UDP</a-select-option>
-          <a-select-option value="http">HTTP</a-select-option>
-          <a-select-option value="https">HTTPS</a-select-option>
+          <a-select-option value="tcp">TCP（端口转发）</a-select-option>
+          <a-select-option value="udp">UDP（DNS/游戏等）</a-select-option>
+          <a-select-option value="http">HTTP（网站代理）</a-select-option>
+          <a-select-option value="https">HTTPS（加密网站代理）</a-select-option>
         </a-select>
       </div>
 
       <!-- TCP/UDP: 监听端口 -->
       <div v-if="isStream" class="field">
-        <div class="field-label">监听端口</div>
-        <a-input-number v-model:value="form.listenPort" style="width: 100%" placeholder="9000" />
+        <div class="field-label">对外开放端口</div>
+        <a-input-number v-model:value="form.listenPort" style="width: 100%" placeholder="外部访问用端口，如 9000" />
+        <div class="field-help">跳板机上供外部访问的端口（如 9000）</div>
       </div>
 
       <!-- HTTP: 监听端口 + 域名 + 路径 -->
       <div v-if="isHttp" class="field">
-        <div class="field-label">监听端口</div>
-        <a-input-number v-model:value="form.listenPort" style="width: 100%" placeholder="80" />
+        <div class="field-label">对外开放端口</div>
+        <a-input-number v-model:value="form.listenPort" style="width: 100%" placeholder="外部访问用端口，如 9000" />
+        <div class="field-help">跳板机上供外部访问的端口（如 9000）</div>
       </div>
       <div v-if="isHttp || isHttps" class="field">
-        <div class="field-label">域名 (server_name)</div>
-        <a-input v-model:value="form.serverNames" placeholder="app1.gw.local（可留空）" />
+        <div class="field-label">访问域名（可选）</div>
+        <a-input v-model:value="form.serverNames" placeholder="如 app.example.com（可留空）" />
+        <div class="field-help">通过此域名访问时生效，留空则匹配所有</div>
       </div>
       <div v-if="isHttp || isHttps" class="field">
-        <div class="field-label">路径前缀 (location)</div>
-        <a-input v-model:value="form.listenPath" placeholder="/" />
+        <div class="field-label">URL 路径（可选）</div>
+        <a-input v-model:value="form.listenPath" placeholder="如 /api（默认 / 全部转发）" />
+        <div class="field-help">只有访问此路径前缀时才转发</div>
       </div>
 
       <!-- HTTPS: 证书 + 跳转 -->
       <template v-if="isHttps">
         <div class="field">
-          <div class="field-label">证书路径 (ssl_certificate)</div>
-          <a-input v-model:value="form.tlsCertPath" placeholder="/data/cert.pem" />
+          <div class="field-label">SSL 证书文件路径</div>
+          <a-input v-model:value="form.tlsCertPath" placeholder="如 C:/certs/cert.pem" />
         </div>
         <div class="field">
-          <div class="field-label">私钥路径 (ssl_certificate_key)</div>
-          <a-input v-model:value="form.tlsKeyPath" placeholder="/data/key.pem" />
+          <div class="field-label">SSL 私钥文件路径</div>
+          <a-input v-model:value="form.tlsKeyPath" placeholder="如 C:/certs/key.pem" />
         </div>
         <div class="switch-row">
           <span>HTTP→HTTPS 自动跳转</span>
@@ -187,27 +199,31 @@ async function save() {
       </template>
 
       <div class="field">
-        <div class="field-label">目标主机</div>
-        <a-input v-model:value="form.upstreamHost" placeholder="192.168.1.10" />
+        <div class="field-label">内网服务 IP 地址</div>
+        <a-input v-model:value="form.upstreamHost" placeholder="如 192.168.1.10" />
+        <div class="field-help">要转发的内网服务器的 IP</div>
       </div>
       <div class="field">
-        <div class="field-label">目标端口</div>
-        <a-input-number v-model:value="form.upstreamPort" style="width: 100%" placeholder="3306" />
+        <div class="field-label">内网服务端口</div>
+        <a-input-number v-model:value="form.upstreamPort" style="width: 100%" placeholder="如 3306（MySQL）、22（SSH）、80（Web）" />
+        <div class="field-help">内网服务实际运行的端口</div>
       </div>
       <div class="field">
-        <div class="field-label">附加指令（高级）</div>
+        <div class="field-label">高级配置（可选）</div>
         <a-textarea
           v-model:value="form.extraDirectives"
           :rows="2"
-          placeholder="proxy_timeout 1h;"
+          placeholder="# 一般不需要填
+# 示例：proxy_timeout 1h;"
         />
+        <div class="field-help">懂 nginx 的用户可以手写额外配置指令</div>
       </div>
       <div class="switch-row">
-        <span>启用健康检查</span>
+        <span>定期检测内网服务是否在线</span>
         <a-switch v-model:checked="form.healthCheckEnabled" />
       </div>
       <div v-if="form.healthCheckEnabled" class="field">
-        <div class="field-label">检查间隔（秒）</div>
+        <div class="field-label">检测间隔（秒）</div>
         <a-input-number v-model:value="form.healthCheckIntervalSec" :min="5" style="width: 100%" />
       </div>
       <a-alert
@@ -240,6 +256,13 @@ async function save() {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   margin-bottom: var(--space-1);
+}
+
+.field-help {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+  line-height: 1.4;
 }
 
 .switch-row {
