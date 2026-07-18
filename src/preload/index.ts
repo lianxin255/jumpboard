@@ -25,6 +25,7 @@ const api = {
   deleteCustomTemplate: (id: string) => ipcRenderer.invoke(IPC.TEMPLATE_DELETE_CUSTOM, id),
   // Log
   listLogs: (hostId: string | null, limit: number) => ipcRenderer.invoke(IPC.LOG_LIST, hostId, limit),
+  tailNginxLogs: (lines: number) => ipcRenderer.invoke(IPC.NGINX_LOG_TAIL, lines),
   // Snapshot
   listSnapshots: (hostId: string) => ipcRenderer.invoke(IPC.SNAPSHOT_LIST, hostId),
   getSnapshot: (id: string) => ipcRenderer.invoke(IPC.SNAPSHOT_GET, id),

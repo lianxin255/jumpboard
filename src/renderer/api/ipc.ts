@@ -19,6 +19,7 @@ export interface ElectronAPI {
   deleteCustomTemplate(id: string): Promise<boolean>
   // Log
   listLogs(hostId: string | null, limit: number): Promise<any[]>
+  tailNginxLogs(lines: number): Promise<{ access: string[]; error: string[] }>
   // Snapshot
   listSnapshots(hostId: string): Promise<any[]>
   getSnapshot(id: string): Promise<any>

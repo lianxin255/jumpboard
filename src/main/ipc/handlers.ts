@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { join } from 'path'
-import { rmSync, existsSync } from 'fs'
+import { rmSync, existsSync, readFileSync } from 'fs'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
 import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
@@ -94,6 +94,27 @@ export function registerIpcHandlers(): void {
 
   // Log
   ipcMain.handle(IPC.LOG_LIST, (_e, hostId: string | null, limit: number) => listLogs(hostId, limit))
+
+  // 读 nginx 运行日志（access.log + error.log 的最后 N 行）
+  ipcMain.handle(IPC.NGINX_LOG_TAIL, (_e, lines: number) => {
+    const paths = resolvePaths()
+    const result: { access: string[]; error: string[] } = { access: [], error: [] }
+    try {
+      const accessLog = join(paths.nginxLogDir, 'access.log')
+      if (existsSync(accessLog)) {
+        const content = readFileSync(accessLog, 'utf-8')
+        result.access = content.split('\n').filter(Boolean).slice(-lines)
+      }
+    } catch { /* 忽略 */ }
+    try {
+      const errorLog = join(paths.nginxLogDir, 'error.log')
+      if (existsSync(errorLog)) {
+        const content = readFileSync(errorLog, 'utf-8')
+        result.error = content.split('\n').filter(Boolean).slice(-lines)
+      }
+    } catch { /* 忽略 */ }
+    return result
+  })
 
   // Snapshot
   ipcMain.handle(IPC.SNAPSHOT_LIST, (_e, hostId: string) => listSnapshots(hostId, 50))

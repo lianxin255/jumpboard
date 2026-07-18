@@ -98,6 +98,7 @@ export const IPC = {
   // Log
   LOG_LIST: 'log:list',
   LOG_ADD: 'log:add',
+  NGINX_LOG_TAIL: 'nginx:log-tail',
   // Snapshot
   SNAPSHOT_LIST: 'snapshot:list',
   SNAPSHOT_GET: 'snapshot:get',
