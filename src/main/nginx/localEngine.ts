@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
-import { dirname } from 'path'
+import { dirname, join } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
 
@@ -31,6 +31,10 @@ export class LocalNginxEngine implements NginxEngine {
     // -p prefix 指向 nginx 二进制所在目录（bundledNginxDir），这是 nginx 期望的"家目录"
     // 结构（含 conf/mime.types 等相对路径基准）。conf/logs/temp/pid 用绝对路径在 conf 里指定。
     const nginxDir = dirname(this.cfg.nginxPath)
+    // nginx 启动早期（读 conf 之前）会用默认 prefix/logs/error.log 记日志，
+    // 必须确保 nginxDir/logs 存在，否则报 alert "could not open error log file"。
+    const nginxDefaultLogDir = join(nginxDir, 'logs')
+    if (!existsSync(nginxDefaultLogDir)) mkdirSync(nginxDefaultLogDir, { recursive: true })
     this.child = spawn(this.cfg.nginxPath, [
       '-c', this.cfg.confPath,
       '-p', nginxDir,

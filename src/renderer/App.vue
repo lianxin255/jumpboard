@@ -110,8 +110,13 @@ main { flex: 1; overflow-y: auto; }
 
 .nav-tabs {
   flex: 1;
+  min-width: 0;
 }
 .nav-tabs :deep(.ant-tabs-nav) {
   margin: 0;
+  min-width: 360px;
+}
+.nav-tabs :deep(.ant-tabs) {
+  width: 100%;
 }
 </style>
