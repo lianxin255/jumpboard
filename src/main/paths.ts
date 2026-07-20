@@ -8,50 +8,59 @@ export function __setAppRootForTest(root: string | null): void {
 }
 
 /**
- * data 目录的根：用户数据跟 exe 走（绿色版核心要求）。
- * - portable 模式：PORTABLE_EXECUTABLE_DIR 指向真正 exe 位置（U 盘/文件夹）
- * - 打包非 portable：exe 所在目录
- * - 开发：项目根目录
+ * 安全获取 Electron app 实例。测试环境（vitest 无 electron）返回 null。
+ * 用动态 require 避免顶层 import 在非 electron 环境崩溃。
+ */
+function getElectronApp(): any | null {
+  try {
+    const electron = require('electron')
+    return electron?.app ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * data 目录根：用户数据跟 app 走（绿色版核心要求）。
+ *
+ * 用 Electron 成熟的 app.getPath('exe') + app.isPackaged API 定位，
+ * 不再手写 PORTABLE_EXECUTABLE_DIR 等环境变量探测。
+ *
+ * - Windows portable：exe 旁目录
+ * - macOS .app：.app 所在目录（dirname 三次从 MacOS/Foo 回到 Foo.app 父目录）
+ * - 开发：项目根目录（process.cwd()）
+ * - 测试：appRootForTest 覆盖
  */
 function getDataRoot(): string {
   if (appRootForTest) return appRootForTest
-  // portable 模式：electron-builder 注入此环境变量，指向真正 exe 所在目录
-  if (process.env.PORTABLE_EXECUTABLE_DIR) {
-    return process.env.PORTABLE_EXECUTABLE_DIR
-  }
-  // 打包环境：exe 所在目录（dirname(execPath) 对 nsis 安装版是安装目录）
-  try {
-    const electron = require('electron')
-    if (electron?.app?.isPackaged) {
-      return dirname(electron.app.getPath('exe'))
+  const app = getElectronApp()
+  if (app?.isPackaged) {
+    const exePath = app.getPath('exe')
+    if (process.platform === 'darwin') {
+      // Foo.app/Contents/MacOS/Foo → Foo.app 所在目录
+      return dirname(dirname(dirname(exePath)))
     }
-  } catch {
-    // 非 electron 环境（测试）
+    return dirname(exePath)
   }
-  // 开发环境：项目根目录
+  // 开发环境
   return process.cwd()
 }
 
 /**
- * resources 目录：内置 nginx.exe + 模板所在。
- * 打包后这些资源在 Electron 的 process.resourcesPath 下（由 extraResources 配置决定）。
+ * resources 目录：内置 nginx + 模板所在。
+ * 打包后在 process.resourcesPath（Electron 标准 API）。
  * 开发时在项目根的 resources/ 下。
- *
- * 关键：portable 模式下 process.resourcesPath 指向临时解压目录（resources 在那里），
- * 而 data 目录跟 exe 走（PORTABLE_EXECUTABLE_DIR）。两者不在同一处，必须分开算。
  */
 function getResourcesDir(): string {
-  // process.resourcesPath 是 Electron 注入的，打包后指向 app/resources
-  // extraResources 把 nginx → resources/nginx，templates → resources/templates
-  if (process.resourcesPath && process.resourcesPath !== 'None') {
+  const app = getElectronApp()
+  if (app?.isPackaged && process.resourcesPath) {
     return process.resourcesPath
   }
-  // 开发环境：项目根的 resources/
   return join(getDataRoot(), 'resources')
 }
 
 export interface AppPaths {
-  /** data 目录根（跟 exe 走） */
+  /** data 目录根（跟 exe/app 走） */
   dataRoot: string
   dataDir: string
   dbPath: string
@@ -59,7 +68,7 @@ export interface AppPaths {
   nginxLogDir: string
   snapshotDir: string
   tempDir: string
-  /** resources 目录（内置 nginx/模板，打包后在 process.resourcesPath） */
+  /** resources 目录（内置 nginx/模板） */
   resourcesDir: string
   bundledNginxDir: string
   ensureDataDirs: () => void

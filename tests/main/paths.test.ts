@@ -49,16 +49,15 @@ describe('paths', () => {
     expect(existsSync(join(dataDir, 'temp'))).toBe(true)
   })
 
-  it('PORTABLE_EXECUTABLE_DIR 优先于 production 分支', () => {
+  it('无 electron 时 fallback 到 process.cwd()', () => {
     __setAppRootForTest(null)
-    process.env.PORTABLE_EXECUTABLE_DIR = '/fake/portable'
     const p = resolvePaths()
-    expect(p.dataRoot).toBe('/fake/portable')
-    expect(p.dataDir).toBe('/fake/portable/data')
-    delete process.env.PORTABLE_EXECUTABLE_DIR
+    // 测试环境无 electron，fallback 到 process.cwd()（项目根）
+    expect(p.dataRoot).toBe(process.cwd())
   })
 
   it('resourcesDir 在开发模式下基于 dataRoot/resources', () => {
+    __setAppRootForTest(testRoot)
     const p = resolvePaths()
     expect(p.resourcesDir).toBe(join(testRoot, 'resources'))
     expect(p.bundledNginxDir).toBe(join(testRoot, 'resources', 'nginx'))
