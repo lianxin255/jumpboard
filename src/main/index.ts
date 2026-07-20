@@ -51,10 +51,14 @@ async function initEngineForDefaultHost() {
     engine = new LocalNginxEngine({
       nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir, prefixDir
     })
-    // 把内置 mime.types 复制到 prefixDir，让 `include mime.types;` 相对 -p 能解析。
+    // 把内置 mime.types 同时复制到 prefixDir 和 nginxConfDir：
+    // nginx 的 include 相对路径解析行为因平台/版本而异（可能相对 -p prefix 或 conf 文件目录），
+    // 两个目录都覆盖确保万无一失。
     const bundledMime = join(paths.bundledNginxDir, 'mime.types')
     if (pathExistsSync(bundledMime)) {
-      try { copySync(bundledMime, join(prefixDir, 'mime.types')) } catch { /* 忽略 */ }
+      for (const targetDir of [prefixDir, paths.nginxConfDir]) {
+        try { copySync(bundledMime, join(targetDir, 'mime.types')) } catch { /* 忽略 */ }
+      }
     }
     // local：生成初始 conf（即使没 mapping，也要有最小 conf）
     const mappings = listEnabledMappings(host.id)

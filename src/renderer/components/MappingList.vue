@@ -1,8 +1,22 @@
 <script setup lang="ts">
-import { PlusOutlined } from '@antdv-next/icons'
+import { PlusOutlined, DeleteOutlined } from '@antdv-next/icons'
+import { Modal } from 'antdv-next'
 import { useMappingsStore } from '@renderer/stores/mappings'
 const store = useMappingsStore()
 const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
+
+function confirmDelete(id: string, name: string) {
+  Modal.confirm({
+    title: '删除映射规则',
+    content: `确定删除「${name}」吗？此操作不可撤销。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      await store.remove(id)
+    }
+  })
+}
 </script>
 
 <template>
@@ -18,6 +32,9 @@ const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
       </div>
       <a-switch size="small" :checked="m.enabled === 1"
         @click.stop @change="store.toggle(m.id, $event ? 1 : 0)" />
+      <a-button type="text" size="small" danger @click.stop="confirmDelete(m.id, m.name)">
+        <template #icon><DeleteOutlined /></template>
+      </a-button>
     </div>
     <a-button class="new-btn" type="primary" @click="emit('new')">
       <template #icon><PlusOutlined /></template>
