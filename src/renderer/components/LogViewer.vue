@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import dayjs from 'dayjs'
 import { ReloadOutlined } from '@antdv-next/icons'
 import { useLogsStore } from '@renderer/stores/logs'
 import { api } from '@renderer/api/ipc'
@@ -29,7 +30,7 @@ function levelColor(level: string): string {
   return 'var(--text-tertiary)'
 }
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', { hour12: false })
+  return dayjs(ts).format('YYYY-MM-DD HH:mm:ss')
 }
 </script>
 

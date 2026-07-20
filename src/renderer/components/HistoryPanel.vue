@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import dayjs from 'dayjs'
 import { Modal, message } from 'antdv-next'
 import { ReloadOutlined, RollbackOutlined } from '@antdv-next/icons'
 import { useSnapshotsStore } from '@renderer/stores/snapshots'
@@ -48,7 +49,7 @@ function rollback() {
 }
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', { hour12: false })
+  return dayjs(ts).format('YYYY-MM-DD HH:mm:ss')
 }
 </script>
 
