@@ -230,18 +230,21 @@ async function save() {
         <a-form-item label="内网服务 IP 地址" name="upstreamHost">
           <a-input-group compact style="display: flex">
             <a-input v-model:value="form.upstreamHost" placeholder="如 192.168.1.10" style="flex: 1" />
-            <a-dropdown>
-              <a-button>本机 IP</a-button>
-              <template #overlay>
-                <a-menu @click="({ key }: any) => form.upstreamHost = key">
-                  <a-menu-item v-for="ip in localIPs" :key="ip.address">
-                    {{ ip.address }} <span style="color: #999">({{ ip.interface }})</span>
-                  </a-menu-item>
-                  <a-menu-divider v-if="localIPs.length > 0" />
-                  <a-menu-item key="127.0.0.1">127.0.0.1 (本机回环)</a-menu-item>
-                </a-menu>
+            <a-popover trigger="click" placement="bottomRight">
+              <template #content>
+                <div class="ip-picker">
+                  <div v-for="ip in localIPs" :key="ip.address" class="ip-item"
+                    @click="form.upstreamHost = ip.address">
+                    {{ ip.address }} <span class="ip-iface">({{ ip.interface }})</span>
+                  </div>
+                  <div class="ip-item ip-loopback" @click="form.upstreamHost = '127.0.0.1'">
+                    127.0.0.1 (本机回环)
+                  </div>
+                  <div v-if="localIPs.length === 0" class="ip-empty">获取本机 IP 失败</div>
+                </div>
               </template>
-            </a-dropdown>
+              <a-button>本机 IP</a-button>
+            </a-popover>
           </a-input-group>
           <template #extra>要转发的内网服务器的 IP，可点击"本机 IP"自动填入</template>
         </a-form-item>
@@ -302,4 +305,14 @@ async function save() {
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
+
+.ip-picker { max-width: 280px; }
+.ip-item {
+  padding: 4px 8px; cursor: pointer; border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+.ip-item:hover { background: rgba(0, 0, 0, 0.06); }
+.ip-iface { color: #999; font-size: 12px; }
+.ip-loopback { border-top: 1px solid #eee; margin-top: 4px; }
+.ip-empty { padding: 8px; color: #999; }
 </style>
