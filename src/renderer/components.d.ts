@@ -13,6 +13,8 @@ declare module 'vue' {
   export interface GlobalComponents {
     AAlert: typeof import('antdv-next')['Alert']
     AButton: typeof import('antdv-next')['Button']
+    AForm: typeof import('antdv-next')['Form']
+    AFormItem: typeof import('antdv-next')['FormItem']
     AInput: typeof import('antdv-next')['Input']
     AInputNumber: typeof import('antdv-next')['InputNumber']
     AInputPassword: typeof import('antdv-next')['InputPassword']
