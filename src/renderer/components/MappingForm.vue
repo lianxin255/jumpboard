@@ -10,6 +10,7 @@ const emit = defineEmits<{ (e: 'saved'): void; (e: 'cancel'): void }>()
 
 // 本机 IP 列表（供"填入本机 IP"下拉）
 const localIPs = ref<{ interface: string; address: string; family: string }[]>([])
+const ipPopoverOpen = ref(false)
 ;(async () => {
   try { localIPs.value = await api.getLocalIPs() } catch { /* IPC 未就绪 */ }
 })()
@@ -228,24 +229,25 @@ async function save() {
         </template>
 
         <a-form-item label="内网服务 IP 地址" name="upstreamHost">
-          <a-input-group compact style="display: flex">
+          <div style="display: flex; gap: 8px; align-items: center">
             <a-input v-model:value="form.upstreamHost" placeholder="如 192.168.1.10" style="flex: 1" />
-            <a-popover trigger="click" placement="bottomRight">
+            <a-popover v-model:open="ipPopoverOpen" trigger="click" placement="bottomRight">
               <template #content>
                 <div class="ip-picker">
                   <div v-for="ip in localIPs" :key="ip.address" class="ip-item"
-                    @click="form.upstreamHost = ip.address">
+                    @click="form.upstreamHost = ip.address; ipPopoverOpen = false">
                     {{ ip.address }} <span class="ip-iface">({{ ip.interface }})</span>
                   </div>
-                  <div class="ip-item ip-loopback" @click="form.upstreamHost = '127.0.0.1'">
+                  <div class="ip-item ip-loopback"
+                    @click="form.upstreamHost = '127.0.0.1'; ipPopoverOpen = false">
                     127.0.0.1 (本机回环)
                   </div>
                   <div v-if="localIPs.length === 0" class="ip-empty">获取本机 IP 失败</div>
                 </div>
               </template>
-              <a-button>本机 IP</a-button>
+              <a-button size="small">本机 IP</a-button>
             </a-popover>
-          </a-input-group>
+          </div>
           <template #extra>要转发的内网服务器的 IP，可点击"本机 IP"自动填入</template>
         </a-form-item>
         <a-form-item label="内网服务端口" name="upstreamPort">
