@@ -107,6 +107,8 @@ export const IPC = {
   HEALTH_CHECK_NOW: 'health:check-now',
   // Port check
   PORT_CHECK: 'port:check',
+  // Network
+  GET_LOCAL_IPS: 'network:get-local-ips',
   // Host 管理
   HOST_TEST_CONNECTION: 'host:test-connection',
   ENGINE_REFRESH_STATUS: 'engine:refresh-status',

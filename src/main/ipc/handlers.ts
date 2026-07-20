@@ -214,4 +214,21 @@ export function registerIpcHandlers(): void {
       return { ok: false, output: e?.message ?? String(e) }
     }
   })
+
+  // 获取本机所有网卡 IP（排除回环）
+  ipcMain.handle(IPC.GET_LOCAL_IPS, () => {
+    const os = require('os')
+    const interfaces = os.networkInterfaces() as Record<string, Array<{ address: string; family: string; internal: boolean }>>
+    const ips: { interface: string; address: string; family: string }[] = []
+    for (const name of Object.keys(interfaces)) {
+      const addrs = interfaces[name]
+      if (!addrs) continue
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          ips.push({ interface: name, address: addr.address, family: addr.family })
+        }
+      }
+    }
+    return ips
+  })
 }

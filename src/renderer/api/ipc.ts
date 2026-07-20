@@ -35,6 +35,8 @@ export interface ElectronAPI {
   wipeAllData(): Promise<{ ok: boolean; output?: string }>
   exportData(): Promise<any>
   importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number }>
+  // Network
+  getLocalIPs(): Promise<{ interface: string; address: string; family: string }[]>
 }
 
 declare global {

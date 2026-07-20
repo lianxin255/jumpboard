@@ -8,6 +8,12 @@ import type { Template } from '@renderer/stores/templates'
 const props = defineProps<{ hostId: string; mappingId?: string; templateData?: Template | null }>()
 const emit = defineEmits<{ (e: 'saved'): void; (e: 'cancel'): void }>()
 
+// 本机 IP 列表（供"填入本机 IP"下拉）
+const localIPs = ref<{ interface: string; address: string; family: string }[]>([])
+;(async () => {
+  try { localIPs.value = await api.getLocalIPs() } catch { /* IPC 未就绪 */ }
+})()
+
 interface FormState {
   name: string
   protocol: 'tcp' | 'udp' | 'http' | 'https'
@@ -222,8 +228,22 @@ async function save() {
         </template>
 
         <a-form-item label="内网服务 IP 地址" name="upstreamHost">
-          <a-input v-model:value="form.upstreamHost" placeholder="如 192.168.1.10" />
-          <template #extra>要转发的内网服务器的 IP</template>
+          <a-input-group compact style="display: flex">
+            <a-input v-model:value="form.upstreamHost" placeholder="如 192.168.1.10" style="flex: 1" />
+            <a-dropdown>
+              <a-button>本机 IP</a-button>
+              <template #overlay>
+                <a-menu @click="({ key }: any) => form.upstreamHost = key">
+                  <a-menu-item v-for="ip in localIPs" :key="ip.address">
+                    {{ ip.address }} <span style="color: #999">({{ ip.interface }})</span>
+                  </a-menu-item>
+                  <a-menu-divider v-if="localIPs.length > 0" />
+                  <a-menu-item key="127.0.0.1">127.0.0.1 (本机回环)</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </a-input-group>
+          <template #extra>要转发的内网服务器的 IP，可点击"本机 IP"自动填入</template>
         </a-form-item>
         <a-form-item label="内网服务端口" name="upstreamPort">
           <a-input-number v-model:value="form.upstreamPort" style="width: 100%" placeholder="如 3306（MySQL）、22（SSH）、80（Web）" />

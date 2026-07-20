@@ -41,6 +41,8 @@ const api = {
   wipeAllData: () => ipcRenderer.invoke(IPC.DATA_WIPE),
   exportData: () => ipcRenderer.invoke(IPC.DATA_EXPORT),
   importData: (payload: any) => ipcRenderer.invoke(IPC.DATA_IMPORT, payload),
+  // Network
+  getLocalIPs: () => ipcRenderer.invoke(IPC.GET_LOCAL_IPS),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
