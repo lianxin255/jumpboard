@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs'
+import { readdirSync, readFileSync, outputFileSync, pathExistsSync, ensureDirSync, removeSync } from 'fs-extra'
 import { join, basename, extname } from 'path'
 import { parse, stringify } from 'yaml'
 import type { TemplateDefinition } from './types'
@@ -19,11 +19,11 @@ function getBuiltinDir(): string {
   // 注意：NODE_ENV 在 portable 下不一定被设，用 process.resourcesPath 检测更可靠。
   if (process.resourcesPath && process.resourcesPath !== 'None') {
     const packaged = join(process.resourcesPath, 'templates', 'builtin')
-    if (existsSync(packaged)) return packaged
+    if (pathExistsSync(packaged)) return packaged
   }
   // vitest 运行源文件时 __dirname 是 src/main/templates，内置模板就在 ./builtin
   const fromHere = join(__dirname, 'builtin')
-  if (existsSync(fromHere)) return fromHere
+  if (pathExistsSync(fromHere)) return fromHere
   // electron-vite 编译后（开发模式 npm run dev）__dirname 是 out/main，回溯到 src
   return join(__dirname, '..', '..', '..', 'src', 'main', 'templates', 'builtin')
 }
@@ -37,7 +37,7 @@ function getCustomDir(): string {
   if (customDirForTest) return customDirForTest
   const paths = resolvePaths()
   const dir = join(paths.dataDir, 'templates', 'custom')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  ensureDirSync(dir)
   return dir
 }
 
@@ -63,7 +63,7 @@ function loadYamlFile(filePath: string, id: string, builtin: boolean): TemplateD
 
 export function listBuiltinTemplates(): TemplateDefinition[] {
   const dir = getBuiltinDir()
-  if (!existsSync(dir)) return []
+  if (!pathExistsSync(dir)) return []
   const files = readdirSync(dir).filter(f => extname(f) === '.yml' || extname(f) === '.yaml')
   const list: TemplateDefinition[] = []
   for (const f of files) {
@@ -76,7 +76,7 @@ export function listBuiltinTemplates(): TemplateDefinition[] {
 
 export function listCustomTemplates(): TemplateDefinition[] {
   const dir = getCustomDir()
-  if (!existsSync(dir)) return []
+  if (!pathExistsSync(dir)) return []
   const files = readdirSync(dir).filter(f => extname(f) === '.yml' || extname(f) === '.yaml')
   const list: TemplateDefinition[] = []
   for (const f of files) {
@@ -93,7 +93,6 @@ export function listAllTemplates(): TemplateDefinition[] {
 
 export function saveCustomTemplate(tpl: TemplateDefinition): void {
   const dir = getCustomDir()
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   const data = {
     id: tpl.id,
     name: tpl.name,
@@ -103,11 +102,11 @@ export function saveCustomTemplate(tpl: TemplateDefinition): void {
     mapping: tpl.mapping,
     extraDirectives: tpl.extraDirectives
   }
-  writeFileSync(join(dir, `${tpl.id}.yml`), stringify(data), 'utf-8')
+  outputFileSync(join(dir, `${tpl.id}.yml`), stringify(data))
 }
 
 export function deleteCustomTemplate(id: string): void {
   const dir = getCustomDir()
   const file = join(dir, `${id}.yml`)
-  if (existsSync(file)) rmSync(file)
+  if (pathExistsSync(file)) removeSync(file)
 }

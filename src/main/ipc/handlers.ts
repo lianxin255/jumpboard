@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { join } from 'path'
-import { rmSync, existsSync, readFileSync } from 'fs'
+import { removeSync, pathExistsSync, readFileSync } from 'fs-extra'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
 import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
@@ -101,14 +101,14 @@ export function registerIpcHandlers(): void {
     const result: { access: string[]; error: string[] } = { access: [], error: [] }
     try {
       const accessLog = join(paths.nginxLogDir, 'access.log')
-      if (existsSync(accessLog)) {
+      if (pathExistsSync(accessLog)) {
         const content = readFileSync(accessLog, 'utf-8')
         result.access = content.split('\n').filter(Boolean).slice(-lines)
       }
     } catch { /* 忽略 */ }
     try {
       const errorLog = join(paths.nginxLogDir, 'error.log')
-      if (existsSync(errorLog)) {
+      if (pathExistsSync(errorLog)) {
         const content = readFileSync(errorLog, 'utf-8')
         result.error = content.split('\n').filter(Boolean).slice(-lines)
       }
@@ -190,8 +190,8 @@ export function registerIpcHandlers(): void {
       closeDb()
       for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates']) {
         const p = join(paths.dataDir, sub)
-        if (existsSync(p)) {
-          rmSync(p, { recursive: true, force: true })
+        if (pathExistsSync(p)) {
+          removeSync(p)
         }
       }
       return { ok: true }

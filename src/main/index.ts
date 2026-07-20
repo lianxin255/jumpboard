@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
-import { copyFileSync, existsSync, mkdirSync } from 'fs'
+import { ensureDirSync, copySync, pathExistsSync } from 'fs-extra'
 import { resolvePaths } from './paths'
 import { openDb, closeDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -47,14 +47,14 @@ async function initEngineForDefaultHost() {
     // nginx -p prefix：用 data/nginx-home（跟 exe 走、可写、持久）。
     // 不用 nginx.exe 所在目录（portable 下在临时解压目录，可能只读/被清理）。
     const prefixDir = join(paths.dataDir, 'nginx-home')
-    if (!existsSync(prefixDir)) mkdirSync(prefixDir, { recursive: true })
+    ensureDirSync(prefixDir)
     engine = new LocalNginxEngine({
       nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir, prefixDir
     })
     // 把内置 mime.types 复制到 prefixDir，让 `include mime.types;` 相对 -p 能解析。
     const bundledMime = join(paths.bundledNginxDir, 'mime.types')
-    if (existsSync(bundledMime)) {
-      try { copyFileSync(bundledMime, join(prefixDir, 'mime.types')) } catch { /* 忽略 */ }
+    if (pathExistsSync(bundledMime)) {
+      try { copySync(bundledMime, join(prefixDir, 'mime.types')) } catch { /* 忽略 */ }
     }
     // local：生成初始 conf（即使没 mapping，也要有最小 conf）
     const mappings = listEnabledMappings(host.id)

@@ -1,5 +1,5 @@
 import { join, dirname } from 'path'
-import { mkdirSync } from 'fs'
+import { ensureDirSync } from 'fs-extra'
 
 let appRootForTest: string | null = null
 
@@ -99,7 +99,7 @@ export function resolvePaths(): AppPaths {
         join(dataDir, 'snapshots'),
         join(dataDir, 'temp')
       ]) {
-        mkdirSync(d, { recursive: true })
+        ensureDirSync(d)
       }
     }
   }

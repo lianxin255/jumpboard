@@ -1,6 +1,6 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { join } from 'path'
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
+import { ensureDirSync, pathExistsSync, outputFileSync, readFileSync } from 'fs-extra'
 import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
 
 export class LocalNginxEngine implements NginxEngine {
@@ -21,17 +21,17 @@ export class LocalNginxEngine implements NginxEngine {
     if (this.child && !this.child.killed) {
       throw new Error('nginx already running')
     }
-    if (!existsSync(this.cfg.nginxPath)) {
+    if (!pathExistsSync(this.cfg.nginxPath)) {
       throw new Error(`nginx binary not found: ${this.cfg.nginxPath}`)
     }
     for (const d of [this.cfg.logDir, this.cfg.tempDir, this.cfg.prefixDir]) {
-      if (!existsSync(d)) mkdirSync(d, { recursive: true })
+      ensureDirSync(d)
     }
     // nginx -p prefix 指向 prefixDir（data/nginx-home，跟 exe 走、可写、持久）。
     // 不再用 nginx.exe 所在目录（portable 下在临时解压目录，可能只读/被清理）。
     // nginx 启动早期用 <prefix>/logs/error.log 记日志，必须确保 logs 子目录存在。
     const prefixLogsDir = join(this.cfg.prefixDir, 'logs')
-    if (!existsSync(prefixLogsDir)) mkdirSync(prefixLogsDir, { recursive: true })
+    ensureDirSync(prefixLogsDir)
     this.child = spawn(this.cfg.nginxPath, [
       '-c', this.cfg.confPath,
       '-p', this.cfg.prefixDir,
@@ -135,11 +135,11 @@ export class LocalNginxEngine implements NginxEngine {
   }
 
   async writeConf(content: string): Promise<void> {
-    writeFileSync(this.cfg.confPath, content, 'utf-8')
+    outputFileSync(this.cfg.confPath, content)
   }
 
   async readConf(): Promise<string> {
-    if (!existsSync(this.cfg.confPath)) return ''
+    if (!pathExistsSync(this.cfg.confPath)) return ''
     return readFileSync(this.cfg.confPath, 'utf-8')
   }
 }
