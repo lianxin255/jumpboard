@@ -1,212 +1,163 @@
 <script setup lang="ts">
 import { ThemeProvider, createStyles } from 'antdv-style'
 import { ConfigProvider, theme } from 'antdv-next'
-import type { ButtonProps, ConfigProviderProps } from 'antdv-next'
+import type { ConfigProviderProps } from 'antdv-next'
 import { clsx } from '@v-c/util'
 import { computed } from 'vue'
 
-// glassTheme 必须在 ThemeProvider 内部调用（useStyles 依赖 token 上下文）
-// 所以 Root.vue 先挂 ThemeProvider，内部子组件 GlassApp 用 useGlassTheme
+// 暗色 token 上下文必须在 ThemeProvider 内部使用，所以拆成内部组件。
+// 已去除毛玻璃注入，改由 antd darkAlgorithm + 自定义暗色 token 驱动。
 
-const useStyles = createStyles(({ token, css }) => {
-  const glassBorder = {
-    boxShadow: [
-      '0 8px 24px rgba(85, 85,85, 0.1)',
-      'inset 0 0 5px 2px rgba(255, 255, 255, 0.3)',
-      'inset 0 5px 2px rgba(255, 255, 255, 0.2)',
-    ].join(','),
-  }
-  const glassBox = {
-    ...glassBorder,
-    background: `color-mix(in srgb, ${token.colorBgContainer} 15%, transparent)`,
-    backdropFilter: 'blur(12px)',
-  }
+const useStyles = createStyles(({ css }) => {
   return {
-    glassBorder,
-    glassBox,
-    notBackdropFilter: css({ backdropFilter: 'none' }),
-    app: css({ textShadow: '0 1px rgba(0,0,0,0.1)' }),
-    cardRoot: css({
-      ...glassBox,
-      backgroundColor: `color-mix(in srgb, ${token.colorBgContainer} 40%, transparent)`,
+    // 应用根：轻微文字阴影提升暗底可读性
+    app: css({ textShadow: '0 1px rgba(0,0,0,0.3)' }),
+    // antd 组件的统一暗色细边框（替代旧的玻璃高光）
+    borderSkin: css({
+      borderColor: 'var(--border-soft) !important',
+      boxShadow: 'none',
     }),
-    modalContainer: css({ ...glassBox, backdropFilter: 'none' }),
-    buttonRoot: css({ ...glassBorder }),
-    buttonRootDefaultColor: css({
-      background: 'transparent',
-      color: token.colorText,
-      '&:hover': {
-        background: 'rgba(255,255,255,0.2)',
-        color: `color-mix(in srgb, ${token.colorText} 90%, transparent)`,
-      },
-      '&:active': {
-        background: 'rgba(255,255,255,0.1)',
-        color: `color-mix(in srgb, ${token.colorText} 80%, transparent)`,
-      },
+    // 弹窗/卡片容器统一暗色 surface 背景
+    surfaceBg: css({
+      background: 'var(--surface)',
+      borderColor: 'var(--border-soft)',
+      boxShadow: 'var(--shadow-md)',
     }),
-    buttonRootDangerColor: css({
-      background: 'rgba(255, 120, 117, 0.1)',
-      borderColor: 'rgba(255, 120, 117, 0.24)',
-      color: token.colorError,
-      '&:hover': {
-        background: 'rgba(255, 120, 117, 0.16)',
-        borderColor: 'rgba(255, 120, 117, 0.32)',
-        color: token.colorErrorHover,
-      },
-      '&:active': {
-        background: 'rgba(255, 120, 117, 0.12)',
-        borderColor: 'rgba(255, 120, 117, 0.28)',
-        color: token.colorErrorActive,
-      },
-    }),
-    dropdownRoot: css({
-      ...glassBox,
-      borderRadius: token.borderRadiusLG,
-      ul: { background: 'transparent' },
-    }),
-    notificationRoot: css({
-      '&.ant-notification-notice, & .ant-notification-notice': {
-        ...glassBox,
-        background: `color-mix(in srgb, ${token.colorBgContainer} 25%, transparent)`,
-      },
-    }),
-    switchRoot: css({ ...glassBorder, border: 'none' }),
-    segmentedRoot: css({
-      ...glassBorder,
-      background: 'transparent',
-      backdropFilter: 'none',
-      '& .ant-segmented-thumb': { ...glassBox },
-      '& .ant-segmented-item-selected': { ...glassBox },
-    }),
-    radioButtonRoot: css({
-      '&.ant-radio-button-wrapper': {
-        ...glassBorder,
-        background: 'transparent',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        color: token.colorText,
-        '&:hover': { borderColor: 'rgba(255, 255, 255, 0.24)', color: token.colorText },
-        '&.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)': {
-          ...glassBox,
-          borderColor: 'rgba(255, 255, 255, 0.28)',
-          color: token.colorText,
-          '&::before': { backgroundColor: 'rgba(255, 255, 255, 0.18)' },
-          '&:hover': { color: token.colorText },
-        },
-      },
-    }),
-    progressTrack: css({ ...glassBorder, height: '12px' }),
-    progressRail: css({ height: '12px' }),
   }
 })
 
-// 内部组件：在 ThemeProvider 内部，可以安全调用 useStyles
 import { defineComponent, h } from 'vue'
 import App from './App.vue'
 
-const GlassConfigProvider = defineComponent({
+const DarkConfigProvider = defineComponent({
   setup(_, { slots }) {
     const { styles } = useStyles()
     const configProps = computed<ConfigProviderProps>(() => ({
       theme: {
-        algorithm: theme.defaultAlgorithm,
+        algorithm: theme.darkAlgorithm,
         token: {
-          colorPrimary: '#0A84FF',
-          borderRadius: 12,
-          borderRadiusLG: 12,
-          borderRadiusSM: 12,
-          borderRadiusXS: 12,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-          motionDurationSlow: '0.2s',
-          motionDurationMid: '0.1s',
-          motionDurationFast: '0.05s',
+          colorPrimary: '#c96442',
+          colorSuccess: '#5b9a4a',
+          colorWarning: '#c9a23a',
+          colorError: '#b53333',
+          colorInfo: '#c96442',
+          // 背景
+          colorBgBase: '#141413',
+          colorBgContainer: '#262624',
+          colorBgElevated: '#30302e',
+          colorBgLayout: '#141413',
+          colorBgSpotlight: '#30302e',
+          colorBgBlur: '#141413',
+          // 文字
+          colorTextBase: '#faf9f5',
+          colorText: '#faf9f5',
+          colorTextSecondary: '#b0aea5',
+          colorTextTertiary: '#87867f',
+          colorTextQuaternary: '#828179',
+          // 边框
+          colorBorder: '#3d3d3a',
+          colorBorderSecondary: '#30302e',
+          // 圆角缩小到设计稿风格
+          borderRadius: 3,
+          borderRadiusLG: 6,
+          borderRadiusSM: 2,
+          borderRadiusXS: 2,
+          // 字体
+          fontFamily: "Arial, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+          fontFamilyCode: "ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace",
+          fontSize: 13,
+          // 动效
+          motionDurationSlow: '0.2s cubic-bezier(0.2,0,0,1)',
+          motionDurationMid: '0.14s cubic-bezier(0.2,0,0,1)',
+          motionDurationFast: '0.1s cubic-bezier(0.2,0,0,1)',
+          // 阴影
+          boxShadowSecondary: '0 1px 0 rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.45)',
         },
         components: {
           Button: {
-            primaryShadow: 'none', dangerShadow: 'none', defaultShadow: 'none',
-            colorError: '#ff7875', colorErrorHover: '#ffa39e', colorErrorActive: '#ff4d4f',
-            colorErrorBg: 'rgba(255, 120, 117, 0.1)',
-            colorErrorBgFilledHover: 'rgba(255, 120, 117, 0.16)',
-            colorErrorBgActive: 'rgba(255, 120, 117, 0.12)',
-            colorErrorBorder: 'rgba(255, 120, 117, 0.24)',
-            colorErrorBorderHover: 'rgba(255, 120, 117, 0.32)',
-            colorErrorText: '#ff7875', colorErrorTextHover: '#ffa39e', colorErrorTextActive: '#ff4d4f',
-            defaultBg: 'rgba(255, 255, 255, 0.1)',
-            defaultBorderColor: 'rgba(255, 255, 255, 0.1)',
-            defaultHoverBg: 'rgba(255, 255, 255, 0.2)',
-            defaultHoverBorderColor: 'rgba(255, 255, 255, 0.1)',
-            defaultActiveBg: 'rgba(255, 255, 255, 0.1)',
-            defaultActiveBorderColor: 'rgba(255, 255, 255, 0.18)',
+            primaryShadow: 'none',
+            defaultShadow: 'none',
+            dangerShadow: 'none',
+            fontWeight: 500,
+            controlHeight: 30,
           },
-          Notification: {
-            colorSuccessBg: 'rgba(183, 235, 143, 0.18)',
-            colorErrorBg: 'rgba(255, 120, 117, 0.16)',
-            colorInfoBg: 'rgba(145, 202, 255, 0.18)',
-            colorWarningBg: 'rgba(255, 229, 143, 0.18)',
+          Modal: {
+            contentBg: '#30302e',
+            headerBg: '#30302e',
+            titleColor: '#faf9f5',
           },
-          Layout: {
-            bodyBg: 'rgba(255, 255, 255, 0.12)',
-            footerBg: 'rgba(255, 255, 255, 0.12)',
-            headerBg: 'rgba(255, 255, 255, 0.32)',
-            headerColor: 'rgba(0, 0, 0, 0.88)',
-            siderBg: 'rgba(255, 255, 255, 0.18)',
-            triggerBg: 'rgba(255, 255, 255, 0.28)',
-            triggerColor: 'rgba(0, 0, 0, 0.88)',
+          Input: {
+            colorBgContainer: '#262624',
+            activeBorderColor: '#c96442',
+            hoverBorderColor: '#87867f',
           },
-          Menu: {
-            activeBarBorderWidth: 0,
-            groupTitleColor: 'rgba(0, 0, 0, 0.55)',
-            itemActiveBg: 'rgba(255, 255, 255, 0.24)',
-            itemBg: 'transparent',
-            itemColor: 'rgba(0, 0, 0, 0.78)',
-            itemHoverBg: 'rgba(255, 255, 255, 0.28)',
-            itemHoverColor: 'rgba(0, 0, 0, 0.88)',
-            itemSelectedBg: 'color-mix(in srgb, #0A84FF 18%, transparent)',
-            itemSelectedColor: '#0A84FF',
-            subMenuItemBg: 'transparent',
-            subMenuItemSelectedColor: 'rgba(0, 0, 0, 0.88)',
+          InputNumber: {
+            colorBgContainer: '#262624',
+            activeBorderColor: '#c96442',
           },
-          Progress: {
-            circleTextColor: 'rgba(0, 0, 0, 0.88)',
-            defaultColor: '#0A84FF',
-            remainingColor: 'rgba(255, 255, 255, 0.28)',
+          Select: {
+            colorBgContainer: '#262624',
+            optionSelectedBg: 'rgba(201,100,66,0.12)',
+            optionActiveBg: '#3d3d3a',
+          },
+          Tabs: {
+            cardBg: 'transparent',
+            cardActiveColor: '#faf9f5',
+            itemColor: '#87867f',
+            itemHoverColor: '#b0aea5',
+            itemSelectedColor: '#faf9f5',
+            inkBarColor: '#c96442',
+          },
+          Switch: {
+            colorPrimary: '#5b9a4a',
+          },
+          Card: {
+            colorBgContainer: '#262624',
+            headerBg: 'transparent',
+          },
+          Segmented: {
+            itemSelectedBg: '#3d3d3a',
+            trackBg: '#262624',
+            itemColor: '#87867f',
+          },
+          Tag: {
+            defaultBg: '#262624',
+          },
+          Popover: {
+            colorBgElevated: '#30302e',
+          },
+          Tooltip: {
+            colorBgSpotlight: '#30302e',
+          },
+          Table: {
+            headerBg: '#1c1c1a',
+            rowHoverBg: '#262624',
           },
         },
       },
       app: { class: styles.app },
-      card: { classes: { root: styles.cardRoot } },
-      modal: { classes: { container: styles.modalContainer } },
-      button: {
-        classes: ({ props }: { props: ButtonProps }) => ({
-          root: clsx(
-            styles.buttonRoot,
-            props.color === 'default' && styles.buttonRootDefaultColor,
-            props.color === 'danger' && styles.buttonRootDangerColor,
-          ),
-        }),
-      },
-      alert: { class: clsx(styles.glassBox, styles.notBackdropFilter) },
-      dropdown: { classes: { root: styles.dropdownRoot } },
+      // 弹窗/下拉统一暗色 surface 背景 + 细边框
+      modal: { classes: { container: styles.surfaceBg } },
+      card: { classes: { root: styles.borderSkin } },
+      dropdown: { classes: { root: styles.surfaceBg } },
       select: {
         classes: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
-          popup: { root: styles.glassBox },
+          root: styles.borderSkin,
+          popup: { root: styles.surfaceBg },
         },
       },
-      input: { classes: { root: clsx(styles.glassBox, styles.notBackdropFilter) } },
-      inputNumber: { classes: { root: clsx(styles.glassBox, styles.notBackdropFilter) } },
-      popover: { classes: { container: styles.glassBox } },
-      notification: { classes: { root: styles.notificationRoot } },
-      switch: { classes: { root: styles.switchRoot } },
-      radio: { classes: { root: styles.radioButtonRoot } },
-      segmented: { class: styles.segmentedRoot },
+      input: { classes: { root: styles.borderSkin } },
+      inputNumber: { classes: { root: styles.borderSkin } },
+      popover: { classes: { container: styles.surfaceBg } },
+      notification: { classes: { root: styles.surfaceBg } },
       colorPicker: {
         arrow: false,
-        classes: { root: clsx(styles.glassBox, styles.notBackdropFilter) },
+        classes: { root: styles.borderSkin },
       },
       datePicker: {
         classes: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
-          popup: { container: styles.glassBox },
+          root: styles.borderSkin,
+          popup: { container: styles.surfaceBg },
         },
       },
     }))
@@ -217,8 +168,8 @@ const GlassConfigProvider = defineComponent({
 
 <template>
   <ThemeProvider>
-    <GlassConfigProvider>
+    <DarkConfigProvider>
       <App />
-    </GlassConfigProvider>
+    </DarkConfigProvider>
   </ThemeProvider>
 </template>

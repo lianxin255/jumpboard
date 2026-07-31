@@ -1,19 +1,122 @@
-/* 毛玻璃工具类。组合 backdrop-filter + 半透明 + 细边框 + 阴影。
-   antd 组件的玻璃质感由 glassTheme.ts 的 ConfigProvider classes 注入，
-   这里只保留自定义容器（非 antd 组件）用的 .glass-card / .glass-panel。 */
+/* 容器与按钮工具类。已去除毛玻璃，改为 Anthropic 暗色的实色 surface。
+   保留 .glass-card / .glass-panel class 名以兼容现有组件引用。 */
 
+/* ── 容器 ── */
 .glass-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--blur-md)) saturate(1.5);
-  -webkit-backdrop-filter: blur(var(--blur-md)) saturate(1.5);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  background: var(--surface-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
 }
 
 .glass-panel {
-  background: var(--bg-elevated);
-  backdrop-filter: blur(var(--blur-lg)) saturate(1.8);
-  -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.8);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
 }
+
+/* ── 按钮工具类（对齐设计稿 .btn 系列） ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: var(--r);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--fg);
+  transition: all var(--transition-fast);
+}
+.btn .b-ico { width: 13px; height: 13px; flex: none; }
+
+.btn-ghost { color: var(--fg-2); border-color: var(--border-soft); }
+.btn-ghost:hover { color: var(--fg); background: var(--surface-3); border-color: var(--muted); }
+
+.btn-sand { background: var(--surface-2); color: var(--fg); border-color: var(--border-soft); }
+.btn-sand:hover { background: #4a4a46; }
+
+.btn-dark { background: var(--bg-topbar); color: var(--fg-2); border-color: var(--border-soft); }
+.btn-dark:hover { color: var(--fg); border-color: var(--muted); }
+
+.btn-accent { background: var(--color-accent); color: var(--fg); }
+.btn-accent:hover { background: var(--color-accent-hover); }
+.btn-accent:active { background: var(--color-accent-active); }
+
+.btn-danger { background: var(--color-danger); color: var(--fg); }
+.btn-danger:hover { background: #9c2a2a; }
+
+.btn-sm { padding: 4px 8px; font-size: 11.5px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; align-items: center; }
+
+/* ── 图标按钮（行内操作） ── */
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+.icon-btn.danger:hover { color: var(--color-danger); background: rgba(181, 51, 51, 0.1); }
+.icon-btn svg { width: 14px; height: 14px; }
+
+/* ── 段落标题（mono uppercase 小标） ── */
+.sec-tit {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--meta);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── 状态点 ── */
+.eng-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+.eng-dot.run { background: var(--color-success); box-shadow: 0 0 0 3px rgba(91, 154, 74, 0.18); }
+.eng-dot.stop { background: var(--color-danger); }
+.eng-dot.unk { background: var(--meta); }
+
+/* ── 脉冲动画（待应用提示） ── */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 空状态 ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px var(--page-px);
+  text-align: center;
+}
+.empty-state .e-ico {
+  width: 64px;
+  height: 64px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--r);
+  display: grid;
+  place-items: center;
+  color: var(--meta);
+  margin-bottom: 18px;
+}
+.empty-state .e-ico svg { width: 30px; height: 30px; }
+.empty-state h3 { font-size: 20px; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; color: var(--muted); max-width: 340px; margin-bottom: 20px; }

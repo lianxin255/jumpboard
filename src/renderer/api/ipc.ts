@@ -3,6 +3,8 @@ export interface ElectronAPI {
   createHost(input: any): Promise<any>
   updateHost(id: string, patch: any): Promise<any>
   deleteHost(id: string): Promise<boolean>
+  setDefaultHost(id: string): Promise<boolean>
+  switchHost(id: string): Promise<{ ok: boolean }>
   listMappings(hostId: string): Promise<any[]>
   createMapping(input: any): Promise<any>
   updateMapping(id: string, patch: any): Promise<any>
@@ -12,6 +14,8 @@ export interface ElectronAPI {
   reloadEngine(): Promise<{ ok: boolean; output: string }>
   testEngine(): Promise<{ ok: boolean; output: string }>
   engineStatus(): Promise<string>
+  isEngineDirty(): Promise<boolean>
+  getEnginePid(): Promise<number | null>
   // Template
   listTemplates(): Promise<any[]>
   listBuiltinTemplates(): Promise<any[]>
@@ -34,7 +38,7 @@ export interface ElectronAPI {
   // 数据管理
   wipeAllData(): Promise<{ ok: boolean; output?: string }>
   exportData(): Promise<any>
-  importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number }>
+  importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number; snapshotsImported?: number; logsImported?: number }>
   // Network
   getLocalIPs(): Promise<{ interface: string; address: string; family: string }[]>
 }

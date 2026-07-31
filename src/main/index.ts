@@ -1,15 +1,11 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
-import { ensureDirSync, copySync, pathExistsSync } from 'fs-extra'
 import { resolvePaths } from './paths'
 import { openDb, closeDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
-import { setActiveEngine, getActiveEngine } from './nginx/engineRegistry'
-import { LocalNginxEngine } from './nginx/localEngine'
-import { RemoteNginxEngine } from './nginx/remoteEngine'
+import { getActiveEngine } from './nginx/engineRegistry'
+import { switchEngineToHost } from './nginx/hostEngineSwitch'
 import { getDefaultHost, listHosts, createHost, setDefaultHost } from './db/hostRepo'
-import { listEnabledMappings } from './db/mappingRepo'
-import { generateFullConf } from './nginx/confGenerator'
 import { startHealthCheckLoop, stopHealthCheckLoop } from './services/healthCheck'
 
 function createWindow() {
@@ -34,64 +30,27 @@ function createWindow() {
   }
 }
 
-async function initEngineForDefaultHost() {
-  const host = getDefaultHost()
-  if (!host) return
-  const paths = resolvePaths()
-
-  let engine: LocalNginxEngine | RemoteNginxEngine
-  if (host.type === 'local') {
-    const nginxPath = host.localConfig?.nginxPath
-      || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
-    const confPath = join(paths.nginxConfDir, 'nginx.conf')
-    // nginx -p prefix：用 data/nginx-home（跟 exe 走、可写、持久）。
-    // 不用 nginx.exe 所在目录（portable 下在临时解压目录，可能只读/被清理）。
-    const prefixDir = join(paths.dataDir, 'nginx-home')
-    ensureDirSync(prefixDir)
-    engine = new LocalNginxEngine({
-      nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir, prefixDir
-    })
-    // 把内置 mime.types 同时复制到 prefixDir 和 nginxConfDir：
-    // nginx 的 include 相对路径解析行为因平台/版本而异（可能相对 -p prefix 或 conf 文件目录），
-    // 两个目录都覆盖确保万无一失。
-    const bundledMime = join(paths.bundledNginxDir, 'mime.types')
-    if (pathExistsSync(bundledMime)) {
-      for (const targetDir of [prefixDir, paths.nginxConfDir]) {
-        try { copySync(bundledMime, join(targetDir, 'mime.types')) } catch { /* 忽略 */ }
-      }
-    }
-    // local：生成初始 conf（即使没 mapping，也要有最小 conf）
-    const mappings = listEnabledMappings(host.id)
-    const conf = generateFullConf(mappings, {
-      nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir
-    })
-    await engine.writeConf(conf)
-  } else if (host.type === 'remote' && host.remoteConfig) {
-    // remote：不自动写 conf（远程 conf 由远程自己维护），只建连接 + 异步刷新状态
-    engine = new RemoteNginxEngine({
-      host: host.remoteConfig.host,
-      port: host.remoteConfig.port,
-      username: host.remoteConfig.username,
-      passwordEncrypted: host.remoteConfig.passwordEncrypted,
-      privateKeyPath: host.remoteConfig.keyPath,
-      nginxPath: host.remoteConfig.nginxPath,
-      confPath: host.remoteConfig.confPath,
-      reloadCmd: host.remoteConfig.reloadCmd,
-      testCmd: host.remoteConfig.testCmd
-    })
-    // 异步刷新状态（不 await，不阻塞启动）
-    if (engine instanceof RemoteNginxEngine) {
-      engine.refreshStatus().catch(() => {})
-    }
-  } else {
-    return
-  }
-  setActiveEngine(engine)
-}
-
 app.whenReady().then(async () => {
   try {
+    // Windows 下 nginx.exe 用 ANSI 代码页读文件，路径含非 ASCII 字符（中文用户名/中文文件夹）
+    // 会触发 CreateFile failed (1113)，nginx 无法启动。这是 nginx 官方 Windows 版的硬限制，
+    // 社区无解（短路径/8.3 对中文不可靠）。绿色版的正确做法是提示用户放到英文路径。
+    if (process.platform === 'win32' && app.isPackaged) {
+      // 只检查 exe 所在目录（dirname），不检查 exe 文件名本身
+      // —— exe 名可能含中文（如 Nginx跳板机.exe），但 nginx 的工作目录是 dataDir，不涉及 exe 名
+      const exeDir = require('path').dirname(app.getPath('exe'))
+      if (/[^\x00-\x7F]/.test(exeDir)) {
+        dialog.showErrorBox(
+          '路径包含中文，无法启动',
+          '本程序内置的 nginx 不支持包含中文的路径（如中文用户名「C:\\Users\\张三」或中文文件夹）。\n\n' +
+          '当前路径：\n' + exeDir + '\n\n' +
+          '解决方法：把整个程序文件夹复制或移动到纯英文路径下（例如 D:\\nginx-jump\\ 或 C:\\nginx-jump\\），再重新运行。'
+        )
+        app.exit(1)
+        return
+      }
+    }
+
     const paths = resolvePaths()
     paths.ensureDataDirs()
     openDb()
@@ -109,7 +68,8 @@ app.whenReady().then(async () => {
     }
 
     registerIpcHandlers()
-    await initEngineForDefaultHost()
+    const def = getDefaultHost()
+    if (def) await switchEngineToHost(def.id)
     createWindow()
     startHealthCheckLoop()
 

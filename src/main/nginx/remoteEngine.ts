@@ -79,6 +79,18 @@ export class RemoteNginxEngine implements NginxEngine {
     return await this.ssh.readFile(this.cfg.confPath)
   }
 
+  async getPid(): Promise<number | null> {
+    try {
+      // cat pidfile 是 nginx 规范做法，pgrep -xo（最老进程=master）兜底
+      const r = await this.ssh.exec('cat /run/nginx.pid 2>/dev/null || pgrep -xo nginx')
+      const out = r.stdout.trim()
+      const n = parseInt(out, 10)
+      return Number.isFinite(n) && n > 0 ? n : null
+    } catch {
+      return null
+    }
+  }
+
   close(): void {
     this.ssh.close()
   }

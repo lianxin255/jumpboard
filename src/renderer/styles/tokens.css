@@ -1,39 +1,69 @@
-/* 设计 token：颜色/间距/圆角/阴影/字体。深浅色双主题。 */
+/* 设计 token：Anthropic 暗色风（暖灰底 + 赤陶橙）。
+   单一暗色主题，不做深浅切换。token 值精确对齐 UI 设计稿。 */
 
 :root {
-  /* 品牌色（iOS 系统蓝） */
-  --color-accent: #0A84FF;
-  --color-accent-hover: #0071E3;
-  --color-accent-soft: rgba(10, 132, 255, 0.12);
+  /* ── 品牌色（赤陶橙） ── */
+  --color-accent: #c96442;
+  --color-accent-hover: color-mix(in oklab, #c96442, #fff 6%);
+  --color-accent-active: color-mix(in oklab, #c96442, #000 14%);
+  --color-accent-soft: rgba(201, 100, 66, 0.1);
 
-  /* 语义色 */
-  --color-success: #34c759;
-  --color-warning: #ff9500;
-  --color-danger: #ff3b30;
+  /* ── 语义色 ── */
+  --color-success: #5b9a4a;
+  --color-warning: #c9a23a;
+  --color-danger: #b53333;
 
-  /* 中性色（浅色主题） */
-  --bg-base: #f5f5f7;
-  --bg-elevated: rgba(255, 255, 255, 0.72);
-  --bg-glass: rgba(255, 255, 255, 0.6);
-  --bg-glass-strong: rgba(255, 255, 255, 0.8);
-  --bg-input: rgba(255, 255, 255, 0.8);
-  --bg-hover: rgba(0, 0, 0, 0.04);
+  /* ── 背景层级（设计稿 surface 分层） ── */
+  --bg-base: #141413;          /* 最底层 app 背景 */
+  --bg-topbar: #0e0e0d;        /* 顶栏更深 */
+  --surface: #30302e;          /* 卡片/弹窗主背景 */
+  --surface-2: #3d3d3a;        /* 悬浮态 */
+  --surface-3: #262624;        /* 嵌入态/输入底 */
+  --surface-code: #101010;     /* 代码块 */
 
-  --text-primary: #1d1d1f;
-  --text-secondary: #6e6e73;
-  --text-tertiary: #aeaeb2;
+  /* 兼容旧组件 class（glass-card / glass-panel 等）映射到新 surface */
+  --bg-elevated: var(--surface);
+  --bg-glass: var(--surface);
+  --bg-glass-strong: var(--surface-2);
+  --bg-input: var(--surface-3);
+  --bg-hover: var(--surface-2);
 
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-strong: rgba(0, 0, 0, 0.12);
+  /* ── 文字层级 ── */
+  --fg: #faf9f5;
+  --fg-2: #b0aea5;
+  --muted: #87867f;
+  --meta: #828179;
+  /* 兼容旧组件命名 */
+  --text-primary: var(--fg);
+  --text-secondary: var(--fg-2);
+  --text-tertiary: var(--muted);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+  /* ── 边框层级 ── */
+  --border: #30302e;
+  --border-soft: #3d3d3a;
+  --border-hair: rgba(250, 249, 245, 0.08);
+  /* 兼容旧组件命名 */
+  --border-subtle: var(--border-hair);
+  --border-strong: var(--border-soft);
 
-  --blur-sm: 8px;
-  --blur-md: 20px;
-  --blur-lg: 40px;
+  /* ── 阴影 ── */
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 1px 0 rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.4), 0 12px 40px rgba(0, 0, 0, 0.5);
 
+  /* ── 圆角（设计稿极小圆角） ── */
+  --radius: 3px;
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  /* 兼容旧组件命名 */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r);
+  --radius-lg: var(--r-lg);
+  --radius-xl: 8px;
+  --radius-pill: 999px;
+
+  /* ── 间距 ── */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -42,59 +72,29 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-pill: 999px;
-
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-  --font-size-xs: 11px;
+  /* ── 字体 ── */
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-body: Arial, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* 兼容旧组件命名 */
+  --font-sans: var(--font-body);
+  --font-size-xs: 10.5px;
   --font-size-sm: 12px;
-  --font-size-base: 14px;
-  --font-size-md: 15px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
   --font-size-lg: 18px;
 
-  --transition-fast: 0.15s ease;
-  --transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
+  /* ── 过渡 ── */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --transition-fast: 0.14s var(--ease);
+  --transition-base: 0.2s var(--ease);
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --color-accent: #0A84FF;
-    --color-accent-soft: rgba(10, 132, 255, 0.2);
+  /* ── 协议四色（转发列表 badge） ── */
+  --proto-tcp: #7aa2c4;
+  --proto-udp: #9c8ac4;
+  --proto-http: #c4a05a;
+  --proto-https: #5b9a6a;
 
-    --bg-base: #1c1c1e;
-    --bg-elevated: rgba(40, 40, 42, 0.72);
-    --bg-glass: rgba(40, 40, 42, 0.6);
-    --bg-glass-strong: rgba(50, 50, 52, 0.8);
-    --bg-input: rgba(50, 50, 52, 0.8);
-    --bg-hover: rgba(255, 255, 255, 0.06);
-
-    --text-primary: #f5f5f7;
-    --text-secondary: #aeaeb2;
-    --text-tertiary: #636366;
-
-    --border-subtle: rgba(255, 255, 255, 0.1);
-    --border-strong: rgba(255, 255, 255, 0.16);
-
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg-base: #1c1c1e;
-  --bg-elevated: rgba(40, 40, 42, 0.72);
-  --bg-glass: rgba(40, 40, 42, 0.6);
-  --bg-glass-strong: rgba(50, 50, 52, 0.8);
-  --bg-input: rgba(50, 50, 52, 0.8);
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --text-primary: #f5f5f7;
-  --text-secondary: #aeaeb2;
-  --text-tertiary: #636366;
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  /* ── 页面内边距（设计稿统一 28px） ── */
+  --page-px: 28px;
 }

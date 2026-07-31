@@ -3,10 +3,11 @@ import { join } from 'path'
 import { removeSync, pathExistsSync, readFileSync } from 'fs-extra'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
-import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, type CreateHostInput } from '../db/hostRepo'
+import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, setDefaultHost, type CreateHostInput } from '../db/hostRepo'
 import { listMappings, createMapping, updateMapping, deleteMapping, listEnabledMappings, getMapping } from '../db/mappingRepo'
 import { closeDb } from '../db/connection'
-import { setActiveEngine, getActiveEngine, refreshActiveStatus } from '../nginx/engineRegistry'
+import { setActiveEngine, getActiveEngine, refreshActiveStatus, isEngineDirty, setEngineDirty } from '../nginx/engineRegistry'
+import { switchEngineToHost } from '../nginx/hostEngineSwitch'
 import { listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate } from '../templates/templateRepo'
 import { applyMappings } from '../nginx/applyFlow'
 import { resolvePaths } from '../paths'
@@ -14,6 +15,7 @@ import { listLogs } from '../db/logRepo'
 import { listSnapshots, getSnapshot } from '../db/snapshotRepo'
 import { isPortAvailable } from '../services/portCheck'
 import { checkMapping } from '../services/healthCheck'
+import { logger } from '../services/logger'
 import { exportData, importData } from '../services/dataTransfer'
 import { SshClient } from '../ssh/client'
 import { encryptPassword, decryptPassword } from '../crypto'
@@ -38,34 +40,76 @@ function encryptPlainPassword(input: any): any {
 export function registerIpcHandlers(): void {
   // Host
   ipcMain.handle(IPC.HOST_LIST, () => listHosts())
-  ipcMain.handle(IPC.HOST_CREATE, (_e, input: CreateHostInput) => createHost(encryptPlainPassword(input)))
+  ipcMain.handle(IPC.HOST_CREATE, (_e, input: CreateHostInput) => {
+    const r = createHost(encryptPlainPassword(input))
+    logger.info(null, 'app', `新增主机「${input.name}」· ${input.type === 'local' ? '本地' : '远程SSH'}`)
+    return r
+  })
   ipcMain.handle(IPC.HOST_UPDATE, (_e, id: string, patch: Partial<CreateHostInput>) => updateHost(id, encryptPlainPassword(patch)))
-  ipcMain.handle(IPC.HOST_DELETE, (_e, id: string) => { deleteHost(id); return true })
+  ipcMain.handle(IPC.HOST_DELETE, (_e, id: string) => {
+    const h = listHosts().find(x => x.id === id)
+    deleteHost(id)
+    logger.info(null, 'app', `删除主机「${h?.name ?? id}」`)
+    return true
+  })
+  // 设为默认主机
+  ipcMain.handle(IPC.HOST_SET_DEFAULT, (_e, id: string) => { setDefaultHost(id); return true })
+  // 切换活动主机：真正重建/切换 nginx 引擎（local 重建子进程，remote 重连 SSH）
+  ipcMain.handle(IPC.HOST_SWITCH, async (_e, id: string) => {
+    try {
+      const ok = await switchEngineToHost(id)
+      const h = listHosts().find(x => x.id === id)
+      if (ok) logger.info(id, 'app', `切换到主机「${h?.name ?? id}」`)
+      return { ok }
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? String(e) }
+    }
+  })
 
-  // Mapping
+  // Mapping —— 增删改后标记「待应用」，提示用户改动不会立即生效
   ipcMain.handle(IPC.MAPPING_LIST, (_e, hostId: string) => listMappings(hostId))
-  ipcMain.handle(IPC.MAPPING_CREATE, (_e, input: MappingInput) => createMapping(input))
-  ipcMain.handle(IPC.MAPPING_UPDATE, (_e, id: string, patch: Partial<MappingInput>) => updateMapping(id, patch))
-  ipcMain.handle(IPC.MAPPING_DELETE, (_e, id: string) => { deleteMapping(id); return true })
+  ipcMain.handle(IPC.MAPPING_CREATE, (_e, input: MappingInput) => {
+    const r = createMapping(input); setEngineDirty(true)
+    logger.info(input.hostId, 'app', `新建映射「${input.name}」· ${(input.protocol || '').toUpperCase()}`)
+    return r
+  })
+  ipcMain.handle(IPC.MAPPING_UPDATE, (_e, id: string, patch: Partial<MappingInput>) => {
+    const r = updateMapping(id, patch); setEngineDirty(true)
+    const m = patch.name ? `「${patch.name}」` : ''
+    logger.info(null, 'app', `修改映射 ${m}`)
+    return r
+  })
+  ipcMain.handle(IPC.MAPPING_DELETE, (_e, id: string) => {
+    const m = getMapping(id)
+    deleteMapping(id); setEngineDirty(true)
+    logger.info(m?.hostId ?? null, 'app', `删除映射「${m?.name ?? id}」`)
+    return true
+  })
 
   // Engine
   ipcMain.handle(IPC.ENGINE_START, async () => {
     const eng = getActiveEngine()
     if (!eng) return { status: 'unknown', error: '没有活动的 nginx 引擎（未选中主机或主机非本地类型）' }
+    const host = getDefaultHost()
     try {
       await eng.start()
+      logger.info(host?.id ?? null, 'app', '引擎启动 · nginx 已开始运行')
       return { status: eng.status(), error: null }
     } catch (e: any) {
+      logger.error(host?.id ?? null, 'app', `引擎启动失败 · ${e?.message ?? String(e)}`)
       return { status: eng.status(), error: e?.message ?? String(e) }
     }
   })
   ipcMain.handle(IPC.ENGINE_STOP, async () => {
     const eng = getActiveEngine()
     if (!eng) return { status: 'unknown', error: null }
+    const host = getDefaultHost()
     try {
       await eng.stop()
+      logger.info(host?.id ?? null, 'app', '引擎停止 · 所有转发已失效')
       return { status: eng.status(), error: null }
     } catch (e: any) {
+      logger.error(host?.id ?? null, 'app', `引擎停止失败 · ${e?.message ?? String(e)}`)
       return { status: eng.status(), error: e?.message ?? String(e) }
     }
   })
@@ -81,10 +125,21 @@ export function registerIpcHandlers(): void {
       nginxTempDir: paths.tempDir,
       hostId: host.id
     })
+    // 应用成功 = 实时 conf 与 DB 一致，清掉「待应用」标记
+    if (result.ok) setEngineDirty(false)
     return { ok: result.ok, output: result.output }
   })
   ipcMain.handle(IPC.ENGINE_TEST, async () => { const eng = getActiveEngine(); return eng ? eng.test() : { ok: false, output: 'no engine' } })
   ipcMain.handle(IPC.ENGINE_STATUS, () => getActiveEngine()?.status() ?? 'unknown')
+  // 是否有「待应用」的改动（增删改 mapping 后置脏，reload 成功后清脏）
+  ipcMain.handle(IPC.ENGINE_DIRTY_GET, () => isEngineDirty())
+  // 获取 nginx 主进程 PID（local 同步 child.pid，remote 异步读 pidfile/pgrep）
+  ipcMain.handle(IPC.ENGINE_PID_GET, async () => {
+    const eng = getActiveEngine() as any
+    if (!eng || typeof eng.getPid !== 'function') return null
+    // Promise.resolve 包装同时兼容同步(local)和异步(remote)返回
+    return await Promise.resolve(eng.getPid())
+  })
 
   // Template
   ipcMain.handle(IPC.TEMPLATE_LIST, () => listAllTemplates())
@@ -134,6 +189,9 @@ export function registerIpcHandlers(): void {
     }
     try {
       await eng.reload()
+      // 回滚成功 = conf 已与快照一致，清「待应用」（快照未必等于当前 DB mapping，但实时 conf 已落盘）
+      setEngineDirty(false)
+      logger.info(snap.hostId, 'app', `手动回滚到快照 ${snap.id}`)
       return { ok: true, output: testResult.output }
     } catch (e: any) {
       return { ok: false, output: e?.message ?? String(e) }
@@ -194,6 +252,7 @@ export function registerIpcHandlers(): void {
           removeSync(p)
         }
       }
+      logger.warn(null, 'app', '清空所有数据 · 数据库已重置')
       return { ok: true }
     } catch (e: any) {
       return { ok: false, output: e?.message ?? String(e) }
@@ -205,10 +264,12 @@ export function registerIpcHandlers(): void {
     return exportData()
   })
 
-  // 导入配置
+  // 导入配置 —— 导入后实时 conf 与 DB 偏离，标记「待应用」
   ipcMain.handle(IPC.DATA_IMPORT, (_e, payload: any) => {
     try {
       const result = importData(payload)
+      setEngineDirty(true)
+      logger.info(null, 'app', `数据导入完成 · ${result.hostsImported} 主机 / ${result.mappingsImported} 映射`)
       return { ok: true, ...result }
     } catch (e: any) {
       return { ok: false, output: e?.message ?? String(e) }

@@ -17,6 +17,10 @@ export class LocalNginxEngine implements NginxEngine {
     return this.child && !this.child.killed ? 'running' : 'stopped'
   }
 
+  getPid(): number | null {
+    return this.child?.pid ?? null
+  }
+
   async start(): Promise<void> {
     if (this.child && !this.child.killed) {
       throw new Error('nginx already running')
@@ -24,17 +28,19 @@ export class LocalNginxEngine implements NginxEngine {
     if (!pathExistsSync(this.cfg.nginxPath)) {
       throw new Error(`nginx binary not found: ${this.cfg.nginxPath}`)
     }
-    for (const d of [this.cfg.logDir, this.cfg.tempDir, this.cfg.prefixDir]) {
-      ensureDirSync(d)
-    }
-    // nginx -p prefix 指向 prefixDir（data/nginx-home，跟 exe 走、可写、持久）。
-    // 不再用 nginx.exe 所在目录（portable 下在临时解压目录，可能只读/被清理）。
-    // nginx 启动早期用 <prefix>/logs/error.log 记日志，必须确保 logs 子目录存在。
-    const prefixLogsDir = join(this.cfg.prefixDir, 'logs')
-    ensureDirSync(prefixLogsDir)
+    // 所有 nginx 工作目录都在 prefix 下（conf 内容用相对路径 logs/ temp/）
+    // 确保 prefix 下的 logs/ temp/ 存在，nginx 才能写日志和 pid
+    ensureDirSync(this.cfg.prefixDir)
+    ensureDirSync(join(this.cfg.prefixDir, 'logs'))
+    ensureDirSync(join(this.cfg.prefixDir, 'temp'))
+    ensureDirSync(join(this.cfg.prefixDir, 'conf'))
+    // nginx 用 -p prefix + -c conf/nginx.conf 相对路径启动。
+    // -c 用相对路径（基于 -p prefix 解析），彻底避开绝对路径的反斜杠转义/中文路径问题。
+    // -p 仍需正斜杠（Windows 反斜杠会被 nginx 当转义符）。
+    const toFwdSlash = (p: string) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p
     this.child = spawn(this.cfg.nginxPath, [
-      '-c', this.cfg.confPath,
-      '-p', this.cfg.prefixDir,
+      '-p', toFwdSlash(this.cfg.prefixDir),
+      '-c', 'conf/nginx.conf',
       '-g', 'daemon off;'
     ], {
       windowsHide: true,
@@ -102,30 +108,79 @@ export class LocalNginxEngine implements NginxEngine {
 
   async stop(): Promise<void> {
     if (!this.child) return
-    // 捕获本次要停止的子进程实例 c。SIGTERM/SIGKILL 发给 c，
-    // null 时必须校验 this.child === c，避免晚到的 exit 误清新子进程引用。
     const c = this.child
-    c.kill('SIGTERM')
-    await new Promise<void>((resolve) => {
-      const t = setTimeout(() => {
-        if (this.child === c) this.child!.kill('SIGKILL')
-        resolve()
-      }, 3000)
-      const onExit = () => { clearTimeout(t); if (this.child === c) this.child = null; resolve() }
-      c.once('exit', onExit)
-    })
+    const pid = c.pid
+
+    if (process.platform === 'win32') {
+      // Windows 上 nginx 的进程模型 + Node child_process 有两个已知问题：
+      // 1. nginx master 启动的 worker 进程，master 被杀后会变孤儿（nginx trac #2394）
+      // 2. Node 的 child.kill() 只杀直接子进程（master），杀不到 worker
+      // 唯一可靠方案：taskkill /PID <pid> /T /F —— /T 杀整个进程树（master+worker），/F 强制
+      await new Promise<void>((resolve) => {
+        execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => {
+          // 不管 taskkill 返回什么，都等待子进程退出
+          resolve()
+        })
+      })
+      // taskkill 后给一点时间让进程真正退出
+      await this.waitForExit(c, 3000)
+    } else {
+      // Unix: SIGTERM 优雅停止，3 秒后 SIGKILL 兜底
+      c.kill('SIGTERM')
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(() => {
+          if (this.child === c) this.child!.kill('SIGKILL')
+          resolve()
+        }, 3000)
+        const onExit = () => { clearTimeout(t); if (this.child === c) this.child = null; resolve() }
+        c.once('exit', onExit)
+      })
+    }
   }
 
   async reload(): Promise<void> {
     if (!this.child) throw new Error('nginx not running, cannot reload')
-    // 注意：Windows 对 SIGHUP 支持很弱，真正的 Windows reload 需要 `nginx -s reload` + pid 文件。
-    // 此处 SIGHUP 适用于 macOS/Linux（开发环境）。Windows reload 在 Task 12 / Plan 6 打包时另行处理。
-    this.child.kill('SIGHUP')
+    if (process.platform === 'win32') {
+      // Windows: nginx 不响应 SIGHUP。用 nginx -s reload（通过 pid 文件重读配置）
+      await this.sendSignal('reload')
+    } else {
+      // Unix: SIGHUP 让 nginx 重读配置
+      this.child.kill('SIGHUP')
+    }
+  }
+
+  /**
+   * Windows 专用：执行 nginx -s <signal>，通过 pid 文件让 master 响应。
+   * signal: 'reload' | 'stop' | 'quit'
+   */
+  private async sendSignal(signal: 'reload' | 'stop' | 'quit'): Promise<void> {
+    const toFwdSlash = (p: string) => p.replace(/\\/g, '/')
+    return new Promise((resolve) => {
+      execFile(this.cfg.nginxPath,
+        ['-p', toFwdSlash(this.cfg.prefixDir), '-c', 'conf/nginx.conf', '-s', signal],
+        () => resolve()  // 不管成功失败都 resolve，reload/stop 的结果靠后续状态判断
+      )
+    })
+  }
+
+  /** 等待子进程退出，超时后强 kill 兜底 */
+  private async waitForExit(c: ChildProcess, timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      let done = false
+      const finish = () => { if (!done) { done = true; if (this.child === c) this.child = null; resolve() } }
+      const t = setTimeout(() => {
+        if (this.child === c) { try { c.kill('SIGKILL') } catch { /* ignore */ } }
+        finish()
+      }, timeoutMs)
+      c.once('exit', () => { clearTimeout(t); finish() })
+    })
   }
 
   async test(): Promise<EngineTestResult> {
     return new Promise((resolve) => {
-      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', this.cfg.prefixDir],
+      // 与 start() 一致：-p 正斜杠 + -c 相对路径
+      const toFwdSlash = (p: string) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p
+      execFile(this.cfg.nginxPath, ['-t', '-p', toFwdSlash(this.cfg.prefixDir), '-c', 'conf/nginx.conf'],
         (err: any, stdout: string, stderr: string) => {
           const output = (stdout + stderr).trim()
           if (err) resolve({ ok: false, output })

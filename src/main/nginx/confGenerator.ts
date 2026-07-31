@@ -27,12 +27,14 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
   const hasStream = tcpMappings.length > 0 || udpMappings.length > 0
   const hasHttp = httpMappings.length > 0 || httpsMappings.length > 0
 
+  // 所有路径用相对 prefix 的相对路径（logs/ temp/），nginx 基于 -p prefix 解析。
+  // 彻底避开绝对路径的反斜杠转义/中文路径问题（Windows nginx 用 ANSI 代码页读绝对路径）。
   const lines: string[] = []
   lines.push('# 由 nginx-jump-gui 自动生成，请勿手动编辑')
   lines.push(`# 生成时间: ${new Date().toISOString()}`)
   lines.push('worker_processes 1;')
-  lines.push('error_log ' + confPath(opts.nginxLogDir) + '/error.log warn;')
-  lines.push('pid ' + confPath(opts.nginxTempDir) + '/nginx.pid;')
+  lines.push('error_log logs/error.log warn;')
+  lines.push('pid temp/nginx.pid;')
   lines.push('')
   lines.push('events {')
   lines.push('  worker_connections 1024;')
@@ -41,9 +43,9 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
 
   if (hasHttp) {
     lines.push('http {')
-    lines.push('  access_log ' + confPath(opts.nginxLogDir) + '/access.log;')
-    lines.push('  client_body_temp_path ' + confPath(opts.nginxTempDir) + '/client_body;')
-    lines.push('  proxy_temp_path ' + confPath(opts.nginxTempDir) + '/proxy;')
+    lines.push('  access_log logs/access.log;')
+    lines.push('  client_body_temp_path temp/client_body;')
+    lines.push('  proxy_temp_path temp/proxy;')
     lines.push('  include mime.types;')
     if (httpMappings.length > 0) {
       lines.push('  # ---------- HTTP server 块 ----------')

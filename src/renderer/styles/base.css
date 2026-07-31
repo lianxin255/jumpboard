@@ -1,36 +1,58 @@
+/* 全局重置 + 基础样式。Anthropic 暗色风。 */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body, #app {
   height: 100%;
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-base);
-  color: var(--text-primary);
+  color: var(--fg);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   background: var(--bg-base);
-  background-image:
-    radial-gradient(circle at 15% 20%, rgba(10, 132, 255, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(175, 82, 222, 0.06) 0%, transparent 40%);
-  background-attachment: fixed;
   overflow: hidden;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
+/* 设计稿风格的滚动条 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: var(--surface-2);
+  border: 2px solid var(--bg-base);
   border-radius: var(--radius-pill);
 }
-::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+::-webkit-scrollbar-thumb:hover { background: #56564f; }
 
-select {
-  font-family: var(--font-sans);
-  color: var(--text-primary);
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
-h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
 
 a { color: var(--color-accent); text-decoration: none; }
+
+/* a11y: 键盘焦点 */
+button:focus-visible,
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* a11y: 减弱动效 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -16,7 +16,6 @@ declare module 'vue' {
     AForm: typeof import('antdv-next')['Form']
     AFormItem: typeof import('antdv-next')['FormItem']
     AInput: typeof import('antdv-next')['Input']
-    AInputGroup: typeof import('antdv-next')['InputGroup']
     AInputNumber: typeof import('antdv-next')['InputNumber']
     AInputPassword: typeof import('antdv-next')['InputPassword']
     AInputSearch: typeof import('antdv-next')['InputSearch']

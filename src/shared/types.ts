@@ -79,6 +79,8 @@ export const IPC = {
   HOST_CREATE: 'host:create',
   HOST_UPDATE: 'host:update',
   HOST_DELETE: 'host:delete',
+  HOST_SET_DEFAULT: 'host:set-default',
+  HOST_SWITCH: 'host:switch',
   // Mapping
   MAPPING_LIST: 'mapping:list',
   MAPPING_CREATE: 'mapping:create',
@@ -90,6 +92,8 @@ export const IPC = {
   ENGINE_RELOAD: 'engine:reload',
   ENGINE_TEST: 'engine:test',
   ENGINE_STATUS: 'engine:status',
+  ENGINE_DIRTY_GET: 'engine:dirty-get',
+  ENGINE_PID_GET: 'engine:pid-get',
   // Template
   TEMPLATE_LIST: 'template:list',
   TEMPLATE_LIST_BUILTIN: 'template:list-builtin',

@@ -13,6 +13,9 @@ export interface NginxEngine {
 
   /** 可选：清理资源（如 SSH 连接）。LocalEngine 不需要，RemoteEngine 需要。 */
   close?(): void
+
+  /** 可选：获取 nginx 主进程 PID。本地同步，remote 异步。 */
+  getPid?(): number | null | Promise<number | null>
 }
 
 export interface LocalEngineConfig {

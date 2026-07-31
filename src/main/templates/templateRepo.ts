@@ -6,19 +6,15 @@ import { resolvePaths } from '../paths'
 
 /**
  * 内置模板目录定位。
- * - 生产环境：electron-builder 把模板复制到 resources/templates/builtin，
+ * - 生产环境：electron-builder 把模板复制到 resources/bundled/templates，
  *   Electron 通过 process.resourcesPath 访问。
  * - vitest（源文件）：__dirname 就是 src/main/templates，内置模板在同级 builtin。
  * - electron-vite 编译后：__dirname 是 out/main，需回溯到 src 源文件。
- *
- * 先用 `__dirname/builtin` 这条最稳的路径探测；找不到再回退到编译模式的相对路径。
  */
 function getBuiltinDir(): string {
-  // 打包环境（含 portable）：electron-builder 把模板复制到 resources/templates/builtin，
-  // Electron 注入 process.resourcesPath 指向 app 的 resources 目录。
-  // 注意：NODE_ENV 在 portable 下不一定被设，用 process.resourcesPath 检测更可靠。
+  // 打包环境：模板在 resources/bundled/templates（与 nginx 一起整合到 bundled/ 下）
   if (process.resourcesPath && process.resourcesPath !== 'None') {
-    const packaged = join(process.resourcesPath, 'templates', 'builtin')
+    const packaged = join(process.resourcesPath, 'bundled', 'templates')
     if (pathExistsSync(packaged)) return packaged
   }
   // vitest 运行源文件时 __dirname 是 src/main/templates，内置模板就在 ./builtin

@@ -1,5 +1,6 @@
 import { createConnection } from 'net'
 import http from 'http'
+import https from 'https'
 import type { Mapping, HealthStatus } from '@shared/types'
 import { listEnabledMappings, updateHealthStatus } from '../db/mappingRepo'
 import { getDefaultHost } from '../db/hostRepo'
@@ -22,10 +23,16 @@ export function checkTcp(host: string, port: number): Promise<HealthStatus> {
   })
 }
 
-/** HTTP 探活：GET path，检查状态码 */
-export function checkHttp(host: string, port: number, path: string, expectedStatus: number): Promise<HealthStatus> {
+/** HTTP/HTTPS 探活：GET path，检查状态码。按 useHttps 选择模块 */
+export function checkHttp(host: string, port: number, path: string, expectedStatus: number, useHttps = false): Promise<HealthStatus> {
+  const lib = useHttps ? https : http
   return new Promise((resolve) => {
-    const req = http.get({ hostname: host, port, path, timeout: CHECK_TIMEOUT_MS }, (res) => {
+    const req = lib.get({
+      hostname: host, port, path,
+      timeout: CHECK_TIMEOUT_MS,
+      // HTTPS upstream 通常自签证书，探活时忽略证书校验（只验证端口通不通 + 状态码）
+      rejectUnauthorized: false,
+    }, (res) => {
       res.destroy()
       resolve(res.statusCode === expectedStatus ? 'healthy' : 'unhealthy')
     })
@@ -40,19 +47,20 @@ export function checkMapping(m: Mapping): Promise<HealthStatus> {
     // TCP/UDP 都用 TCP 连接探测（UDP 无连接，nginx stream UDP 探活用 TCP 近似）
     return checkTcp(m.upstreamHost, m.upstreamPort)
   }
-  // http/https
+  // http/https：https 协议必须用 https 模块，否则明文打 443 必然握手失败
   const path = m.healthCheckTargetPath ?? '/'
   const expected = m.healthCheckExpectedStatus ?? 200
-  return checkHttp(m.upstreamHost, m.upstreamPort, path, expected)
+  return checkHttp(m.upstreamHost, m.upstreamPort, path, expected, m.protocol === 'https')
 }
 
-/** 轮询所有 enabled + healthCheckEnabled 的映射 */
+/** 轮询所有 enabled + healthCheckEnabled 的映射（并行，提速避免串行阻塞） */
 async function runOnce(): Promise<void> {
   const host = getDefaultHost()
   if (!host) return
   const mappings = listEnabledMappings(host.id).filter(m => m.healthCheckEnabled === 1)
   const now = Date.now()
-  for (const m of mappings) {
+  // 并行探活：串行时每条最多 3s，映射多会导致一轮远超间隔；并行则一轮≈最慢的一条
+  await Promise.all(mappings.map(async (m) => {
     try {
       const status = await checkMapping(m)
       updateHealthStatus(m.id, status, now)
@@ -60,7 +68,7 @@ async function runOnce(): Promise<void> {
       updateHealthStatus(m.id, 'unknown', now)
       logger.warn(host.id, 'app', `健康检查异常 ${m.name}: ${e?.message ?? e}`)
     }
-  }
+  }))
 }
 
 /** 启动定时轮询 */

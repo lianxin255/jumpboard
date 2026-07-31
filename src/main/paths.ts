@@ -88,7 +88,7 @@ export function resolvePaths(): AppPaths {
     snapshotDir: join(dataDir, 'snapshots'),
     tempDir: join(dataDir, 'temp'),
     resourcesDir,
-    bundledNginxDir: join(resourcesDir, 'nginx'),
+    bundledNginxDir: join(resourcesDir, 'bundled', 'nginx'),
     ensureDataDirs: () => {
       for (const d of [
         dataDir,

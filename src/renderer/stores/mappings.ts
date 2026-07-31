@@ -8,9 +8,20 @@ export interface Mapping {
   enabled: number
   protocol: string
   listenPort: number | null
+  serverNames: string | null
+  listenPath: string | null
   upstreamHost: string
   upstreamPort: number
+  tlsCertPath: string | null
+  tlsKeyPath: string | null
+  redirectHttp: number
+  extraDirectives: string | null
+  healthCheckEnabled: number
   healthStatus: string
+  lastCheckedAt: number | null
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
 }
 
 export const useMappingsStore = defineStore('mappings', () => {

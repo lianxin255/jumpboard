@@ -1,18 +1,26 @@
 appId: com.nginx-jump-gui.app
 productName: Nginx跳板机
+# exe 文件名用纯英文，避免中文 exe 名在 Windows 上引发路径问题
+executableName: NginxJump
 directories:
   output: release
   buildResources: build
+# native 模块必须从 asar 解包，否则 Windows 上 require .node 会失败
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/ssh2/**"
 files:
   - out/**/*
   - package.json
   - "!**/.DS_Store"
 win:
   target:
-    - target: portable
+    # dir = 免安装绿色版：解压即用的文件夹，双击 exe 运行，不写注册表。
+    # 比 portable(单exe) 更稳：portable 在 macOS 上交叉编译需 wine（arm64 上不可用）。
+    - target: dir
       arch:
         - x64
-  artifactName: NginxJump-${version}-portable.exe
+  artifactName: NginxJump-${version}-win-x64
   icon: build/icon.ico
 mac:
   target:
@@ -24,9 +32,11 @@ mac:
   icon: build/icon.icns
   category: public.app-category.developer-tools
 extraResources:
+  # 内置资源统一放 bundled/ 下：nginx 二进制 + 内置模板
+  # app.asar / app.asar.unpacked 是 Electron 强制的，平铺在 resources/ 不动
   - from: resources/nginx
-    to: nginx
+    to: bundled/nginx
     filter: ['**/*']
   - from: src/main/templates/builtin
-    to: templates/builtin
+    to: bundled/templates
     filter: ['**/*.yml']

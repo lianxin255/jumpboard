@@ -30,9 +30,11 @@ describe('dataTransfer', () => {
       healthCheckEnabled: 0, healthCheckIntervalSec: 30, healthCheckTargetPath: null, healthCheckExpectedStatus: null
     })
     const data = exportData()
-    expect(data.version).toBe(1)
+    expect(data.version).toBe(2)
     expect(data.hosts).toHaveLength(1)
     expect(data.mappings).toHaveLength(1)
+    expect(data.snapshots).toBeDefined()
+    expect(data.logs).toBeDefined()
     expect(data.exportedAt).toBeGreaterThan(0)
   })
 
