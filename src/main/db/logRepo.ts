@@ -59,3 +59,8 @@ export function trimLogs(keepCount: number): number {
   )`).run(keepCount)
   return result.changes
 }
+
+/** 清空全部操作日志 */
+export function clearLogs(): void {
+  getDb().prepare('DELETE FROM app_logs').run()
+}

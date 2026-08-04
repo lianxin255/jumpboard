@@ -64,11 +64,13 @@ export function importData(payload: Partial<ExportPayload>): ImportResult {
     for (const m of payload.mappings!) {
       db.prepare(`INSERT INTO mappings (id, host_id, name, enabled, protocol, listen_port, server_names, listen_path,
         upstream_host, upstream_port, tls_cert_path, tls_key_path, redirect_http, extra_directives,
+        proxy_mode, proxy_headers,
         health_check_enabled, health_check_interval_sec, health_check_target_path, health_check_expected_status,
         health_status, last_checked_at, sort_order, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
         .run(m.id, m.hostId, m.name, m.enabled ?? 1, m.protocol, m.listenPort, m.serverNames, m.listenPath,
           m.upstreamHost, m.upstreamPort, m.tlsCertPath, m.tlsKeyPath, m.redirectHttp ?? 0, m.extraDirectives,
+          m.proxyMode ?? 'standard', m.proxyHeaders ?? null,
           m.healthCheckEnabled ?? 0, m.healthCheckIntervalSec ?? 30, m.healthCheckTargetPath, m.healthCheckExpectedStatus,
           m.healthStatus ?? 'unknown', m.lastCheckedAt, m.sortOrder ?? 0, m.createdAt ?? Date.now(), m.updatedAt ?? Date.now())
       mappingsImported++
@@ -108,6 +110,7 @@ function rowToMapping(r: any): Mapping {
     upstreamHost: r.upstream_host, upstreamPort: r.upstream_port,
     tlsCertPath: r.tls_cert_path, tlsKeyPath: r.tls_key_path, redirectHttp: r.redirect_http,
     extraDirectives: r.extra_directives,
+    proxyMode: r.proxy_mode || 'standard', proxyHeaders: r.proxy_headers,
     healthCheckEnabled: r.health_check_enabled, healthCheckIntervalSec: r.health_check_interval_sec,
     healthCheckTargetPath: r.health_check_target_path, healthCheckExpectedStatus: r.health_check_expected_status,
     healthStatus: r.health_status, lastCheckedAt: r.last_checked_at,

@@ -43,6 +43,8 @@ export const useMappingsStore = defineStore('mappings', () => {
 
   async function remove(id: string) {
     await api.deleteMapping(id)
+    // 乐观更新：立即从本地列表移除，UI 即时响应
+    list.value = list.value.filter(m => m.id !== id)
   }
 
   async function toggle(id: string, enabled: number) {

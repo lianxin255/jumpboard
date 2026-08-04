@@ -17,6 +17,8 @@ interface MappingRow {
   tls_key_path: string | null
   redirect_http: number
   extra_directives: string | null
+  proxy_mode: string
+  proxy_headers: string | null
   health_check_enabled: number
   health_check_interval_sec: number
   health_check_target_path: string | null
@@ -35,6 +37,8 @@ function rowToMapping(r: MappingRow): Mapping {
     upstreamHost: r.upstream_host, upstreamPort: r.upstream_port,
     tlsCertPath: r.tls_cert_path, tlsKeyPath: r.tls_key_path, redirectHttp: r.redirect_http,
     extraDirectives: r.extra_directives,
+    proxyMode: (r.proxy_mode || 'standard') as 'standard' | 'minimal' | 'custom',
+    proxyHeaders: r.proxy_headers,
     healthCheckEnabled: r.health_check_enabled, healthCheckIntervalSec: r.health_check_interval_sec,
     healthCheckTargetPath: r.health_check_target_path, healthCheckExpectedStatus: r.health_check_expected_status,
     healthStatus: r.health_status as HealthStatus, lastCheckedAt: r.last_checked_at,
@@ -44,6 +48,7 @@ function rowToMapping(r: MappingRow): Mapping {
 
 const COLUMNS = `id, host_id, name, enabled, protocol, listen_port, server_names, listen_path,
   upstream_host, upstream_port, tls_cert_path, tls_key_path, redirect_http, extra_directives,
+  proxy_mode, proxy_headers,
   health_check_enabled, health_check_interval_sec, health_check_target_path, health_check_expected_status,
   health_status, last_checked_at, sort_order, created_at, updated_at`
 
@@ -53,11 +58,12 @@ export function createMapping(input: MappingInput): Mapping {
   const now = Date.now()
   const maxOrder = (db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM mappings WHERE host_id = ?').get(input.hostId) as { m: number }).m
   db.prepare(`INSERT INTO mappings (${COLUMNS})
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, input.hostId, input.name, input.enabled, input.protocol,
       input.listenPort, input.serverNames, input.listenPath,
       input.upstreamHost, input.upstreamPort, input.tlsCertPath, input.tlsKeyPath,
       input.redirectHttp, input.extraDirectives,
+      input.proxyMode || 'standard', input.proxyHeaders ?? null,
       input.healthCheckEnabled, input.healthCheckIntervalSec,
       input.healthCheckTargetPath, input.healthCheckExpectedStatus,
       'unknown', null, maxOrder + 1, now, now)
@@ -86,11 +92,13 @@ export function updateMapping(id: string, patch: Partial<MappingInput>): void {
   getDb().prepare(`UPDATE mappings SET
     name=?, enabled=?, protocol=?, listen_port=?, server_names=?, listen_path=?,
     upstream_host=?, upstream_port=?, tls_cert_path=?, tls_key_path=?, redirect_http=?,
-    extra_directives=?, health_check_enabled=?, health_check_interval_sec=?,
+    extra_directives=?, proxy_mode=?, proxy_headers=?,
+    health_check_enabled=?, health_check_interval_sec=?,
     health_check_target_path=?, health_check_expected_status=?, updated_at=? WHERE id=?`)
     .run(merged.name, merged.enabled, merged.protocol, merged.listenPort, merged.serverNames, merged.listenPath,
       merged.upstreamHost, merged.upstreamPort, merged.tlsCertPath, merged.tlsKeyPath, merged.redirectHttp,
-      merged.extraDirectives, merged.healthCheckEnabled, merged.healthCheckIntervalSec,
+      merged.extraDirectives, merged.proxyMode || 'standard', merged.proxyHeaders ?? null,
+      merged.healthCheckEnabled, merged.healthCheckIntervalSec,
       merged.healthCheckTargetPath, merged.healthCheckExpectedStatus, Date.now(), id)
 }
 

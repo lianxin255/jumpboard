@@ -23,7 +23,11 @@ export interface ElectronAPI {
   deleteCustomTemplate(id: string): Promise<boolean>
   // Log
   listLogs(hostId: string | null, limit: number): Promise<any[]>
+  clearLogs(): Promise<boolean>
   tailNginxLogs(lines: number): Promise<{ access: string[]; error: string[] }>
+  clearNginxLogs(): Promise<boolean>
+  isNginxLogReadEnabled(): Promise<boolean>
+  setNginxLogReadEnabled(enabled: boolean): Promise<boolean>
   // Snapshot
   listSnapshots(hostId: string): Promise<any[]>
   getSnapshot(id: string): Promise<any>
@@ -41,6 +45,13 @@ export interface ElectronAPI {
   importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number; snapshotsImported?: number; logsImported?: number }>
   // Network
   getLocalIPs(): Promise<{ interface: string; address: string; family: string }[]>
+  // IP 白名单
+  listWhitelist(): Promise<any[]>
+  addWhitelist(ip: string, note?: string): Promise<any>
+  removeWhitelist(id: string): Promise<boolean>
+  toggleWhitelistIp(id: string, enabled: number): Promise<boolean>
+  isWhitelistEnabled(): Promise<boolean>
+  setWhitelistEnabled(enabled: boolean): Promise<boolean>
 }
 
 declare global {

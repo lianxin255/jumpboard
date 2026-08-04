@@ -1,18 +1,19 @@
 import { ipcMain } from 'electron'
 import { join } from 'path'
-import { removeSync, pathExistsSync, readFileSync } from 'fs-extra'
+import { removeSync, pathExistsSync, readFileSync, unlinkSync } from 'fs-extra'
 import { IPC } from '@shared/types'
 import type { MappingInput } from '@shared/types'
 import { listHosts, createHost, updateHost, deleteHost, getDefaultHost, setDefaultHost, type CreateHostInput } from '../db/hostRepo'
 import { listMappings, createMapping, updateMapping, deleteMapping, listEnabledMappings, getMapping } from '../db/mappingRepo'
-import { closeDb } from '../db/connection'
+import { closeDb, getDb } from '../db/connection'
 import { setActiveEngine, getActiveEngine, refreshActiveStatus, isEngineDirty, setEngineDirty } from '../nginx/engineRegistry'
 import { switchEngineToHost } from '../nginx/hostEngineSwitch'
 import { listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate } from '../templates/templateRepo'
 import { applyMappings } from '../nginx/applyFlow'
 import { resolvePaths } from '../paths'
-import { listLogs } from '../db/logRepo'
+import { listLogs, clearLogs } from '../db/logRepo'
 import { listSnapshots, getSnapshot } from '../db/snapshotRepo'
+import { listWhitelist, addWhitelist, removeWhitelist, toggleWhitelist, isWhitelistEnabled, setWhitelistEnabled, getEnabledWhitelistIps } from '../db/whitelistRepo'
 import { isPortAvailable } from '../services/portCheck'
 import { checkMapping } from '../services/healthCheck'
 import { logger } from '../services/logger'
@@ -120,10 +121,18 @@ export function registerIpcHandlers(): void {
     if (!host) return { ok: false, output: 'no default host' }
     const paths = resolvePaths()
     const mappings = listEnabledMappings(host.id)
+    // 白名单开启时传入 IP 列表，conf 生成时注入 allow/deny all
+    const wlEnabled = isWhitelistEnabled()
+    const wlIps = wlEnabled ? getEnabledWhitelistIps() : undefined
+    // 安全守卫：白名单开关 ON 但没有任何有效 IP —— fail-open（静默全开）不可接受
+    if (wlEnabled && (!wlIps || wlIps.length === 0)) {
+      return { ok: false, output: '白名单已开启但未配置任何 IP。请先添加 IP 或关闭白名单后再应用。' }
+    }
     const result = await applyMappings(eng, mappings, {
       nginxLogDir: paths.nginxLogDir,
       nginxTempDir: paths.tempDir,
-      hostId: host.id
+      hostId: host.id,
+      whitelistIps: wlIps,
     })
     // 应用成功 = 实时 conf 与 DB 一致，清掉「待应用」标记
     if (result.ok) setEngineDirty(false)
@@ -149,26 +158,61 @@ export function registerIpcHandlers(): void {
 
   // Log
   ipcMain.handle(IPC.LOG_LIST, (_e, hostId: string | null, limit: number) => listLogs(hostId, limit))
+  // 清空操作日志
+  ipcMain.handle(IPC.LOG_CLEAR, () => { clearLogs(); logger.info(null, 'app', '操作日志已清空'); return true })
 
-  // 读 nginx 运行日志（access.log + error.log 的最后 N 行）
+  // 读 nginx 运行日志（access.log + error.log + stream_access.log 的最后 N 行）
+  // nginx 用相对路径 logs/ 写日志，实际写到 <prefix>/logs/（即 data/nginx-home/logs/）
   ipcMain.handle(IPC.NGINX_LOG_TAIL, (_e, lines: number) => {
+    // 读取开关：关闭时直接返回空，避免大日志文件 OOM
+    const readRow = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as { value: string } | undefined
+    if (readRow?.value === '0') return { access: [], error: [] }
+
     const paths = resolvePaths()
+    const nginxLogsDir = join(paths.dataDir, 'nginx-home', 'logs')
     const result: { access: string[]; error: string[] } = { access: [], error: [] }
     try {
-      const accessLog = join(paths.nginxLogDir, 'access.log')
-      if (pathExistsSync(accessLog)) {
-        const content = readFileSync(accessLog, 'utf-8')
-        result.access = content.split('\n').filter(Boolean).slice(-lines)
+      // http access + stream access 合并后取尾部 N 行（单源时不被腰斩）
+      const accLines: string[] = []
+      for (const f of ['access.log', 'stream_access.log']) {
+        const p = join(nginxLogsDir, f)
+        if (pathExistsSync(p)) {
+          accLines.push(...readFileSync(p, 'utf-8').split('\n').filter(Boolean))
+        }
       }
+      result.access = accLines.slice(-lines)
     } catch { /* 忽略 */ }
     try {
-      const errorLog = join(paths.nginxLogDir, 'error.log')
+      const errorLog = join(nginxLogsDir, 'error.log')
       if (pathExistsSync(errorLog)) {
-        const content = readFileSync(errorLog, 'utf-8')
-        result.error = content.split('\n').filter(Boolean).slice(-lines)
+        result.error = readFileSync(errorLog, 'utf-8').split('\n').filter(Boolean).slice(-lines)
       }
     } catch { /* 忽略 */ }
     return result
+  })
+
+  // 清空 nginx 日志文件（用 unlink 删除，nginx 下次写时自动重建，比截断更可靠）
+  ipcMain.handle(IPC.NGINX_LOG_CLEAR, () => {
+    try {
+      const paths = resolvePaths()
+      const nginxLogsDir = join(paths.dataDir, 'nginx-home', 'logs')
+      for (const f of ['access.log', 'error.log', 'stream_access.log']) {
+        try { unlinkSync(join(nginxLogsDir, f)) } catch { /* 文件不存在则忽略 */ }
+      }
+      logger.info(null, 'app', 'Nginx 日志已清空')
+      return true
+    } catch { return false }
+  })
+
+  // nginx 日志读取开关（关闭后不读 nginx 日志文件，避免大日志 OOM）
+  ipcMain.handle(IPC.NGINX_LOG_READ_ENABLED_GET, () => {
+    const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as { value: string } | undefined
+    return row?.value !== '0'  // 默认开启（未设置时返回 true）
+  })
+  ipcMain.handle(IPC.NGINX_LOG_READ_ENABLED_SET, (_e, enabled: boolean) => {
+    getDb().prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run('nginx_log_read_enabled', enabled ? '1' : '0')
+    return true
   })
 
   // Snapshot
@@ -246,7 +290,7 @@ export function registerIpcHandlers(): void {
       }
       const paths = resolvePaths()
       closeDb()
-      for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates']) {
+      for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates', 'nginx-home']) {
         const p = join(paths.dataDir, sub)
         if (pathExistsSync(p)) {
           removeSync(p)
@@ -291,5 +335,26 @@ export function registerIpcHandlers(): void {
       }
     }
     return ips
+  })
+
+  // IP 白名单（全局访问控制）
+  ipcMain.handle(IPC.WHITELIST_LIST, () => listWhitelist())
+  ipcMain.handle(IPC.WHITELIST_ADD, (_e, ip: string, note?: string) => {
+    const r = addWhitelist(ip, note)
+    setEngineDirty(true)
+    logger.info(null, 'app', `白名单添加 ${ip}`)
+    return r
+  })
+  ipcMain.handle(IPC.WHITELIST_REMOVE, (_e, id: string) => {
+    removeWhitelist(id); setEngineDirty(true); return true
+  })
+  ipcMain.handle(IPC.WHITELIST_TOGGLE_IP, (_e, id: string, enabled: number) => {
+    toggleWhitelist(id, enabled); setEngineDirty(true); return true
+  })
+  ipcMain.handle(IPC.WHITELIST_GET_ENABLED, () => isWhitelistEnabled())
+  ipcMain.handle(IPC.WHITELIST_SET_ENABLED, (_e, enabled: boolean) => {
+    setWhitelistEnabled(enabled); setEngineDirty(true)
+    logger.info(null, 'app', enabled ? '白名单已开启 · 仅允许列表 IP 访问' : '白名单已关闭 · 全部允许')
+    return true
   })
 }

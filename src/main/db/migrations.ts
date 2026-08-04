@@ -64,5 +64,31 @@ export function runMigrations(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_logs_host_time ON app_logs(host_id, timestamp);
+
+    -- 全局 IP 白名单（开启后只允许列表中的 IP 访问所有代理服务）
+    CREATE TABLE IF NOT EXISTS ip_whitelist (
+      id TEXT PRIMARY KEY,
+      ip TEXT NOT NULL,
+      note TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    );
+
+    -- 应用级设置（键值对存储）
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `)
+
+  // 增量迁移：给 mappings 表加 proxy_mode 和 proxy_headers 字段
+  // SQLite 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，需检查列是否存在
+  const cols = db.prepare("PRAGMA table_info(mappings)").all() as { name: string }[]
+  const colNames = cols.map(c => c.name)
+  if (!colNames.includes('proxy_mode')) {
+    db.exec("ALTER TABLE mappings ADD COLUMN proxy_mode TEXT NOT NULL DEFAULT 'standard'")
+  }
+  if (!colNames.includes('proxy_headers')) {
+    db.exec("ALTER TABLE mappings ADD COLUMN proxy_headers TEXT")
+  }
 }

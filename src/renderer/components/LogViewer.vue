@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import dayjs from 'dayjs'
 import { useLogsStore } from '@renderer/stores/logs'
 import { api } from '@renderer/api/ipc'
-import { toast } from '@renderer/feedback'
+import { toast, confirmBox } from '@renderer/feedback'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 dayjs.extend(relativeTime)
@@ -19,6 +19,25 @@ const ngxSub = ref<'err' | 'acc'>('err')
 
 const levelFilter = ref<'all' | 'error' | 'warn' | 'info'>('all')
 const keyword = ref('')
+
+// nginx 日志读取开关（关闭后不读 nginx 日志文件，避免大日志 OOM）
+const ngxLogReadEnabled = ref(true)
+async function loadNgxReadSetting() {
+  try { ngxLogReadEnabled.value = await api.isNginxLogReadEnabled() }
+  catch { /* 读失败时保守默认为关闭（开关语义就是防 OOM） */ ngxLogReadEnabled.value = false }
+}
+async function toggleNgxLogRead() {
+  const next = !ngxLogReadEnabled.value
+  try {
+    await api.setNginxLogReadEnabled(next)
+    ngxLogReadEnabled.value = next
+    toast(next ? 'nginx 日志读取已开启' : 'nginx 日志读取已关闭', 'info')
+    if (!next) { nginxAccessLogs.value = []; nginxErrorLogs.value = [] }
+    else await loadNginxLogs()
+  } catch (e: any) {
+    toast('切换失败: ' + (e?.message ?? '未知错误'), 'err')
+  }
+}
 
 const filteredLogs = computed(() => {
   let list = store.list
@@ -51,10 +70,52 @@ async function loadNginxLogs() {
 
 async function refresh() {
   await store.load(props.hostId, 5000)
-  await loadNginxLogs()
+  if (ngxLogReadEnabled.value) await loadNginxLogs()
   toast('日志已刷新', 'ok')
 }
-refresh()
+
+// 清空当前 Tab 的日志
+async function clearCurrentLogs() {
+  if (activeTab.value === 'app') {
+    const ok = await confirmBox({
+      title: '清空操作日志',
+      message: '将删除全部操作日志记录，此操作不可撤销。',
+      btnText: '清空',
+      kind: 'danger',
+    })
+    if (!ok) return
+    try {
+      await api.clearLogs()
+      store.list = []
+      toast('操作日志已清空', 'ok')
+    } catch (e: any) {
+      toast('清空失败: ' + (e?.message ?? '未知错误'), 'err')
+    }
+  } else {
+    const ok = await confirmBox({
+      title: '清空 Nginx 日志',
+      message: '将清空 nginx 的 access.log 和 error.log 文件内容。',
+      btnText: '清空',
+      kind: 'danger',
+    })
+    if (!ok) return
+    try {
+      const success = await api.clearNginxLogs()
+      if (!success) { toast('清空失败', 'err'); return }
+      nginxAccessLogs.value = []
+      nginxErrorLogs.value = []
+      toast('Nginx 日志已清空', 'ok')
+    } catch (e: any) {
+      toast('清空失败: ' + (e?.message ?? '未知错误'), 'err')
+    }
+  }
+}
+
+// 先加载开关设置，再 refresh（避免首次加载绕过开关读 nginx 日志）
+onMounted(async () => {
+  await loadNgxReadSetting()
+  refresh()
+})
 
 function relTime(ts: number): string {
   return dayjs(ts).fromNow()
@@ -127,6 +188,18 @@ const levelOptions = [
         </button>
       </div>
       <div style="flex:1"></div>
+      <!-- nginx 日志读取开关（仅 nginx tab 显示） -->
+      <div v-if="activeTab === 'nginx'" class="ngx-read-toggle" title="关闭后不读取 nginx 日志文件，避免大日志占用内存">
+        <label class="toggle sm">
+          <input type="checkbox" :checked="ngxLogReadEnabled" @change="toggleNgxLogRead">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+        <span>读取日志文件</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" @click="clearCurrentLogs" title="清空当前标签页的日志">
+        <svg class="b-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        清空
+      </button>
       <button class="btn btn-ghost btn-sm" @click="refresh">
         <svg class="b-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
         刷新
@@ -212,4 +285,15 @@ const levelOptions = [
 .ngx-sub-tabs { display: flex; gap: 0; padding: 8px 0; }
 .ngx-sub-tabs button { padding: 6px 12px; font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; }
 .ngx-sub-tabs button.active { color: var(--fg); border-bottom: 2px solid var(--color-accent); }
+
+.ngx-read-toggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); cursor: pointer; }
+.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
+.toggle.sm { width: 28px; height: 16px; }
+.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
+.toggle.sm .knob { width: 10px; height: 10px; }
+.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
+.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
+.toggle.sm input:checked + .track .knob { left: 14px; }
 </style>

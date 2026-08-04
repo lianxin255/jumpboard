@@ -97,4 +97,37 @@ describe('confGenerator TCP', () => {
     expect(conf).toContain('http {')
     expect(conf).toContain('listen 443 ssl;')
   })
+
+  it('公共代理参数在 http 顶层只写一次（所有模式继承）', () => {
+    const conf = generateFullConf([
+      tcpMapping({ id: 's', protocol: 'http', listenPort: 8080, upstreamPort: 3000 }),
+      tcpMapping({ id: 'mi', protocol: 'http', listenPort: 8081, upstreamPort: 3001, proxyMode: 'minimal' }),
+    ], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    // 顶层出现一次
+    expect(conf).toContain('proxy_http_version 1.1;')
+    expect(conf).toContain('client_max_body_size 0;')
+    expect(conf).toContain('proxy_read_timeout 300s;')
+    expect(conf).toContain('proxy_buffering off;')
+    // 不重复出现在 location 里
+    const locationSections = conf.split('location ')
+    expect(locationSections.length - 1).toBe(2)
+    for (const sec of locationSections.slice(1)) {
+      expect(sec).not.toContain('proxy_http_version')
+      expect(sec).not.toContain('client_max_body_size')
+    }
+  })
+
+  it('standard 模式生成标准头，minimal 模式 location 是纯 proxy_pass', () => {
+    const conf = generateFullConf([
+      tcpMapping({ id: 's', protocol: 'http', listenPort: 8080, upstreamPort: 3000 }),
+      tcpMapping({ id: 'mi', protocol: 'http', listenPort: 8081, upstreamPort: 3001, proxyMode: 'minimal' }),
+    ], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    expect(conf).toContain('proxy_set_header Host $host;')
+    expect(conf).toContain('proxy_set_header X-Real-IP $remote_addr;')
+    // minimal 的 location 块里没有任何 proxy_set_header
+    const locStart = conf.indexOf('listen 8081;')
+    const nextServer = conf.indexOf('# mapping:', locStart)
+    const minimalSection = conf.slice(locStart, nextServer === -1 ? undefined : nextServer)
+    expect(minimalSection).not.toContain('proxy_set_header')
+  })
 })

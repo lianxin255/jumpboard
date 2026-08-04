@@ -27,6 +27,8 @@ interface FormState {
   tlsKeyPath: string
   redirectHttp: boolean
   extraDirectives: string
+  proxyMode: 'standard' | 'minimal' | 'custom'
+  proxyHeaders: string
   healthCheckEnabled: boolean
   healthCheckIntervalSec: number
   healthCheckTargetPath: string
@@ -47,6 +49,8 @@ function templateToForm(tpl: Template | null | undefined): FormState {
     tlsKeyPath: m.tlsKeyPath ?? '',
     redirectHttp: m.redirectHttp === 1,
     extraDirectives: tpl?.extraDirectives ?? m.extraDirectives ?? '',
+    proxyMode: m.proxyMode ?? 'standard',
+    proxyHeaders: m.proxyHeaders ?? '',
     healthCheckEnabled: m.healthCheckEnabled === 1,
     healthCheckIntervalSec: m.healthCheckIntervalSec ?? 30,
     healthCheckTargetPath: m.healthCheckTargetPath ?? '/health',
@@ -74,6 +78,8 @@ async function loadExisting() {
       tlsKeyPath: m.tlsKeyPath ?? '',
       redirectHttp: m.redirectHttp === 1,
       extraDirectives: m.extraDirectives ?? '',
+      proxyMode: m.proxyMode ?? 'standard',
+      proxyHeaders: m.proxyHeaders ?? '',
       healthCheckEnabled: m.healthCheckEnabled === 1,
       healthCheckIntervalSec: m.healthCheckIntervalSec ?? 30,
       healthCheckTargetPath: m.healthCheckTargetPath ?? '/health',
@@ -116,6 +122,10 @@ function validate(): boolean {
   if (isHttps.value) {
     if (!form.tlsCertPath.trim()) e.tlsCertPath = 'HTTPS 需要 SSL 证书路径'
     if (!form.tlsKeyPath.trim()) e.tlsKeyPath = 'HTTPS 需要 SSL 私钥路径'
+  }
+  // custom 模式必须填写自定义代理头
+  if ((isHttp.value || isHttps.value) && form.proxyMode === 'custom' && !form.proxyHeaders.trim()) {
+    e.proxyHeaders = '自定义模式必须填写代理头指令，或改回标准/精简模式'
   }
   errors.value = e
   return Object.keys(e).length === 0
@@ -174,6 +184,8 @@ async function save() {
       tlsKeyPath: isHttps.value ? f.tlsKeyPath : null,
       redirectHttp: isHttps.value && f.redirectHttp ? 1 : 0,
       extraDirectives: f.extraDirectives || null,
+      proxyMode: f.proxyMode,
+      proxyHeaders: f.proxyMode === 'custom' ? (f.proxyHeaders || null) : null,
       healthCheckEnabled: f.healthCheckEnabled ? 1 : 0,
       healthCheckIntervalSec: f.healthCheckIntervalSec,
       healthCheckTargetPath: f.healthCheckEnabled ? f.healthCheckTargetPath || null : null,
@@ -218,6 +230,8 @@ async function saveAsTemplate() {
         upstreamPort: form.upstreamPort,
         serverNames: form.serverNames || null,
         listenPath: form.listenPath || '/',
+        proxyMode: form.proxyMode,
+        proxyHeaders: form.proxyMode === 'custom' ? (form.proxyHeaders || null) : null,
       },
       extraDirectives: form.extraDirectives || undefined,
     })
@@ -376,6 +390,26 @@ async function saveAsTemplate() {
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
         </button>
         <div v-if="advOpen" class="collapse-bd">
+          <!-- 代理模式（仅 HTTP/HTTPS） -->
+          <div v-if="isHttp || isHttps" class="field">
+            <label>代理模式</label>
+            <select class="select" v-model="form.proxyMode">
+              <option value="standard">标准反代（自动生成 Host/WebSocket/大文件等头，适合多数 Web 服务）</option>
+              <option value="minimal">精简代理（不加代理头，保留大文件/超时支持，适合 GitLab 等对 Host 敏感的服务）</option>
+              <option value="custom">完全自定义（下方自定义代理头替代自动生成的）</option>
+            </select>
+            <div v-if="form.proxyMode === 'minimal'" class="hint">
+              精简模式不加 Host/WebSocket 等代理头（GitLab 502 问题选这个），但仍保留 HTTP/1.1（git push 必需）、大文件上传和超时支持。
+            </div>
+          </div>
+          <!-- 自定义代理头（仅 custom 模式 + HTTP/HTTPS 显示） -->
+          <div v-if="(isHttp || isHttps) && form.proxyMode === 'custom'" class="field">
+            <label>自定义代理头指令</label>
+            <textarea class="textarea mono" v-model="form.proxyHeaders" rows="5"
+              placeholder="# 完全替代自动生成的代理头，每行一条 nginx 指令&#10;proxy_http_version 1.1;&#10;proxy_set_header Host $host;&#10;proxy_set_header X-Real-IP $remote_addr;&#10;client_max_body_size 0;&#10;proxy_buffering off;"></textarea>
+            <div class="hint">这些指令会替代标准反代自动生成的全部代理头。proxy_pass 不需要写（自动生成）。</div>
+            <div v-if="errors.proxyHeaders" class="err-msg">{{ errors.proxyHeaders }}</div>
+          </div>
           <div class="field">
             <label>自定义 nginx 指令</label>
             <textarea class="textarea" v-model="form.extraDirectives" rows="3"
@@ -443,7 +477,7 @@ async function saveAsTemplate() {
 .field .hint { font-size: 11px; color: var(--meta); margin-top: 5px; }
 .err-msg { font-size: 11px; color: var(--color-danger); margin-top: 4px; }
 
-.input, .textarea {
+.input, .textarea, .select {
   width: 100%;
   padding: 8px 11px;
   background: var(--surface-3);
@@ -455,10 +489,11 @@ async function saveAsTemplate() {
   outline: none;
   font-family: inherit;
 }
-.input.mono, .textarea { font-family: var(--font-mono); font-size: 12.5px; }
-.input:focus, .textarea:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(201,100,66,.18); }
+.input.mono, .textarea.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.input:focus, .textarea:focus, .select:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(201,100,66,.18); }
 .input::placeholder, .textarea::placeholder { color: var(--meta); }
 .textarea { resize: vertical; min-height: 70px; line-height: 1.6; }
+.select { cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2387867f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 13px; padding-right: 30px; }
 
 .field-row { display: grid; gap: 12px; }
 .field-row.c2 { grid-template-columns: 1fr 1fr; }

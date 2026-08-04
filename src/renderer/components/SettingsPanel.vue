@@ -1,13 +1,73 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { api } from '@renderer/api/ipc'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
+import { useWhitelistStore } from '@renderer/stores/whitelist'
 import { toast, confirmBox } from '@renderer/feedback'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
+const wl = useWhitelistStore()
 const fileInput = ref<HTMLInputElement | null>(null)
+
+// 白名单输入
+const wlIp = ref('')
+const wlNote = ref('')
+
+onMounted(() => { wl.load().catch(() => toast('加载白名单失败', 'err')) })
+
+/** 严格校验 IPv4 或 CIDR（各段 0-255，CIDR 掩码 0-32） */
+function validIpOrCidr(s: string): boolean {
+  const [ipPart, cidr] = s.split('/')
+  const segs = ipPart.split('.')
+  if (segs.length !== 4) return false
+  if (!segs.every(n => /^\d+$/.test(n) && +n >= 0 && +n <= 255)) return false
+  if (cidr !== undefined && (!/^\d+$/.test(cidr) || +cidr < 0 || +cidr > 32)) return false
+  return true
+}
+
+async function addWhitelistIp() {
+  const ip = wlIp.value.trim()
+  if (!ip) { toast('请输入 IP 或网段', 'err'); return }
+  if (!validIpOrCidr(ip)) {
+    toast('格式不正确，应为 IP(1.2.3.4) 或网段(10.0.0.0/24)，各段 0-255', 'err')
+    return
+  }
+  try {
+    await wl.add(ip, wlNote.value.trim() || undefined)
+    wlIp.value = ''
+    wlNote.value = ''
+    toast(`已添加 ${ip} · 记得点「应用」生效`, 'ok')
+  } catch (e: any) {
+    toast('添加失败: ' + e.message, 'err')
+  }
+}
+
+async function removeWhitelistIp(id: string, ip: string) {
+  const ok = await confirmBox({
+    title: '移除白名单',
+    message: `确定从白名单移除 ${ip} 吗？`,
+    btnText: '移除',
+    kind: 'warn',
+  })
+  if (!ok) return
+  try {
+    await wl.remove(id)
+    toast('已移除 · 记得点「应用」生效', 'ok')
+  } catch (e: any) {
+    toast('移除失败: ' + e.message, 'err')
+  }
+}
+
+async function toggleWhitelist() {
+  try {
+    await wl.toggleEnabled(!wl.enabled)
+    toast(wl.enabled ? '白名单已开启 · 记得点「应用」生效' : '白名单已关闭 · 记得点「应用」生效', 'ok')
+  } catch (e: any) {
+    toast('操作失败: ' + e.message, 'err')
+  }
+}
 
 async function wipeAll() {
   const ok = await confirmBox({
@@ -76,11 +136,47 @@ async function doImport(event: Event) {
     <div class="page-hd">
       <div>
         <div class="page-tit">设置</div>
-        <div class="page-sub">数据管理 · 关于</div>
+        <div class="page-sub">访问控制 · 数据管理 · 关于</div>
       </div>
     </div>
 
     <div class="content">
+      <!-- 访问控制：IP 白名单 -->
+      <div class="section">
+        <div class="sec-tit sec-head">访问控制 · IP 白名单</div>
+        <div class="row">
+          <div class="row-info">
+            <h4>启用 IP 白名单</h4>
+            <p>开启后，只有列表中的 IP 能访问所有代理服务。关闭则全部允许。支持单 IP(1.2.3.4)和网段(10.0.0.0/24)。改后需点「应用」生效。</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" :checked="wl.enabled" @change="toggleWhitelist">
+            <span class="track"><span class="knob"></span></span>
+          </label>
+        </div>
+        <!-- 添加 IP -->
+        <div class="wl-add">
+          <input class="input mono" v-model="wlIp" placeholder="192.168.1.10 或 10.0.0.0/24" @keydown.enter="addWhitelistIp">
+          <input class="input" v-model="wlNote" placeholder="备注（可选）" @keydown.enter="addWhitelistIp">
+          <button class="btn btn-accent btn-sm" @click="addWhitelistIp">+ 添加</button>
+        </div>
+        <!-- IP 列表 -->
+        <div v-if="wl.list.length > 0" class="wl-list">
+          <div v-for="item in wl.list" :key="item.id" class="wl-item" :class="{ disabled: item.enabled !== 1 }">
+            <label class="toggle sm">
+              <input type="checkbox" :checked="item.enabled === 1" @change="wl.toggleIp(item.id, ($event.target as HTMLInputElement).checked)">
+              <span class="track"><span class="knob"></span></span>
+            </label>
+            <span class="wl-ip">{{ item.ip }}</span>
+            <span v-if="item.note" class="wl-note">{{ item.note }}</span>
+            <button class="icon-btn danger" title="移除" @click="removeWhitelistIp(item.id, item.ip)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div v-else class="wl-empty">白名单为空，添加 IP 后才能限制访问</div>
+      </div>
+
       <!-- 数据管理 -->
       <div class="section">
         <div class="sec-tit sec-head">数据管理</div>
@@ -153,4 +249,30 @@ async function doImport(event: Event) {
 .danger-zone { border: 1px solid rgba(181,51,51,.4); border-radius: var(--r); padding: 4px 18px; background: rgba(181,51,51,.03); margin-top: 8px; }
 .sec-tit.danger { color: var(--color-danger); }
 .danger-h { color: var(--color-danger); }
+
+/* 白名单 */
+.wl-add { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.wl-add .input { flex: 1; }
+.wl-add .input:nth-child(2) { max-width: 200px; font-family: var(--font-body); }
+.input { padding: 6px 10px; background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: var(--r); font-size: 13px; color: var(--fg); outline: none; font-family: inherit; }
+.input.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.input:focus { border-color: var(--color-accent); }
+
+.wl-list { padding-top: 4px; }
+.wl-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-hair); }
+.wl-item.disabled { opacity: 0.5; }
+.wl-ip { font-family: var(--font-mono); font-size: 13px; color: var(--fg); min-width: 160px; }
+.wl-note { font-size: 12px; color: var(--muted); flex: 1; }
+.wl-empty { color: var(--muted); font-size: 12px; padding: 16px 0; text-align: center; }
+
+/* 开关（复用全局样式） */
+.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
+.toggle.sm { width: 28px; height: 16px; }
+.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
+.toggle.sm .knob { width: 10px; height: 10px; }
+.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
+.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
+.toggle.sm input:checked + .track .knob { left: 14px; }
 </style>

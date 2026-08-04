@@ -35,6 +35,13 @@ export interface RemoteHostConfig {
 export type Protocol = 'tcp' | 'udp' | 'http' | 'https'
 export type HealthStatus = 'healthy' | 'unhealthy' | 'unknown' | 'checking'
 
+/** HTTP/HTTPS 代理模式：
+ * - standard：标准反代（自动生成 Host/X-Real-IP/WebSocket/大body等头）
+ * - minimal：精简代理（仅 proxy_pass，不加额外头，适合 GitLab 等对 Host 敏感的服务）
+ * - custom：完全自定义（用户写的 proxy_headers 替代自动生成的）
+ */
+export type ProxyMode = 'standard' | 'minimal' | 'custom'
+
 export interface Mapping {
   id: string
   hostId: string
@@ -50,6 +57,8 @@ export interface Mapping {
   tlsKeyPath: string | null
   redirectHttp: number    // 0 | 1
   extraDirectives: string | null
+  proxyMode: ProxyMode
+  proxyHeaders: string | null    // custom 模式下的自定义代理头指令
   healthCheckEnabled: number
   healthCheckIntervalSec: number
   healthCheckTargetPath: string | null
@@ -102,7 +111,11 @@ export const IPC = {
   // Log
   LOG_LIST: 'log:list',
   LOG_ADD: 'log:add',
+  LOG_CLEAR: 'log:clear',
   NGINX_LOG_TAIL: 'nginx:log-tail',
+  NGINX_LOG_CLEAR: 'nginx:log-clear',
+  NGINX_LOG_READ_ENABLED_GET: 'nginx:log-read-enabled-get',
+  NGINX_LOG_READ_ENABLED_SET: 'nginx:log-read-enabled-set',
   // Snapshot
   SNAPSHOT_LIST: 'snapshot:list',
   SNAPSHOT_GET: 'snapshot:get',
@@ -120,6 +133,13 @@ export const IPC = {
   DATA_WIPE: 'data:wipe',
   DATA_EXPORT: 'data:export',
   DATA_IMPORT: 'data:import',
+  // IP 白名单（全局访问控制）
+  WHITELIST_LIST: 'whitelist:list',
+  WHITELIST_ADD: 'whitelist:add',
+  WHITELIST_REMOVE: 'whitelist:remove',
+  WHITELIST_TOGGLE_IP: 'whitelist:toggle-ip',
+  WHITELIST_GET_ENABLED: 'whitelist:get-enabled',
+  WHITELIST_SET_ENABLED: 'whitelist:set-enabled',
 } as const
 
 // ============ Log ============

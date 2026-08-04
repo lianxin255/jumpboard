@@ -29,17 +29,63 @@ function renderExtra(extra: string | null, indent = '    '): string[] {
   return out
 }
 
-/** 公共：HTTP/HTTPS 转发头 */
-function proxyHeaders(indent = '      '): string[] {
+/**
+ * 标准反代的 proxy_set_header 系列。
+ * 注意：HTTP/1.1、body 大小、超时、buffering 等公共参数在 confGenerator 的 http 顶层
+ * 只写一次（所有模式继承），不在这里重复生成；header 是数组替换语义，若上移会让
+ * minimal/custom 模式被迫继承 Host 头且无法删除，所以必须留在 location 按模式生成。
+ */
+function standardProxySetHeaders(indent = '      '): string[] {
   return [
     `${indent}proxy_set_header Host $host;`,
     `${indent}proxy_set_header X-Real-IP $remote_addr;`,
     `${indent}proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
-    `${indent}proxy_set_header X-Forwarded-Proto $scheme;`
+    `${indent}proxy_set_header X-Forwarded-Proto $scheme;`,
+    `${indent}proxy_set_header Upgrade $http_upgrade;`,
+    `${indent}proxy_set_header Connection $connection_upgrade;`,
   ]
 }
 
-export function renderTcpServer(m: Mapping): string[] {
+/**
+ * 按 proxyMode 生成 location 内的代理指令（proxy_pass 之后的行）：
+ * - standard：标准反代头（Host/X-Real-IP/WebSocket）
+ * - minimal：不生成任何指令（HTTP/1.1、大 body、超时、buffering 继承 http 顶层公共参数）
+ * - custom：用户在 proxyHeaders 字段填的自定义指令（替代自动生成的头）
+ *   custom 模式下每行过滤掉 {}#（防注入逃逸），保留 ;（指令结尾需要）
+ */
+function renderProxyDirectives(m: Mapping, indent = '      '): string[] {
+  const mode = m.proxyMode || 'standard'
+  if (mode === 'minimal') {
+    // 精简：不生成任何指令。proxy_http_version 1.1 / client_max_body_size 0 /
+    // proxy_read_timeout 300s 已在 http 顶层，minimal 继承即可，正好是纯 proxy_pass。
+    return []
+  }
+  if (mode === 'custom' && m.proxyHeaders && m.proxyHeaders.trim()) {
+    // 过滤危险字符（{}# 和换行），保留分号（代理头指令需要）
+    return m.proxyHeaders.split('\n')
+      .map(l => l.replace(/[{}#\r]/g, '').trim())
+      .filter(l => l)
+      .map(l => indent + l)
+  }
+  // custom+空、standard、undefined 都走标准头
+  return standardProxySetHeaders(indent)
+}
+
+/** 生成白名单 allow/deny 指令行。whitelist 非空时返回 allow + deny all，空则返回空数组。
+ *  关键：sanitize 后若无有效 allow，不注入 deny all（避免管理员自锁）。 */
+function renderWhitelist(wl: string[] | undefined, indent = '    '): string[] {
+  if (!wl || wl.length === 0) return []
+  const lines: string[] = []
+  for (const ip of wl) {
+    const clean = sanitize(ip)
+    if (clean) lines.push(`${indent}allow ${clean};`)
+  }
+  // 只有存在至少一条有效 allow 时才 deny all，否则跳过（防止 sanitize 过滤掉全部后只剩 deny all 锁死）
+  if (lines.length > 0) lines.push(`${indent}deny all;`)
+  return lines
+}
+
+export function renderTcpServer(m: Mapping, wl?: string[]): string[] {
   const listen = safePort(m.listenPort)
   if (listen == null) return []
   const upHost = sanitize(m.upstreamHost)
@@ -47,13 +93,14 @@ export function renderTcpServer(m: Mapping): string[] {
     `  # mapping: ${m.name}`,
     '  server {',
     `    listen ${listen};`,
+    ...renderWhitelist(wl),
     `    proxy_pass ${upHost}:${m.upstreamPort};`,
     ...renderExtra(m.extraDirectives),
     '  }'
   ]
 }
 
-export function renderUdpServer(m: Mapping): string[] {
+export function renderUdpServer(m: Mapping, wl?: string[]): string[] {
   const listen = safePort(m.listenPort)
   if (listen == null) return []
   const upHost = sanitize(m.upstreamHost)
@@ -61,13 +108,14 @@ export function renderUdpServer(m: Mapping): string[] {
     `  # mapping: ${m.name}`,
     '  server {',
     `    listen ${listen} udp;`,
+    ...renderWhitelist(wl),
     `    proxy_pass ${upHost}:${m.upstreamPort};`,
     ...renderExtra(m.extraDirectives),
     '  }'
   ]
 }
 
-export function renderHttpServer(m: Mapping): string[] {
+export function renderHttpServer(m: Mapping, wl?: string[]): string[] {
   const port = safePort(m.listenPort) ?? 80
   const path = sanitize(m.listenPath) || '/'
   const serverNames = sanitize(m.serverNames)
@@ -78,26 +126,28 @@ export function renderHttpServer(m: Mapping): string[] {
   lines.push(`    listen ${port};`)
   if (serverNames) lines.push(`    server_name ${serverNames};`)
   lines.push(`    location ${path} {`)
+  lines.push(...renderWhitelist(wl, '      '))
   lines.push(`      proxy_pass http://${upHost}:${m.upstreamPort};`)
-  lines.push(...proxyHeaders())
+  lines.push(...renderProxyDirectives(m))
   lines.push(...renderExtra(m.extraDirectives, '      '))
   lines.push('    }')
   lines.push('  }')
   return lines
 }
 
-export function renderHttpsServer(m: Mapping): string[] {
+export function renderHttpsServer(m: Mapping, wl?: string[]): string[] {
   const path = sanitize(m.listenPath) || '/'
   const serverNames = sanitize(m.serverNames)
   const upHost = sanitize(m.upstreamHost)
   const lines: string[] = []
   lines.push(`  # mapping: ${m.name}`)
 
-  // HTTP → HTTPS 跳转块（可选）
+  // HTTP → HTTPS 跳转块（可选）—— 白名单也要注入此块，否则 80 端口可绕过
   if (m.redirectHttp === 1 && serverNames) {
     lines.push('  server {')
     lines.push('    listen 80;')
     lines.push(`    server_name ${serverNames};`)
+    lines.push(...renderWhitelist(wl))
     lines.push('    return 301 https://$host$request_uri;')
     lines.push('  }')
     lines.push('')
@@ -110,8 +160,9 @@ export function renderHttpsServer(m: Mapping): string[] {
   if (m.tlsCertPath) lines.push(`    ssl_certificate ${sanitize(m.tlsCertPath)};`)
   if (m.tlsKeyPath) lines.push(`    ssl_certificate_key ${sanitize(m.tlsKeyPath)};`)
   lines.push(`    location ${path} {`)
+  lines.push(...renderWhitelist(wl, '      '))
   lines.push(`      proxy_pass http://${upHost}:${m.upstreamPort};`)
-  lines.push(...proxyHeaders())
+  lines.push(...renderProxyDirectives(m))
   lines.push(...renderExtra(m.extraDirectives, '      '))
   lines.push('    }')
   lines.push('  }')

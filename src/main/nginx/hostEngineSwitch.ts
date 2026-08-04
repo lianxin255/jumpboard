@@ -8,6 +8,7 @@ import { ensureDirSync, copySync, pathExistsSync } from 'fs-extra'
 import { resolvePaths } from '../paths'
 import { getHost } from '../db/hostRepo'
 import { listEnabledMappings } from '../db/mappingRepo'
+import { isWhitelistEnabled, getEnabledWhitelistIps } from '../db/whitelistRepo'
 import { generateFullConf } from './confGenerator'
 import { setActiveEngine } from './engineRegistry'
 import { LocalNginxEngine } from './localEngine'
@@ -40,9 +41,13 @@ export async function switchEngineToHost(hostId: string): Promise<boolean> {
     }
     // local：生成初始 conf（即使没 mapping，也要有最小 conf）
     const mappings = listEnabledMappings(host.id)
+    // 白名单开启且无有效 IP 时不注入（避免 fail-open 或自锁）
+    const wlEnabled = isWhitelistEnabled()
+    const wlIps = (wlEnabled && getEnabledWhitelistIps().length > 0) ? getEnabledWhitelistIps() : undefined
     const conf = generateFullConf(mappings, {
       nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir
+      nginxTempDir: paths.tempDir,
+      whitelistIps: wlIps,
     })
     await engine.writeConf(conf)
   } else if (host.type === 'remote' && host.remoteConfig) {
