@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox } from '@renderer/feedback'
+import ModalShell from '@renderer/components/ModalShell.vue'
 
 const props = defineProps<{ engineStatus?: string }>()
 
@@ -75,16 +76,19 @@ function openEdit(h: any) {
   showForm.value = true
 }
 
-async function testConn() {
+async function testConn(h?: any) {
   testing.value = true
   testResult.value = null
   try {
-    testResult.value = await store.testConnection({
+    // 行内按钮（传入 h）用该主机的 remoteConfig（含加密密码，后端会解密）；
+    // 表单内按钮（无 h）用表单当前值（明文密码走 PLAIN: 前缀）。
+    const cfg = h?.remoteConfig ?? {
       host: form.value.host,
       port: form.value.port,
       username: form.value.username,
       passwordEncrypted: form.value.password ? 'PLAIN:' + form.value.password : null,
-    })
+    }
+    testResult.value = await store.testConnection(cfg)
     toast(testResult.value.ok ? 'SSH 连接成功' : '连接失败: ' + testResult.value.output, testResult.value.ok ? 'ok' : 'err')
   } finally {
     testing.value = false
@@ -123,6 +127,19 @@ async function save() {
     toast('保存失败: ' + e.message, 'err')
   }
 }
+
+// Ctrl/Cmd+S 保存主机（表单显示期间才监听）
+function onKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    save()
+  }
+}
+watch(showForm, (v) => {
+  if (v) window.addEventListener('keydown', onKeydown)
+  else window.removeEventListener('keydown', onKeydown)
+})
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 async function removeHost(id: string, name: string) {
   const ok = await confirmBox({
@@ -184,7 +201,7 @@ async function makeDefault(id: string, name: string) {
           <button v-if="h.isDefault !== 1" class="icon-btn" title="设为默认" @click="makeDefault(h.id, h.name)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9"/></svg>
           </button>
-          <button v-if="h.type === 'remote'" class="icon-btn" title="测试连接" @click="testConn">
+          <button v-if="h.type === 'remote'" class="icon-btn" title="测试连接" :disabled="testing" @click="testConn(h)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </button>
           <button class="icon-btn" title="编辑" @click="openEdit(h)">
@@ -205,18 +222,8 @@ async function makeDefault(id: string, name: string) {
     </div>
 
     <!-- 主机表单浮层 -->
-    <div v-if="showForm" class="overlay" @click.self="showForm = false">
-      <div class="modal lg">
-        <div class="modal-hd">
-          <div>
-            <h3>{{ editingId ? '编辑主机' : '新增主机' }}</h3>
-            <div class="sub">本地 / 远程 SSH · 所有数据按主机隔离</div>
-          </div>
-          <button class="close-x" @click="showForm = false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <div class="modal-bd">
+    <ModalShell v-if="showForm" :title="editingId ? '编辑主机' : '新增主机'" sub="本地 / 远程 SSH · 所有数据按主机隔离" size="lg" @cancel="showForm = false">
+      <div>
           <!-- 主机类型 -->
           <div class="field">
             <label>主机类型</label>
@@ -311,14 +318,13 @@ async function makeDefault(id: string, name: string) {
           </template>
 
           <div v-if="error" class="alert-warn" style="margin-top:12px">{{ error }}</div>
-        </div>
-
-        <div class="modal-ft">
-          <button class="btn btn-ghost" @click="showForm = false">取消</button>
-          <button class="btn btn-accent" @click="save">保存主机</button>
-        </div>
       </div>
-    </div>
+
+      <template #footer>
+        <button class="btn btn-ghost" @click="showForm = false">取消</button>
+        <button class="btn btn-accent" @click="save">保存主机</button>
+      </template>
+    </ModalShell>
   </div>
 </template>
 
@@ -351,17 +357,7 @@ async function makeDefault(id: string, name: string) {
 
 .row-acts { display: flex; gap: 4px; justify-content: flex-end; }
 
-/* 浮层（与 MappingForm 共享样式） */
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(2px); z-index: 50; display: flex; align-items: center; justify-content: center; animation: fade .15s; }
-.modal { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--r-lg); box-shadow: var(--shadow-md); width: 92%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; animation: fadeUp .2s var(--ease); }
-.modal.lg { max-width: 860px; }
-.modal-hd { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.modal-hd h3 { font-family: var(--font-display); font-size: 18px; font-weight: 500; }
-.modal-hd .sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-.close-x { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--muted); background: none; border: none; cursor: pointer; }
-.close-x:hover { background: var(--surface-2); color: var(--fg); }
-.modal-bd { padding: 20px; overflow: auto; flex: 1; }
-.modal-ft { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+/* 浮层骨架抽为 ModalShell 组件 */
 
 .field { margin-bottom: 14px; }
 .field > label { display: block; font-size: 12px; color: var(--fg-2); margin-bottom: 6px; font-weight: 500; }

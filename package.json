@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "build:portable": "electron-vite build && electron-builder --win portable",
-    "build:win": "electron-vite build && electron-builder --win --x64 && cd release && mv win-unpacked NginxJump && ditto -c -k --keepParent NginxJump NginxJump-$(node -p \"require('../package.json').version\")-win-x64.zip",
+    "build:win": "electron-vite build && electron-builder --win --x64",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3"

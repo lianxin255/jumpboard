@@ -1,8 +1,11 @@
 node_modules/
 out/
+release/
 dist/
-data/
 *.log
 .DS_Store
-release/
-/index.js
+data/
+*.db
+*.db-shm
+*.db-wal
+.verify-*.ts

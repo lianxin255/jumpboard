@@ -47,7 +47,7 @@ describe('renderHttpServer', () => {
     expect(conf).toContain('listen 8080;')
     expect(conf).toContain('server_name app1.gw.local;')
     expect(conf).toContain('location /')
-    expect(conf).toContain('proxy_pass http://10.0.0.3:3000;')
+    expect(conf).toContain('proxy_pass http://10.0.0.3:3000/;')
     expect(conf).toContain('proxy_set_header Host')
     expect(conf).toContain('proxy_set_header X-Real-IP')
     expect(conf).toContain('proxy_set_header X-Forwarded-For')
@@ -55,6 +55,16 @@ describe('renderHttpServer', () => {
   it('无 serverName 时省略 server_name 行', () => {
     const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, serverNames: null, upstreamHost: '10.0.0.3', upstreamPort: 3000 }))
     expect(out.join('\n')).not.toContain('server_name')
+  })
+  it('proxyPassUrl 非空时原样透传（不走 host:port 拼接）', () => {
+    const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, upstreamHost: '10.0.0.3', upstreamPort: 3000, proxyPassUrl: 'http://27.196.154.94/' }))
+    const conf = out.join('\n')
+    expect(conf).toContain('proxy_pass http://27.196.154.94/;')
+    expect(conf).not.toContain('10.0.0.3:3000')
+  })
+  it('proxyPassUrl 为空时走默认拼接（根路径带尾斜杠）', () => {
+    const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, upstreamHost: '10.0.0.3', upstreamPort: 3000, proxyPassUrl: null }))
+    expect(out.join('\n')).toContain('proxy_pass http://10.0.0.3:3000/;')
   })
   it('extraDirectives 在 location 块内正确缩进渲染', () => {
     const out = renderHttpServer(base({ protocol: 'http', listenPort: 8080, upstreamHost: '10.0.0.3', upstreamPort: 3000, extraDirectives: 'proxy_buffering off;' }))
@@ -76,7 +86,7 @@ describe('renderHttpsServer', () => {
     expect(conf).toContain('listen 443 ssl;')
     expect(conf).toContain('ssl_certificate /data/cert.pem;')
     expect(conf).toContain('ssl_certificate_key /data/key.pem;')
-    expect(conf).toContain('proxy_pass http://10.0.0.4:8443;')
+    expect(conf).toContain('proxy_pass http://10.0.0.4:8443/;')
   })
   it('redirectHttp=0 时不生成 80 跳转块', () => {
     const out = renderHttpsServer(base({
@@ -93,5 +103,31 @@ describe('renderHttpsServer', () => {
       tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0
     }))
     expect(out.join('\n')).not.toContain('ssl_certificate')
+  })
+})
+
+describe('安全：mapping.name 注入消毒（H2）', () => {
+  it('name 含换行+指令字符时被压平，无法逃逸注释行', () => {
+    const evil = base({
+      protocol: 'http', listenPort: 8080,
+      name: 'evil\n server { listen 7777; allow all; } #',
+    })
+    const lines = renderHttpServer(evil)
+    const commentLine = lines[0]
+    // 关键断言：注释行自身不含换行（sanitize 剔 \n 后注入内容全部留在同一行注释里，无法成为指令）
+    expect(commentLine).not.toMatch(/[\n\r]/)
+    // 下一行必须是 server { 结构行，不是注入的指令
+    expect(lines[1].trim()).toBe('server {')
+    // 注入的 listen 7777 只出现在注释文本里，不构成指令行（listen 8080 是结构行的）
+    expect(lines.some(l => l.trim().startsWith('listen 7777'))).toBe(false)
+    expect(commentLine).toContain('listen 7777')  // 压平后的无害文本仍在注释里
+  })
+  it('TCP 映射的 name 同样消毒（换行剔除，不产生额外行）', () => {
+    const evil = base({ name: 'x\n}\nserver {\nlisten 9999;' })
+    const lines = renderTcpServer(evil)
+    expect(lines[0]).not.toMatch(/[\n\r]/)
+    expect(lines[1].trim()).toBe('server {')
+    // 注入的 listen 9999 被压平进注释文本，不构成指令行
+    expect(lines.some(l => l.trim().startsWith('listen 9999'))).toBe(false)
   })
 })

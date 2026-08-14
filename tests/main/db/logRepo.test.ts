@@ -55,6 +55,23 @@ describe('logRepo', () => {
     expect(listLogs('h1', 100)).toHaveLength(5)
   })
 
+  it('trimLogs 同 timestamp 时按插入顺序保留最新（rowid DESC 稳定排序）', () => {
+    // 快速连续写 6 条（同毫秒 timestamp 概率高），保留 3 条应是最晚插入的 m3/m4/m5
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm0' })
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm1' })
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm2' })
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm3' })
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm4' })
+    addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm5' })
+    trimLogs(3)
+    const kept = listLogs('h1', 100).map(l => l.message)
+    // 最晚插入的 3 条保留（listLogs 按 timestamp DESC，但同 timestamp 时顺序由 trimLogs 的 rowid DESC 决定）
+    expect(kept).toContain('m5')
+    expect(kept).toContain('m4')
+    expect(kept).toContain('m3')
+    expect(kept).not.toContain('m0')
+  })
+
   it('hostId 为 null 也能写入和查询（全局日志）', () => {
     addLog({ hostId: null, level: 'info', source: 'app', message: 'global' })
     const list = listLogs(null, 100)

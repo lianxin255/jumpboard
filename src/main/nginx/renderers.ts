@@ -11,6 +11,14 @@ function sanitize(v: string | null | undefined): string {
   return v.replace(/[;{}#\n\r]/g, '').trim()
 }
 
+/**
+ * mapping.name 消毒（用于 conf 注释行）。name 含 \n 可让注释提前终止、
+ * 后续行成为真实指令（注入完整 server 块），必须剔除换行和指令字符。
+ */
+function safeName(name: string | null | undefined): string {
+  return sanitize(name)
+}
+
 /** 校验端口合法（1-65535），非法返回 null */
 function safePort(p: number | null | undefined): number | null {
   if (p == null) return null
@@ -90,7 +98,7 @@ export function renderTcpServer(m: Mapping, wl?: string[]): string[] {
   if (listen == null) return []
   const upHost = sanitize(m.upstreamHost)
   return [
-    `  # mapping: ${m.name}`,
+    `  # mapping: ${safeName(m.name)}`,
     '  server {',
     `    listen ${listen};`,
     ...renderWhitelist(wl),
@@ -105,7 +113,7 @@ export function renderUdpServer(m: Mapping, wl?: string[]): string[] {
   if (listen == null) return []
   const upHost = sanitize(m.upstreamHost)
   return [
-    `  # mapping: ${m.name}`,
+    `  # mapping: ${safeName(m.name)}`,
     '  server {',
     `    listen ${listen} udp;`,
     ...renderWhitelist(wl),
@@ -115,19 +123,30 @@ export function renderUdpServer(m: Mapping, wl?: string[]): string[] {
   ]
 }
 
+/** 生成 proxy_pass 指令值。proxyPassUrl 非空时原样用（用户自定义），否则按 host:port + 尾斜杠拼接。 */
+function renderProxyPass(m: Mapping, path: string, indent = '      '): string {
+  const upHost = sanitize(m.upstreamHost)
+  if (m.proxyPassUrl && m.proxyPassUrl.trim()) {
+    // 用户自定义：sanitize 后原样用（isValidProxyPassUrl 已在 handler 层校验，这里只防注入）
+    return `${indent}proxy_pass ${sanitize(m.proxyPassUrl)};`
+  }
+  // 默认拼接：location /（根匹配）时加尾斜杠，让 GitLab 等后端路径规范化正确
+  const trailingSlash = path === '/' ? '/' : ''
+  return `${indent}proxy_pass http://${upHost}:${m.upstreamPort}${trailingSlash};`
+}
+
 export function renderHttpServer(m: Mapping, wl?: string[]): string[] {
   const port = safePort(m.listenPort) ?? 80
   const path = sanitize(m.listenPath) || '/'
   const serverNames = sanitize(m.serverNames)
-  const upHost = sanitize(m.upstreamHost)
   const lines: string[] = []
-  lines.push(`  # mapping: ${m.name}`)
+  lines.push(`  # mapping: ${safeName(m.name)}`)
   lines.push('  server {')
   lines.push(`    listen ${port};`)
   if (serverNames) lines.push(`    server_name ${serverNames};`)
   lines.push(`    location ${path} {`)
   lines.push(...renderWhitelist(wl, '      '))
-  lines.push(`      proxy_pass http://${upHost}:${m.upstreamPort};`)
+  lines.push(renderProxyPass(m, path))
   lines.push(...renderProxyDirectives(m))
   lines.push(...renderExtra(m.extraDirectives, '      '))
   lines.push('    }')
@@ -138,9 +157,8 @@ export function renderHttpServer(m: Mapping, wl?: string[]): string[] {
 export function renderHttpsServer(m: Mapping, wl?: string[]): string[] {
   const path = sanitize(m.listenPath) || '/'
   const serverNames = sanitize(m.serverNames)
-  const upHost = sanitize(m.upstreamHost)
   const lines: string[] = []
-  lines.push(`  # mapping: ${m.name}`)
+  lines.push(`  # mapping: ${safeName(m.name)}`)
 
   // HTTP → HTTPS 跳转块（可选）—— 白名单也要注入此块，否则 80 端口可绕过
   if (m.redirectHttp === 1 && serverNames) {
@@ -161,7 +179,7 @@ export function renderHttpsServer(m: Mapping, wl?: string[]): string[] {
   if (m.tlsKeyPath) lines.push(`    ssl_certificate_key ${sanitize(m.tlsKeyPath)};`)
   lines.push(`    location ${path} {`)
   lines.push(...renderWhitelist(wl, '      '))
-  lines.push(`      proxy_pass http://${upHost}:${m.upstreamPort};`)
+  lines.push(renderProxyPass(m, path))
   lines.push(...renderProxyDirectives(m))
   lines.push(...renderExtra(m.extraDirectives, '      '))
   lines.push('    }')

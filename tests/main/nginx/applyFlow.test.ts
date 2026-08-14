@@ -33,13 +33,16 @@ function makeEngine(opts: {
   readConf?: vi.Mock
 } = {}) {
   return {
+    engineKind: 'local' as const,
+    supportsProcessControl: true,
     test: opts.testMock ?? vi.fn().mockResolvedValue(opts.testResult ?? { ok: true, output: 'syntax is ok' }),
     writeConf: opts.writeConf ?? vi.fn().mockResolvedValue(undefined),
     reload: opts.reload ?? vi.fn().mockResolvedValue(undefined),
     readConf: opts.readConf ?? vi.fn().mockResolvedValue('old conf'),
     start: vi.fn(),
     stop: vi.fn(),
-    status: vi.fn().mockReturnValue('running')
+    status: vi.fn().mockReturnValue('running'),
+    refreshStatus: vi.fn().mockResolvedValue('running'),
   }
 }
 
@@ -50,7 +53,7 @@ describe('applyMappings', () => {
 
   it('test 通过 → writeConf + reload', async () => {
     const eng = makeEngine()
-    const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    const result = await applyMappings(eng as any, [mapping()], {})
     expect(result.ok).toBe(true)
     expect(eng.writeConf).toHaveBeenCalledOnce()
     expect(eng.reload).toHaveBeenCalledOnce()
@@ -58,7 +61,7 @@ describe('applyMappings', () => {
 
   it('test 失败 → 不 reload，回滚到旧 conf', async () => {
     const eng = makeEngine({ testResult: { ok: false, output: 'invalid host in upstream' } })
-    const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    const result = await applyMappings(eng as any, [mapping()], {})
     expect(result.ok).toBe(false)
     expect(result.output).toContain('invalid host in upstream')
     // writeConf 被调用两次：一次写新 conf，一次回滚旧 conf
@@ -66,30 +69,33 @@ describe('applyMappings', () => {
     expect(eng.reload).not.toHaveBeenCalled()
   })
 
-  it('test 通过但 reload 抛错 → 返回错误', async () => {
+  it('test 通过但 reload 抛错 → 返回错误且回滚旧 conf（修复原 applyFlow 不回滚的 bug）', async () => {
     const eng = makeEngine({ reload: vi.fn().mockRejectedValue(new Error('reload failed')) })
-    const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    const result = await applyMappings(eng as any, [mapping()], {})
     expect(result.ok).toBe(false)
     expect(result.output).toContain('reload failed')
+    // reload 失败也回滚磁盘 conf（safeApplyConf 新增的行为）
+    expect(eng.writeConf).toHaveBeenCalledTimes(2)
+    expect(eng.writeConf).toHaveBeenNthCalledWith(2, 'old conf')
   })
 
   it('生成的 conf 通过 result.conf 暴露（调试用）', async () => {
     const eng = makeEngine()
-    const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+    const result = await applyMappings(eng as any, [mapping()], {})
     expect(result.conf).toContain('stream {')
     expect(result.conf).toContain('listen 9000;')
   })
 
   it('成功时存配置快照（hostId 提供时）', async () => {
     const eng = makeEngine()
-    await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
+    await applyMappings(eng as any, [mapping()], { hostId: 'h1' })
     expect(createSnapshot).toHaveBeenCalledWith(expect.objectContaining({ hostId: 'h1', reason: 'reload' }))
     expect(logger.info).toHaveBeenCalled()
   })
 
   it('校验失败时写 warn 日志不存快照', async () => {
     const eng = makeEngine({ testResult: { ok: false, output: 'bad config' } })
-    await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
+    await applyMappings(eng as any, [mapping()], { hostId: 'h1' })
     expect(logger.warn).toHaveBeenCalled()
     expect(createSnapshot).not.toHaveBeenCalled()
   })

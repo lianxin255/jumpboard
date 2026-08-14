@@ -35,6 +35,11 @@ function getDataRoot(): string {
   if (appRootForTest) return appRootForTest
   const app = getElectronApp()
   if (app?.isPackaged) {
+    // Windows portable 单 exe：NSIS 注入 PORTABLE_EXECUTABLE_DIR 指向 exe 真实位置。
+    // app.getPath('exe') 在 portable 模式下返回临时解压目录的 exe，数据会丢——必须用此环境变量。
+    if (process.platform === 'win32' && process.env.PORTABLE_EXECUTABLE_DIR) {
+      return process.env.PORTABLE_EXECUTABLE_DIR
+    }
     const exePath = app.getPath('exe')
     if (process.platform === 'darwin') {
       // Foo.app/Contents/MacOS/Foo → Foo.app 所在目录

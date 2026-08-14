@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import dayjs from 'dayjs'
 import { useSnapshotsStore } from '@renderer/stores/snapshots'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox } from '@renderer/feedback'
+import { formatTime } from '@renderer/utils/time'
 
 const store = useSnapshotsStore()
 const props = defineProps<{ hostId: string }>()
@@ -58,13 +58,7 @@ async function rollback() {
   }
 }
 
-function formatTime(ts: number): string {
-  const d = dayjs(ts)
-  const now = dayjs()
-  if (d.isSame(now, 'day')) return '今天 ' + d.format('HH:mm:ss')
-  if (d.isSame(now.subtract(1, 'day'), 'day')) return '昨天 ' + d.format('HH:mm:ss')
-  return d.format('MM-DD HH:mm:ss')
-}
+// formatTime 已抽到 @renderer/utils/time
 
 const selectedSnap = () => store.list.find(s => s.id === selectedId.value)
 </script>

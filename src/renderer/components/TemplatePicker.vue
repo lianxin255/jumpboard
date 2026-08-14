@@ -4,6 +4,8 @@ import { useTemplatesStore } from '@renderer/stores/templates'
 import type { Template } from '@renderer/stores/templates'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox } from '@renderer/feedback'
+import ModalShell from '@renderer/components/ModalShell.vue'
+import { protocolIconPaths as iconPaths } from '@renderer/utils/icons'
 
 const store = useTemplatesStore()
 const emit = defineEmits<{ (e: 'pick', tpl: Template | null): void; (e: 'cancel'): void }>()
@@ -27,23 +29,7 @@ const grouped = computed(() => {
 
 // icon id → SVG path（用设计稿的图标，比 antd 图标更统一）
 // tcp/udp/http/https 用于自定义模板（saveAsTemplate 存的 icon = protocol 值）
-const iconPaths: Record<string, string> = {
-  tcp: 'M5 8h14M5 12h14M5 16h14',
-  udp: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM5 8h14M5 16h14',
-  http: 'M3 12h18M12 3v18',
-  https: 'M5 11h14v9H5zM8 11V7a4 4 0 0 1 8 0v4',
-  network: 'M5 8h14M5 12h14M5 16h14',
-  terminal: 'M7 9l3 3-3 3M13 15h4',
-  monitor: 'M8 4h8v2M8 18h8v2M3 9h18M3 15h18',
-  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z',
-  lock: 'M5 11h14v9H5zM8 11V7a4 4 0 0 1 8 0v4',
-  code: 'M8 8l-4 4 4 4M16 8l4 4-4 4',
-  bolt: 'M13 2L4 14h7l-2 8 9-12h-7z',
-  database: 'M12 3c4.4 0 8 1.3 8 3v12c0 1.7-3.6 3-8 3s-8-1.3-8-3V6c0-1.7 3.6-3 8-3zM4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
-  message: 'M4 18c4-8 12-8 16 0M4 14c4-6 12-6 16 0',
-  api: 'M3 12h4l3-7 4 14 3-7h4',
-  default: 'M12 5v14M5 12h14',
-}
+// iconPaths 已抽到 @renderer/utils/icons
 
 const selected = ref<string | null>(null)
 
@@ -86,90 +72,53 @@ function confirmPick() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('cancel')">
-    <div class="modal">
-      <div class="modal-hd">
-        <div>
-          <h3>选择模板</h3>
-          <div class="sub">预填字段后进入表单，可随时修改</div>
-        </div>
-        <button class="close-x" @click="emit('cancel')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
+  <ModalShell title="选择模板" sub="预填字段后进入表单，可随时修改" size="lg" @cancel="emit('cancel')">
+    <div v-if="store.loading" class="empty-state" style="padding:40px">加载中…</div>
+    <div v-else-if="store.list.length === 0" class="empty-state" style="padding:40px">没有可用模板</div>
 
-      <div class="modal-bd">
-        <div v-if="store.loading" class="empty-state" style="padding:40px">加载中…</div>
-        <div v-else-if="store.list.length === 0" class="empty-state" style="padding:40px">没有可用模板</div>
-
-        <template v-for="[cat, items] in grouped" :key="cat">
-          <div class="tpl-cat-hd">{{ cat }}</div>
-          <div class="tpl-grid">
-            <div v-for="t in items" :key="t.id" class="tpl-card"
-              :class="{ sel: selected === t.id }" @click="pickTpl(t)">
-              <button v-if="!t.builtin" class="tpl-del" title="删除" @click="deleteCustom(t, $event)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-              <div class="t-ico">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path :d="iconPaths[t.icon] || iconPaths.default" />
-                </svg>
-              </div>
-              <div class="t-nm">{{ t.name }}<span v-if="!t.builtin" class="t-custom">自定义</span></div>
-              <div class="t-desc">{{ t.description }}</div>
-              <div v-if="t.mapping?.upstreamPort" class="t-port">端口 {{ t.mapping.upstreamPort }}</div>
-              <div v-else-if="t.mapping?.listenPort" class="t-port">端口 {{ t.mapping.listenPort }}</div>
-            </div>
+    <template v-for="[cat, items] in grouped" :key="cat">
+      <div class="tpl-cat-hd">{{ cat }}</div>
+      <div class="tpl-grid">
+        <div v-for="t in items" :key="t.id" class="tpl-card"
+          :class="{ sel: selected === t.id }" @click="pickTpl(t)">
+          <button v-if="!t.builtin" class="tpl-del" title="删除" @click="deleteCustom(t, $event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <div class="t-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path :d="iconPaths[t.icon] || iconPaths.default" />
+            </svg>
           </div>
-        </template>
-
-        <!-- 自定义 -->
-        <div class="tpl-cat-hd">自定义</div>
-        <div class="tpl-grid">
-          <div class="tpl-card custom" :class="{ sel: selected === '__custom__' }" @click="pickCustom">
-            <div class="t-ico">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
-            </div>
-            <div class="t-nm">自定义</div>
-            <div class="t-desc">空白表单，全部字段自行填写</div>
-            <div class="t-port">任意协议</div>
-          </div>
+          <div class="t-nm">{{ t.name }}<span v-if="!t.builtin" class="t-custom">自定义</span></div>
+          <div class="t-desc">{{ t.description }}</div>
+          <div v-if="t.mapping?.upstreamPort" class="t-port">端口 {{ t.mapping.upstreamPort }}</div>
+          <div v-else-if="t.mapping?.listenPort" class="t-port">端口 {{ t.mapping.listenPort }}</div>
         </div>
       </div>
+    </template>
 
-      <div class="modal-ft">
-        <button class="btn btn-ghost" @click="emit('cancel')">取消</button>
-        <button class="btn btn-accent" :disabled="!selected" @click="confirmPick">下一步：填写参数</button>
+    <!-- 自定义 -->
+    <div class="tpl-cat-hd">自定义</div>
+    <div class="tpl-grid">
+      <div class="tpl-card custom" :class="{ sel: selected === '__custom__' }" @click="pickCustom">
+        <div class="t-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        <div class="t-nm">自定义</div>
+        <div class="t-desc">空白表单，全部字段自行填写</div>
+        <div class="t-port">任意协议</div>
       </div>
     </div>
-  </div>
+
+    <template #footer>
+      <button class="btn btn-ghost" @click="emit('cancel')">取消</button>
+      <button class="btn btn-accent" :disabled="!selected" @click="confirmPick">下一步：填写参数</button>
+    </template>
+  </ModalShell>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.6);
-  backdrop-filter: blur(2px);
-  z-index: 50;
-  display: flex; align-items: center; justify-content: center;
-  animation: fade .15s;
-}
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-md);
-  width: 92%; max-width: 860px; max-height: 88vh;
-  display: flex; flex-direction: column;
-  animation: fadeUp .2s var(--ease);
-}
-.modal-hd { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.modal-hd h3 { font-family: var(--font-display); font-size: 18px; font-weight: 500; }
-.modal-hd .sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-.close-x { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--muted); background: none; border: none; cursor: pointer; }
-.close-x:hover { background: var(--surface-2); color: var(--fg); }
-.modal-bd { padding: 20px; overflow: auto; flex: 1; }
-.modal-ft { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+/* overlay/modal 骨架抽为 ModalShell 组件 */
 
 .tpl-cat-hd { font-family: var(--font-mono); font-size: 10.5px; color: var(--meta); letter-spacing: 0.08em; text-transform: uppercase; margin: 4px 0 10px; }
 .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }

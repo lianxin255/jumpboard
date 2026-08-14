@@ -91,4 +91,7 @@ export function runMigrations(db: Database): void {
   if (!colNames.includes('proxy_headers')) {
     db.exec("ALTER TABLE mappings ADD COLUMN proxy_headers TEXT")
   }
+  if (!colNames.includes('proxy_pass_url')) {
+    db.exec("ALTER TABLE mappings ADD COLUMN proxy_pass_url TEXT")
+  }
 }

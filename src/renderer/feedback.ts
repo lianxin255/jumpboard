@@ -3,7 +3,7 @@
  * 挂载一次 <FeedbackHost /> 即全局可用。
  * 设计稿风格：Toast 底部居中圆点消息；Confirm 圆图标 + Serif 标题 + impact 提示。
  */
-import { ref, h, defineComponent } from 'vue'
+import { ref, h, defineComponent, onMounted, onUnmounted } from 'vue'
 
 // ── Toast ──
 type ToastKind = 'ok' | 'err' | 'info'
@@ -71,10 +71,25 @@ function closeConfirm(ok: boolean) {
   confirmState.value.visible = false
 }
 
+/** confirmBox/promptBox 是否正打开（供 ModalShell 的 Esc 守卫用，避免 DOM 查询时序竞态） */
+export function isFeedbackModalOpen(): boolean {
+  return confirmState.value.visible
+}
+
 // ── 宿主组件 ──
 export const FeedbackHost = defineComponent({
   name: 'FeedbackHost',
   setup() {
+    // Esc 关闭 confirm/prompt 弹窗（与遮罩点击同义：取消）
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && confirmState.value.visible) {
+        e.preventDefault()
+        closeConfirm(false)
+      }
+    }
+    onMounted(() => window.addEventListener('keydown', onKeydown))
+    onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+
     return () => [
       // Toast 容器
       h('div', { class: 'fb-toast-wrap' },

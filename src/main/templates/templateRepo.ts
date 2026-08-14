@@ -5,6 +5,15 @@ import type { TemplateDefinition } from './types'
 import { resolvePaths } from '../paths'
 
 /**
+ * 自定义模板 id 白名单：字母、数字、下划线、短横线，长度 1-64。
+ * 拒绝路径分隔符（/ \）、相对路径（..）等，防止 tpl.id 拼文件名时穿越到任意目录。
+ */
+const TEMPLATE_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/
+function isValidTemplateId(id: string): boolean {
+  return typeof id === 'string' && TEMPLATE_ID_RE.test(id)
+}
+
+/**
  * 内置模板目录定位。
  * - 生产环境：electron-builder 把模板复制到 resources/bundled/templates，
  *   Electron 通过 process.resourcesPath 访问。
@@ -88,6 +97,9 @@ export function listAllTemplates(): TemplateDefinition[] {
 }
 
 export function saveCustomTemplate(tpl: TemplateDefinition): void {
+  if (!isValidTemplateId(tpl.id)) {
+    throw new Error('模板 id 非法：仅允许字母、数字、下划线、短横线（1-64 字符）')
+  }
   const dir = getCustomDir()
   const data = {
     id: tpl.id,
@@ -102,6 +114,7 @@ export function saveCustomTemplate(tpl: TemplateDefinition): void {
 }
 
 export function deleteCustomTemplate(id: string): void {
+  if (!isValidTemplateId(id)) return  // 非法 id 直接拒绝，不拼路径
   const dir = getCustomDir()
   const file = join(dir, `${id}.yml`)
   if (pathExistsSync(file)) removeSync(file)

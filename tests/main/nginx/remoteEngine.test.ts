@@ -77,14 +77,39 @@ describe('RemoteNginxEngine', () => {
   it('refreshStatus 通过 systemctl 更新 cachedStatus 为 running', async () => {
     sshMocks.exec.mockResolvedValue({ stdout: 'active\n', stderr: '', code: 0 })
     const eng = makeEngine()
-    await (eng as any).refreshStatus()
+    await eng.refreshStatus()
     expect(eng.status()).toBe('running')
   })
 
-  it('start/stop 是 no-op（远程不托管进程），不抛错', async () => {
+  it('engineKind 为 remote，supportsProcessControl 为 false', () => {
+    const eng = makeEngine()
+    expect(eng.engineKind).toBe('remote')
+    expect(eng.supportsProcessControl).toBe(false)
+  })
+
+  it('start/stop 抛错（远程不托管进程，明示不支持而非假动作）', async () => {
     sshMocks.exec.mockResolvedValue({ stdout: 'inactive', stderr: '', code: 0 })
     const eng = makeEngine()
-    await expect(eng.start()).resolves.toBeUndefined()
-    await expect(eng.stop()).resolves.toBeUndefined()
+    await expect(eng.start()).rejects.toThrow(/不支持/)
+    await expect(eng.stop()).rejects.toThrow(/不支持/)
+  })
+
+  it('可注入 SshClient（可测性）——不依赖 @main/ssh/client 模块 mock', async () => {
+    // 直接构造 mock SshClient，验证构造函数注入路径
+    const mockSsh = {
+      exec: vi.fn().mockResolvedValue({ stdout: 'active\n', stderr: '', code: 0 }),
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      close: vi.fn(),
+    }
+    const eng = new RemoteNginxEngine({
+      host: '1.1.1.1', port: 22, username: 'root', passwordEncrypted: null,
+      nginxPath: '/usr/sbin/nginx', confPath: '/etc/nginx/nginx.conf',
+      reloadCmd: 'nginx -s reload', testCmd: 'nginx -t',
+    }, mockSsh as any)
+    // 注入的 mock 生效：不经过模块 mock
+    const status = await eng.refreshStatus()
+    expect(status).toBe('running')
+    expect(mockSsh.exec).toHaveBeenCalled()
   })
 })

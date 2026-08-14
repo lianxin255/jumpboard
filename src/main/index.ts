@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import { join } from 'path'
 import { resolvePaths } from './paths'
 import { openDb, closeDb } from './db/connection'
@@ -7,6 +7,7 @@ import { getActiveEngine } from './nginx/engineRegistry'
 import { switchEngineToHost } from './nginx/hostEngineSwitch'
 import { getDefaultHost, listHosts, createHost, setDefaultHost } from './db/hostRepo'
 import { startHealthCheckLoop, stopHealthCheckLoop } from './services/healthCheck'
+import { logger } from './services/logger'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -28,6 +29,22 @@ function createWindow() {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // 窗口加固：渲染层一旦被注入（XSS），禁止把窗口导航到任意页面或开新窗口钓鱼。
+  // 新窗口一律拒绝并转交系统浏览器（shell.openExternal 只处理 http/https）。
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  // 只允许应用内导航（file:// 自身资源或开发 server），其他一律拦截
+  win.webContents.on('will-navigate', (e, url) => {
+    const devServer = process.env.ELECTRON_RENDERER_URL
+    const allowed = url.startsWith('file://') || (devServer ? url.startsWith(devServer) : false)
+    if (!allowed) {
+      e.preventDefault()
+      if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    }
+  })
 }
 
 app.whenReady().then(async () => {
@@ -69,7 +86,10 @@ app.whenReady().then(async () => {
 
     registerIpcHandlers()
     const def = getDefaultHost()
-    if (def) await switchEngineToHost(def.id)
+    if (def) {
+      const r = await switchEngineToHost(def.id)
+      if (!r.ok) logger.warn(def.id, 'app', `启动时切换默认主机失败：${r.error ?? '未知原因'}`)
+    }
     createWindow()
     startHealthCheckLoop()
 

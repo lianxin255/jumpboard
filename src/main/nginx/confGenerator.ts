@@ -2,20 +2,8 @@ import type { Mapping } from '@shared/types'
 import { renderTcpServer, renderUdpServer, renderHttpServer, renderHttpsServer } from './renderers'
 
 export interface ConfGenOptions {
-  nginxLogDir: string
-  nginxTempDir: string
   /** 白名单 IP 列表（非空时在每个 server 块注入 allow/deny all） */
   whitelistIps?: string[]
-}
-
-/**
- * 规范化路径供 nginx conf 使用：Windows 反斜杠转正斜杠。
- * nginx conf 解析时反斜杠是转义字符（\t→TAB, \n→换行），
- * Windows 路径 C:\Users\...\data\temp 会被错误解析。
- * nginx 在 Windows 上完全支持正斜杠，所以统一转成 /。
- */
-function confPath(p: string): string {
-  return p.replace(/\\/g, '/')
 }
 
 export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): string {

@@ -45,10 +45,11 @@ const navItems = [
   { key: 'settings', label: '设置', icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>' },
 ] as const
 
-// 引擎状态（顶栏精简版）+ dirty + pid，统一在 refreshEng 拉
+// 引擎状态（顶栏精简版）+ dirty + pid + 能力，统一在 refreshEng 拉
 const engStatus = ref<string>('unknown')
 const engDirty = ref(false)
 const engPid = ref<number | null>(null)
+const engSupportsProcessControl = ref(true)  // 默认 true，避免首帧闪烁；切主机后刷新为真实值
 const engBusy = ref(false)
 async function refreshEng() {
   try {
@@ -56,6 +57,9 @@ async function refreshEng() {
     engDirty.value = await api.isEngineDirty()
     // 引擎未运行时没必要拉 pid，省一次 IPC
     engPid.value = engStatus.value === 'running' ? await api.getEnginePid() : null
+    // 引擎能力：remote 不支持启停，UI 据此隐藏按钮
+    const kind = await api.getEngineKind()
+    engSupportsProcessControl.value = kind?.supportsProcessControl ?? true
   } catch { /* ignore */ }
 }
 async function engStart() {
@@ -115,8 +119,8 @@ async function pickHost(id: string) {
   closeHostMenu()
   try {
     // 真正切换后端活动引擎（local 重建子进程 / remote 重连 SSH），不再只是改前端 ref
-    const ok = await hosts.switchTo(id)
-    if (!ok) { toast('切换主机失败', 'err'); return }
+    const r = await hosts.switchTo(id)
+    if (!r?.ok) { toast('切换主机失败: ' + (r?.error || '未知原因'), 'err'); return }
     if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
     await refreshEng()
     toast('已切换主机', 'info')
@@ -136,6 +140,24 @@ function onPick(tpl: Template | null) {
   showForm.value = true
 }
 function openEdit(id: string) { editingId.value = id; showForm.value = true }
+
+// 克隆：用现有映射字段打开新建表单（不带 mappingId → 走 create），名称加 (副本)
+function cloneMap(id: string) {
+  const m = mappings.list.find(x => x.id === id)
+  if (!m) return
+  pickedTemplate.value = {
+    id: '__clone__',
+    name: (m.name || '') + ' (副本)',
+    icon: m.protocol,
+    category: '克隆',
+    description: '',
+    builtin: false,
+    mapping: { ...m, name: (m.name || '') + ' (副本)' },
+    extraDirectives: m.extraDirectives ?? undefined,
+  } as Template
+  editingId.value = undefined  // 关键：不带 mappingId → 保存时走 createMapping
+  showForm.value = true
+}
 async function onSaved() {
   showForm.value = false
   pickedTemplate.value = null
@@ -150,7 +172,7 @@ async function onSaved() {
       <div class="brand">
         <div class="mark">跳</div>
         <div class="name">跳板 Jumpbox</div>
-        <span class="ver">v0.1.0</span>
+        <span class="ver">v1.0.0</span>
       </div>
 
       <!-- 主机选择器（自定义下拉，显示名称） -->
@@ -194,9 +216,9 @@ async function onSaved() {
           <span class="lbl">{{ engStatus === 'running' ? '运行中' : engStatus === 'stopped' ? '已停止' : '未知' }}</span>
         </div>
         <div class="eng-btns">
-          <button v-if="engStatus !== 'running'" class="btn btn-accent btn-sm"
+          <button v-if="engSupportsProcessControl && engStatus !== 'running'" class="btn btn-accent btn-sm"
             :disabled="engBusy" @click="engStart">启动</button>
-          <button v-if="engStatus === 'running'" class="btn btn-danger btn-sm"
+          <button v-if="engSupportsProcessControl && engStatus === 'running'" class="btn btn-danger btn-sm"
             :disabled="engBusy" @click="engStop">停止</button>
         </div>
       </div>
@@ -206,7 +228,7 @@ async function onSaved() {
       <MappingList v-if="currentView === 'mappings'"
         :engine-status="engStatus" :engine-dirty="engDirty" :engine-pid="engPid"
         @refresh-eng="refreshEng"
-        @new="openNew" @edit="openEdit" />
+        @new="openNew" @edit="openEdit" @clone="cloneMap" />
       <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
       <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
       <HostManager v-else-if="currentView === 'hosts'" :engine-status="engStatus" />

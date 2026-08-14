@@ -15,9 +15,9 @@ files:
   - "!**/.DS_Store"
 win:
   target:
-    # dir = 免安装绿色版：解压即用的文件夹，双击 exe 运行，不写注册表。
-    # 比 portable(单exe) 更稳：portable 在 macOS 上交叉编译需 wine（arm64 上不可用）。
-    - target: dir
+    # portable = 单 exe：NSIS 自解压，用户双击直接跑，数据写 exe 旁（PORTABLE_EXECUTABLE_DIR）。
+    # macOS arm64 交叉打包不需要 wine（electron-builder 自带 NSIS 打包器）。
+    - target: portable
       arch:
         - x64
   artifactName: NginxJump-${version}-win-x64

@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import dayjs from 'dayjs'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useLogsStore } from '@renderer/stores/logs'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox } from '@renderer/feedback'
-import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/zh-cn'
-dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
+import ToggleSwitch from '@renderer/components/ToggleSwitch.vue'
+import { relTime, absTime } from '@renderer/utils/time'
 
 const store = useLogsStore()
 const props = defineProps<{ hostId: string }>()
@@ -26,8 +23,7 @@ async function loadNgxReadSetting() {
   try { ngxLogReadEnabled.value = await api.isNginxLogReadEnabled() }
   catch { /* 读失败时保守默认为关闭（开关语义就是防 OOM） */ ngxLogReadEnabled.value = false }
 }
-async function toggleNgxLogRead() {
-  const next = !ngxLogReadEnabled.value
+async function onToggleNgxRead(next: boolean) {
   try {
     await api.setNginxLogReadEnabled(next)
     ngxLogReadEnabled.value = next
@@ -115,14 +111,34 @@ async function clearCurrentLogs() {
 onMounted(async () => {
   await loadNgxReadSetting()
   refresh()
+  // 轮询：操作日志 10s 刷新（让标题"实时刷新"名副其实）。
+  // tab 不可见时暂停，避免后台无意义 IPC；可见时恢复。
+  document.addEventListener('visibilitychange', onVisibility)
+  startPolling()
 })
 
-function relTime(ts: number): string {
-  return dayjs(ts).fromNow()
+// 切换主机时立即重新加载，否则 10s 轮询间隔内显示的是旧主机日志
+watch(() => props.hostId, () => { refresh() })
+
+// 轮询 + 可见性控制（组件销毁时清理，避免泄漏）
+let pollTimer: ReturnType<typeof setInterval> | null = null
+function startPolling() {
+  if (pollTimer) return
+  pollTimer = setInterval(refresh, 10000)
 }
-function absTime(ts: number): string {
-  return dayjs(ts).format('HH:mm:ss')
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
+function onVisibility() {
+  if (document.visibilityState === 'visible') startPolling()
+  else stopPolling()
+}
+onUnmounted(() => {
+  stopPolling()
+  document.removeEventListener('visibilitychange', onVisibility)
+})
+
+// relTime + absTime 已抽到 @renderer/utils/time
 
 function levelClass(level: string): string {
   if (level === 'error') return 'lvl-error'
@@ -190,10 +206,7 @@ const levelOptions = [
       <div style="flex:1"></div>
       <!-- nginx 日志读取开关（仅 nginx tab 显示） -->
       <div v-if="activeTab === 'nginx'" class="ngx-read-toggle" title="关闭后不读取 nginx 日志文件，避免大日志占用内存">
-        <label class="toggle sm">
-          <input type="checkbox" :checked="ngxLogReadEnabled" @change="toggleNgxLogRead">
-          <span class="track"><span class="knob"></span></span>
-        </label>
+        <ToggleSwitch :model-value="ngxLogReadEnabled" size="sm" @update:model-value="onToggleNgxRead" />
         <span>读取日志文件</span>
       </div>
       <button class="btn btn-ghost btn-sm" @click="clearCurrentLogs" title="清空当前标签页的日志">
@@ -287,13 +300,4 @@ const levelOptions = [
 .ngx-sub-tabs button.active { color: var(--fg); border-bottom: 2px solid var(--color-accent); }
 
 .ngx-read-toggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); cursor: pointer; }
-.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
-.toggle.sm { width: 28px; height: 16px; }
-.toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
-.toggle.sm .knob { width: 10px; height: 10px; }
-.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
-.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
-.toggle.sm input:checked + .track .knob { left: 14px; }
 </style>

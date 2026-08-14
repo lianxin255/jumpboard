@@ -1,9 +1,12 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
 import { join } from 'path'
 import { ensureDirSync, pathExistsSync, outputFileSync, readFileSync } from 'fs-extra'
+import { toFwdSlash } from '@shared/paths'
 import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
 
 export class LocalNginxEngine implements NginxEngine {
+  readonly engineKind = 'local' as const
+  readonly supportsProcessControl = true
   private child: ChildProcess | null = null
   private readonly cfg: LocalEngineConfig
 
@@ -15,6 +18,11 @@ export class LocalNginxEngine implements NginxEngine {
     // 注意：nginx 自身崩溃时，killed 标志仍为 false，直到 exit 事件触发置空 this.child。
     // 此窗口期（通常 <10ms）status 可能短暂报告 running。GUI 通过错误日志反映真实崩溃。
     return this.child && !this.child.killed ? 'running' : 'stopped'
+  }
+
+  // local 的 status 实时来自 child，无需异步刷新。refreshStatus 为接口一致性而存在。
+  async refreshStatus(): Promise<EngineStatus> {
+    return this.status()
   }
 
   getPid(): number | null {
@@ -36,8 +44,7 @@ export class LocalNginxEngine implements NginxEngine {
     ensureDirSync(join(this.cfg.prefixDir, 'conf'))
     // nginx 用 -p prefix + -c conf/nginx.conf 相对路径启动。
     // -c 用相对路径（基于 -p prefix 解析），彻底避开绝对路径的反斜杠转义/中文路径问题。
-    // -p 仍需正斜杠（Windows 反斜杠会被 nginx 当转义符）。
-    const toFwdSlash = (p: string) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p
+    // -p 仍需正斜杠（Windows 反斜杠会被 nginx 当转义符），toFwdSlash 抽到 @shared/paths。
     this.child = spawn(this.cfg.nginxPath, [
       '-p', toFwdSlash(this.cfg.prefixDir),
       '-c', 'conf/nginx.conf',
@@ -154,7 +161,6 @@ export class LocalNginxEngine implements NginxEngine {
    * signal: 'reload' | 'stop' | 'quit'
    */
   private async sendSignal(signal: 'reload' | 'stop' | 'quit'): Promise<void> {
-    const toFwdSlash = (p: string) => p.replace(/\\/g, '/')
     return new Promise((resolve) => {
       execFile(this.cfg.nginxPath,
         ['-p', toFwdSlash(this.cfg.prefixDir), '-c', 'conf/nginx.conf', '-s', signal],
@@ -179,7 +185,6 @@ export class LocalNginxEngine implements NginxEngine {
   async test(): Promise<EngineTestResult> {
     return new Promise((resolve) => {
       // 与 start() 一致：-p 正斜杠 + -c 相对路径
-      const toFwdSlash = (p: string) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p
       execFile(this.cfg.nginxPath, ['-t', '-p', toFwdSlash(this.cfg.prefixDir), '-c', 'conf/nginx.conf'],
         (err: any, stdout: string, stderr: string) => {
           const output = (stdout + stderr).trim()

@@ -73,4 +73,19 @@ describe('templateRepo', () => {
     expect(list).toHaveLength(1)
     expect(list[0].name).toBe('v2')
   })
+
+  it('saveCustomTemplate 拒绝路径穿越 id（防止写到模板目录外）', () => {
+    const evil = '../../../etc/evil' as any
+    expect(() => saveCustomTemplate({
+      id: evil, name: 'x', icon: 'x', category: 'c', description: '', builtin: false,
+      mapping: { protocol: 'tcp', upstreamHost: '1.1.1.1', upstreamPort: 80 }
+    })).toThrow()
+    // customDir 里没有越界文件
+    expect(existsSync(join(customDir, '../../../etc/evil.yml'))).toBe(false)
+  })
+
+  it('deleteCustomTemplate 对路径穿越 id 静默拒绝（不拼路径）', () => {
+    // 不抛错，也不应删 customDir 外的文件
+    expect(() => deleteCustomTemplate('../../whatever')).not.toThrow()
+  })
 })

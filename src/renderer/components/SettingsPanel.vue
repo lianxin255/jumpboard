@@ -5,6 +5,8 @@ import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
 import { useWhitelistStore } from '@renderer/stores/whitelist'
 import { toast, confirmBox } from '@renderer/feedback'
+import ToggleSwitch from '@renderer/components/ToggleSwitch.vue'
+import { isValidIpOrCidr as validIpOrCidr } from '@shared/validation'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
@@ -17,15 +19,7 @@ const wlNote = ref('')
 
 onMounted(() => { wl.load().catch(() => toast('加载白名单失败', 'err')) })
 
-/** 严格校验 IPv4 或 CIDR（各段 0-255，CIDR 掩码 0-32） */
-function validIpOrCidr(s: string): boolean {
-  const [ipPart, cidr] = s.split('/')
-  const segs = ipPart.split('.')
-  if (segs.length !== 4) return false
-  if (!segs.every(n => /^\d+$/.test(n) && +n >= 0 && +n <= 255)) return false
-  if (cidr !== undefined && (!/^\d+$/.test(cidr) || +cidr < 0 || +cidr > 32)) return false
-  return true
-}
+// validIpOrCidr 已抽到 @shared/validation（前后端共用）
 
 async function addWhitelistIp() {
   const ip = wlIp.value.trim()
@@ -60,10 +54,10 @@ async function removeWhitelistIp(id: string, ip: string) {
   }
 }
 
-async function toggleWhitelist() {
+async function onToggleWhitelist(next: boolean) {
   try {
-    await wl.toggleEnabled(!wl.enabled)
-    toast(wl.enabled ? '白名单已开启 · 记得点「应用」生效' : '白名单已关闭 · 记得点「应用」生效', 'ok')
+    await wl.toggleEnabled(next)
+    toast(next ? '白名单已开启 · 记得点「应用」生效' : '白名单已关闭 · 记得点「应用」生效', 'ok')
   } catch (e: any) {
     toast('操作失败: ' + e.message, 'err')
   }
@@ -78,7 +72,7 @@ async function wipeAll() {
     impact: '此操作不可恢复，建议先导出备份。',
   })
   if (!ok) return
-  const r = await api.wipeAllData()
+  const r = await api.wipeAllData('CONFIRM_WIPE')
   if (!r.ok) { toast('清除失败：' + (r.output ?? '未知错误'), 'err'); return }
   toast('所有数据已清空，请重启程序', 'ok')
 }
@@ -93,7 +87,7 @@ async function doExport() {
     a.download = `nginx-jump-backup-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    toast(`已导出 ${data.hosts.length} 主机 / ${data.mappings.length} 映射 / ${data.snapshots?.length ?? 0} 快照`, 'ok')
+    toast(`已导出 ${data.hosts.length} 主机 / ${data.mappings.length} 映射 / ${data.snapshots?.length ?? 0} 快照（不含密码，导入后需重填）`, 'ok')
   } catch (e: any) {
     toast('导出失败: ' + e.message, 'err')
   }
@@ -119,7 +113,9 @@ async function doImport(event: Event) {
     if (!r.ok) {
       toast('导入失败：' + (r.output ?? '未知错误'), 'err')
     } else {
-      toast(`已导入 ${r.hostsImported} 主机 / ${r.mappingsImported} 映射 / ${r.snapshotsImported} 快照`, 'ok')
+      const skipped = (r.hostsSkipped ?? 0) + (r.mappingsSkipped ?? 0)
+      const skipNote = skipped > 0 ? `，跳过 ${skipped} 条非法记录` : ''
+      toast(`已导入 ${r.hostsImported} 主机 / ${r.mappingsImported} 映射${skipNote}。远程主机密码不随导入恢复，需重新填写`, 'ok')
       await hosts.load()
       if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
     }
@@ -149,10 +145,7 @@ async function doImport(event: Event) {
             <h4>启用 IP 白名单</h4>
             <p>开启后，只有列表中的 IP 能访问所有代理服务。关闭则全部允许。支持单 IP(1.2.3.4)和网段(10.0.0.0/24)。改后需点「应用」生效。</p>
           </div>
-          <label class="toggle">
-            <input type="checkbox" :checked="wl.enabled" @change="toggleWhitelist">
-            <span class="track"><span class="knob"></span></span>
-          </label>
+          <ToggleSwitch :model-value="wl.enabled" @update:model-value="onToggleWhitelist" />
         </div>
         <!-- 添加 IP -->
         <div class="wl-add">
@@ -163,10 +156,7 @@ async function doImport(event: Event) {
         <!-- IP 列表 -->
         <div v-if="wl.list.length > 0" class="wl-list">
           <div v-for="item in wl.list" :key="item.id" class="wl-item" :class="{ disabled: item.enabled !== 1 }">
-            <label class="toggle sm">
-              <input type="checkbox" :checked="item.enabled === 1" @change="wl.toggleIp(item.id, ($event.target as HTMLInputElement).checked)">
-              <span class="track"><span class="knob"></span></span>
-            </label>
+            <ToggleSwitch :model-value="item.enabled === 1" size="sm" @update:model-value="(v: boolean) => wl.toggleIp(item.id, v)" />
             <span class="wl-ip">{{ item.ip }}</span>
             <span v-if="item.note" class="wl-note">{{ item.note }}</span>
             <button class="icon-btn danger" title="移除" @click="removeWhitelistIp(item.id, item.ip)">
@@ -202,7 +192,7 @@ async function doImport(event: Event) {
         <div class="sec-tit sec-head">关于</div>
         <div class="about-grid">
           <div class="about-cell"><span class="k">软件名称</span><span class="v">跳板 Jumpbox</span></div>
-          <div class="about-cell"><span class="k">版本</span><span class="v">0.1.0</span></div>
+          <div class="about-cell"><span class="k">版本</span><span class="v">1.0.0</span></div>
           <div class="about-cell"><span class="k">内置 nginx</span><span class="v">1.26.2</span></div>
           <div class="about-cell"><span class="k">数据存储</span><span class="v">SQLite · 本地</span></div>
           <div class="about-cell"><span class="k">平台</span><span class="v">Windows / macOS</span></div>
@@ -265,14 +255,5 @@ async function doImport(event: Event) {
 .wl-note { font-size: 12px; color: var(--muted); flex: 1; }
 .wl-empty { color: var(--muted); font-size: 12px; padding: 16px 0; text-align: center; }
 
-/* 开关（复用全局样式） */
-.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
-.toggle.sm { width: 28px; height: 16px; }
-.toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
-.toggle.sm .knob { width: 10px; height: 10px; }
-.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
-.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
-.toggle.sm input:checked + .track .knob { left: 14px; }
+/* 开关已抽为 ToggleSwitch 组件 */
 </style>

@@ -41,12 +41,12 @@ export const useHostsStore = defineStore('hosts', () => {
     await load()
   }
 
-  // 切换活动主机：通知后端真正切换 nginx 引擎，再更新前端 currentHostId
+  // 切换活动主机：通知后端真正切换 nginx 引擎，成功时更新前端 currentHostId。
+  // 返回完整结果（含 error 信息），让调用方能拿到失败原因展示给用户。
   async function switchTo(id: string) {
     const r = await api.switchHost(id)
-    if (!r.ok) return false
-    currentHostId.value = id
-    return true
+    if (r.ok) currentHostId.value = id
+    return r
   }
 
   async function create(input: any) {

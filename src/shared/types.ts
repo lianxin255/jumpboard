@@ -59,6 +59,7 @@ export interface Mapping {
   extraDirectives: string | null
   proxyMode: ProxyMode
   proxyHeaders: string | null    // custom 模式下的自定义代理头指令
+  proxyPassUrl: string | null    // 自定义 proxy_pass 值（如 http://1.2.3.4/），null 走默认 host:port 拼
   healthCheckEnabled: number
   healthCheckIntervalSec: number
   healthCheckTargetPath: string | null
@@ -103,6 +104,8 @@ export const IPC = {
   ENGINE_STATUS: 'engine:status',
   ENGINE_DIRTY_GET: 'engine:dirty-get',
   ENGINE_PID_GET: 'engine:pid-get',
+  /** 查询活动引擎的能力：engineKind（local/remote）+ supportsProcessControl */
+  ENGINE_KIND_GET: 'engine:kind-get',
   // Template
   TEMPLATE_LIST: 'template:list',
   TEMPLATE_LIST_BUILTIN: 'template:list-builtin',

@@ -23,6 +23,7 @@ export class SshClient {
   private client: Client
   private connected = false
   private connecting: Promise<void> | null = null
+  private disconnected = false  // 连接断开后标记，connect() 时据此重建 Client
   private readonly config: ConnectConfig
 
   constructor(config: SshConfig) {
@@ -35,11 +36,24 @@ export class SshClient {
       readyTimeout: 10000
     }
     this.client = new Client()
+    // 监听连接断开：服务端主动断开/网络中断时重置状态，下次操作重建连接。
+    // 否则 connected 永远 true，exec 报 Socket closed 且永不重连。
+    this.client.on('close', () => { this.connected = false; this.connecting = null; this.disconnected = true })
+    this.client.on('end', () => { this.connected = false })
+    this.client.on('error', () => { this.connected = false; this.connecting = null; this.disconnected = true })
   }
 
   async connect(): Promise<void> {
     if (this.connected) return
     if (this.connecting) return this.connecting
+    // 连接断开后（close/end 事件触发）旧 Client 实例不可复用，需重建
+    if (this.disconnected) {
+      this.client = new Client()
+      this.client.on('close', () => { this.connected = false; this.connecting = null; this.disconnected = true })
+      this.client.on('end', () => { this.connected = false })
+      this.client.on('error', () => { this.connected = false; this.connecting = null; this.disconnected = true })
+      this.disconnected = false
+    }
     this.connecting = new Promise<void>((resolve, reject) => {
       this.client.once('ready', () => {
         this.connected = true

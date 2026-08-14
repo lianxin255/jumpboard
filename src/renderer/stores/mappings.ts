@@ -60,5 +60,17 @@ export const useMappingsStore = defineStore('mappings', () => {
     }
   }
 
-  return { list, loading, load, create, remove, toggle }
+  // 批量启停：复用单条 toggle（乐观更新逐条生效）。返回成功数，供前端准确 toast。
+  async function batchToggle(ids: string[], enabled: number): Promise<number> {
+    const results = await Promise.all(ids.map(id => toggle(id, enabled).then(() => true).catch(() => false)))
+    return results.filter(Boolean).length
+  }
+
+  // 批量删除：复用单条 remove。返回成功数。
+  async function batchRemove(ids: string[]): Promise<number> {
+    const results = await Promise.all(ids.map(id => remove(id).then(() => true).catch(() => false)))
+    return results.filter(Boolean).length
+  }
+
+  return { list, loading, load, create, remove, toggle, batchToggle, batchRemove }
 })

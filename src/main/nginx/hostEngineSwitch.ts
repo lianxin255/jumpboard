@@ -14,10 +14,18 @@ import { setActiveEngine } from './engineRegistry'
 import { LocalNginxEngine } from './localEngine'
 import { RemoteNginxEngine } from './remoteEngine'
 
-export async function switchEngineToHost(hostId: string): Promise<boolean> {
+export async function switchEngineToHost(hostId: string): Promise<{ ok: boolean; error?: string }> {
   const host = getHost(hostId)
-  if (!host) return false
+  if (!host) return { ok: false, error: '主机不存在' }
   const paths = resolvePaths()
+
+  // 白名单开启但无有效 IP：fail-closed，拒绝切换（与 ENGINE_RELOAD 的守卫一致）。
+  // 此检查对 local 和 remote 都生效——之前只在 local 分支内检查，remote 被绕过。
+  const wlEnabled = isWhitelistEnabled()
+  if (wlEnabled && getEnabledWhitelistIps().length === 0) {
+    return { ok: false, error: '白名单已开启但未配置任何 IP，请先添加 IP 或关闭白名单。' }
+  }
+  const wlIps = wlEnabled ? getEnabledWhitelistIps() : undefined
 
   let engine: LocalNginxEngine | RemoteNginxEngine
   if (host.type === 'local') {
@@ -39,14 +47,11 @@ export async function switchEngineToHost(hostId: string): Promise<boolean> {
     if (pathExistsSync(bundledMime)) {
       try { copySync(bundledMime, join(confDir, 'mime.types')) } catch { /* 忽略 */ }
     }
-    // local：生成初始 conf（即使没 mapping，也要有最小 conf）
+    // local：生成初始 conf（即使没 mapping，也要有最小 conf）。
+    // 此处不走 safeApplyConf（不 test/reload），且在 setActiveEngine 之前执行，
+    // 此时无 active engine，reload/rollback 不可能并发，无需加锁。
     const mappings = listEnabledMappings(host.id)
-    // 白名单开启且无有效 IP 时不注入（避免 fail-open 或自锁）
-    const wlEnabled = isWhitelistEnabled()
-    const wlIps = (wlEnabled && getEnabledWhitelistIps().length > 0) ? getEnabledWhitelistIps() : undefined
     const conf = generateFullConf(mappings, {
-      nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir,
       whitelistIps: wlIps,
     })
     await engine.writeConf(conf)
@@ -63,13 +68,11 @@ export async function switchEngineToHost(hostId: string): Promise<boolean> {
       reloadCmd: host.remoteConfig.reloadCmd,
       testCmd: host.remoteConfig.testCmd
     })
-    // 异步刷新状态（不 await，不阻塞）
-    if (engine instanceof RemoteNginxEngine) {
-      engine.refreshStatus().catch(() => {})
-    }
+    // 异步刷新状态（不 await，不阻塞）。refreshStatus 是接口方法，local/remote 都有。
+    engine.refreshStatus().catch(() => {})
   } else {
-    return false
+    return { ok: false, error: '主机类型无效或缺少远程配置' }
   }
-  setActiveEngine(engine)
-  return true
+  setActiveEngine(engine, hostId)
+  return { ok: true }
 }

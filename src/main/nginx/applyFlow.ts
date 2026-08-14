@@ -1,6 +1,7 @@
 import type { Mapping } from '@shared/types'
 import type { NginxEngine } from './types'
 import { generateFullConf, type ConfGenOptions } from './confGenerator'
+import { safeApplyConf } from './safeApply'
 import { createSnapshot, trimSnapshots } from '../db/snapshotRepo'
 import { logger } from '../services/logger'
 
@@ -20,9 +21,9 @@ export interface ApplyResult {
 const SNAPSHOT_KEEP = 50
 
 /**
- * 应用映射变更到 nginx：生成 → 校验 → 写入 → reload。
- * 校验失败则原配置不动（回滚旧 conf，不 reload）。
+ * 应用映射变更到 nginx：生成 conf → safeApplyConf（备份→写入→校验→reload，失败回滚）。
  * 成功后存配置快照（若提供 hostId）+ 写日志。
+ * conf 写入的原子性和并发互斥由 safeApplyConf 保证。
  */
 export async function applyMappings(
   engine: NginxEngine,
@@ -31,30 +32,23 @@ export async function applyMappings(
 ): Promise<ApplyResult> {
   const conf = generateFullConf(mappings, opts)
 
-  // 1. 备份旧 conf，写入新 conf
-  const oldConf = await engine.readConf()
-  await engine.writeConf(conf)
+  const result = await safeApplyConf(engine, conf)
 
-  // 2. nginx -t 校验磁盘上的新 conf
-  const testResult = await engine.test()
-  if (!testResult.ok) {
-    await engine.writeConf(oldConf)
-    logger.warn(opts.hostId ?? null, 'app', `配置校验失败: ${testResult.output}`)
-    return { ok: false, conf, output: testResult.output }
-  }
-
-  // 3. 校验通过，reload 让新 conf 生效
-  try {
-    await engine.reload()
+  if (result.ok) {
     // 成功：存快照 + 日志
     if (opts.hostId) {
       createSnapshot({ hostId: opts.hostId, content: conf, reason: 'reload' })
       trimSnapshots(SNAPSHOT_KEEP)
     }
     logger.info(opts.hostId ?? null, 'app', `配置应用成功，${mappings.length} 条映射`)
-    return { ok: true, conf, output: testResult.output }
-  } catch (e: any) {
-    logger.error(opts.hostId ?? null, 'app', `reload 失败: ${e?.message ?? e}`)
-    return { ok: false, conf, output: e?.message ?? String(e) }
+  } else {
+    // 失败日志级别按阶段区分：test 失败=用户配置错(warn)，reload/io 失败=运行时问题(error)。
+    // LogViewer 按 level 过滤，reload 失败若降级成 warn 会在"只看 error"下被漏掉。
+    if (result.failStage === 'test') {
+      logger.warn(opts.hostId ?? null, 'app', `配置校验失败: ${result.output}`)
+    } else {
+      logger.error(opts.hostId ?? null, 'app', `配置应用失败(${result.failStage ?? 'unknown'}): ${result.output}`)
+    }
   }
+  return { ok: result.ok, conf, output: result.output }
 }

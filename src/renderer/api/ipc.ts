@@ -4,7 +4,7 @@ export interface ElectronAPI {
   updateHost(id: string, patch: any): Promise<any>
   deleteHost(id: string): Promise<boolean>
   setDefaultHost(id: string): Promise<boolean>
-  switchHost(id: string): Promise<{ ok: boolean }>
+  switchHost(id: string): Promise<{ ok: boolean; error?: string | null }>
   listMappings(hostId: string): Promise<any[]>
   createMapping(input: any): Promise<any>
   updateMapping(id: string, patch: any): Promise<any>
@@ -16,6 +16,7 @@ export interface ElectronAPI {
   engineStatus(): Promise<string>
   isEngineDirty(): Promise<boolean>
   getEnginePid(): Promise<number | null>
+  getEngineKind(): Promise<{ engineKind: 'local' | 'remote'; supportsProcessControl: boolean } | null>
   // Template
   listTemplates(): Promise<any[]>
   listBuiltinTemplates(): Promise<any[]>
@@ -40,9 +41,9 @@ export interface ElectronAPI {
   testHostConnection(remoteConfig: any): Promise<{ ok: boolean; output: string }>
   refreshEngineStatus(): Promise<string>
   // 数据管理
-  wipeAllData(): Promise<{ ok: boolean; output?: string }>
+  wipeAllData(confirmToken: string): Promise<{ ok: boolean; output?: string }>
   exportData(): Promise<any>
-  importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number; snapshotsImported?: number; logsImported?: number }>
+  importData(payload: any): Promise<{ ok: boolean; output?: string; hostsImported?: number; mappingsImported?: number; snapshotsImported?: number; logsImported?: number; hostsSkipped?: number; mappingsSkipped?: number }>
   // Network
   getLocalIPs(): Promise<{ interface: string; address: string; family: string }[]>
   // IP 白名单

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useMappingsStore } from '@renderer/stores/mappings'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox } from '@renderer/feedback'
+import ToggleSwitch from '@renderer/components/ToggleSwitch.vue'
+import { relTime } from '@renderer/utils/time'
 import ForwardChain from './ForwardChain.vue'
 
 const props = defineProps<{ engineStatus: string; engineDirty: boolean; enginePid: number | null }>()
 const emit = defineEmits<{
   (e: 'new'): void
   (e: 'edit', id: string): void
+  (e: 'clone', id: string): void
   (e: 'refresh-eng'): void
 }>()
 
@@ -54,14 +57,7 @@ function healthOf(m: any) {
   return healthConfig[m.healthStatus] || { cls: 'unknown', label: '未知' }
 }
 
-function relTime(ts: number | null): string {
-  if (!ts) return '—'
-  const diff = Date.now() - ts
-  if (diff < 60000) return Math.floor(diff / 1000) + ' 秒前'
-  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'
-  return Math.floor(diff / 86400000) + ' 天前'
-}
+// relTime 已抽到 @renderer/utils/time
 
 // 立即健康检查：调后端单条探活，乐观更新本地状态
 async function checkNow(m: any, e: Event) {
@@ -86,6 +82,48 @@ async function toggleMap(m: any, on: boolean) {
   } catch {
     toast('操作失败', 'err')
   }
+}
+
+// 批量选择
+const selectedIds = ref<Set<string>>(new Set())
+// 切换主机时清空选择，避免旧主机的 mapping id 残留导致批量操作作用于错误主机
+watch(() => hosts.currentHostId, () => { selectedIds.value = new Set() })
+const allSelected = computed(() => store.list.length > 0 && filtered.value.every(m => selectedIds.value.has(m.id)))
+const someSelected = computed(() => selectedIds.value.size > 0 && !allSelected.value)
+function toggleSelect(id: string) {
+  const s = new Set(selectedIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  selectedIds.value = s
+}
+function toggleSelectAll(e: Event) {
+  const checked = (e.target as HTMLInputElement).checked
+  selectedIds.value = checked ? new Set(filtered.value.map(m => m.id)) : new Set()
+}
+async function batchToggleSelected(enabled: number) {
+  const ids = [...selectedIds.value]
+  const ok = await store.batchToggle(ids, enabled)
+  emit('refresh-eng')
+  toast(ok === ids.length
+    ? `已批量${enabled ? '启用' : '停用'} ${ok} 条`
+    : `已批量${enabled ? '启用' : '停用'} ${ok}/${ids.length} 条（部分失败）`, ok > 0 ? 'ok' : 'err')
+  selectedIds.value = new Set()
+}
+async function batchDeleteSelected() {
+  const ids = [...selectedIds.value]
+  const ok = await confirmBox({
+    title: '批量删除',
+    message: `确定要删除选中的 ${ids.length} 条映射吗？`,
+    btnText: '删除',
+    kind: 'danger',
+    impact: '此操作不可撤销，请确认后再继续。',
+  })
+  if (!ok) return
+  const deleted = await store.batchRemove(ids)
+  emit('refresh-eng')
+  toast(deleted === ids.length
+    ? `已删除 ${deleted} 条`
+    : `已删除 ${deleted}/${ids.length} 条（部分失败）`, deleted > 0 ? 'ok' : 'err')
+  selectedIds.value = new Set()
 }
 
 async function delMap(m: any) {
@@ -205,7 +243,7 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
 
       <!-- 表格头 -->
       <div v-else class="map-head">
-        <span></span>
+        <span><input type="checkbox" class="cb" :checked="allSelected" :indeterminate.prop="someSelected" @change="toggleSelectAll"></span>
         <span>规则 / 协议</span>
         <span>转发关系</span>
         <span>健康检查</span>
@@ -214,8 +252,19 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
         <span></span>
       </div>
 
+      <!-- 批量操作工具栏 -->
+      <div v-if="selectedIds.size > 0" class="batch-bar">
+        <span class="batch-count">已选 {{ selectedIds.size }} 条</span>
+        <button class="btn btn-ghost btn-sm" @click="batchToggleSelected(1)">批量启用</button>
+        <button class="btn btn-ghost btn-sm" @click="batchToggleSelected(0)">批量停用</button>
+        <button class="btn btn-danger btn-sm" @click="batchDeleteSelected">批量删除</button>
+        <button class="btn btn-ghost btn-sm" @click="selectedIds = new Set()">取消选择</button>
+      </div>
+
       <!-- 表格行 -->
       <div v-for="m in filtered" :key="m.id" class="map-row" :class="{ disabled: m.enabled !== 1 }">
+        <!-- 多选 checkbox -->
+        <div><input type="checkbox" class="cb" :checked="selectedIds.has(m.id)" @change="toggleSelect(m.id)"></div>
         <!-- 协议 badge（色彩由 protoConfig 驱动，淡色背景+边框由 css 按协议上色） -->
         <div>
           <span class="proto-badge" :class="m.protocol" :style="{ color: protoConfig[m.protocol]?.color }">
@@ -245,11 +294,7 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
         </div>
         <!-- 启用开关 -->
         <div>
-          <label class="toggle">
-            <input type="checkbox" :checked="m.enabled === 1"
-              @change="toggleMap(m, ($event.target as HTMLInputElement).checked)">
-            <span class="track"><span class="knob"></span></span>
-          </label>
+          <ToggleSwitch :model-value="m.enabled === 1" @update:model-value="(v: boolean) => toggleMap(m, v)" />
         </div>
         <!-- 最后修改 -->
         <div class="mod-time">{{ relTime(m.updatedAt) }}</div>
@@ -257,6 +302,9 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
         <div class="row-acts">
           <button class="icon-btn" title="编辑" @click="emit('edit', m.id)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+          </button>
+          <button class="icon-btn" title="克隆" @click="emit('clone', m.id)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>
           </button>
           <button class="icon-btn danger" title="删除" @click="delMap(m)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
@@ -318,10 +366,18 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
 .map-list { padding: 6px var(--page-px) 28px; }
 .map-head, .map-row {
   display: grid;
-  grid-template-columns: 70px 1.4fr 2.3fr 1fr 70px 100px 64px;
+  grid-template-columns: 32px 70px 1.4fr 2.3fr 1fr 70px 100px 64px;
   gap: 14px;
   align-items: center;
 }
+.batch-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+.batch-count { font-size: 12.5px; color: var(--fg); font-weight: 500; margin-right: 4px; }
+.cb { width: 14px; height: 14px; cursor: pointer; accent-color: var(--color-accent); }
 .map-head {
   padding: 10px 14px;
   font-family: var(--font-mono);
@@ -373,11 +429,5 @@ onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
 .mod-time { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
 .row-acts { display: flex; gap: 4px; justify-content: flex-end; }
 
-/* 自定义开关 */
-.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
-.toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
-.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
-.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
+/* 自定义开关已抽为 ToggleSwitch 组件 */
 </style>

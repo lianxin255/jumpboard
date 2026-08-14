@@ -22,6 +22,7 @@ const api = {
   engineStatus: () => ipcRenderer.invoke(IPC.ENGINE_STATUS),
   isEngineDirty: () => ipcRenderer.invoke(IPC.ENGINE_DIRTY_GET),
   getEnginePid: () => ipcRenderer.invoke(IPC.ENGINE_PID_GET),
+  getEngineKind: () => ipcRenderer.invoke(IPC.ENGINE_KIND_GET),
   // Template
   listTemplates: () => ipcRenderer.invoke(IPC.TEMPLATE_LIST),
   listBuiltinTemplates: () => ipcRenderer.invoke(IPC.TEMPLATE_LIST_BUILTIN),
@@ -46,7 +47,7 @@ const api = {
   testHostConnection: (remoteConfig: any) => ipcRenderer.invoke(IPC.HOST_TEST_CONNECTION, remoteConfig),
   refreshEngineStatus: () => ipcRenderer.invoke(IPC.ENGINE_REFRESH_STATUS),
   // 数据管理
-  wipeAllData: () => ipcRenderer.invoke(IPC.DATA_WIPE),
+  wipeAllData: (confirmToken: string) => ipcRenderer.invoke(IPC.DATA_WIPE, confirmToken),
   exportData: () => ipcRenderer.invoke(IPC.DATA_EXPORT),
   importData: (payload: any) => ipcRenderer.invoke(IPC.DATA_IMPORT, payload),
   // Network

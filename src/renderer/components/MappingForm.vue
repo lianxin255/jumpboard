@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '@renderer/api/ipc'
 import { toast, confirmBox, promptBox } from '@renderer/feedback'
+import ToggleSwitch from '@renderer/components/ToggleSwitch.vue'
+import ModalShell from '@renderer/components/ModalShell.vue'
+import { formToTemplateMapping } from '@renderer/utils/templateMapping'
 import type { Template } from '@renderer/stores/templates'
 
 // 注意：prop 名不能用 template（与 Vue SFC <template> 标签 + 保留字冲突）
@@ -23,6 +26,7 @@ interface FormState {
   listenPath: string
   upstreamHost: string
   upstreamPort: number | null
+  proxyPassUrl: string
   tlsCertPath: string
   tlsKeyPath: string
   redirectHttp: boolean
@@ -45,6 +49,7 @@ function templateToForm(tpl: Template | null | undefined): FormState {
     listenPath: m.listenPath ?? '/',
     upstreamHost: m.upstreamHost ?? '',
     upstreamPort: m.upstreamPort ?? null,
+    proxyPassUrl: m.proxyPassUrl ?? '',
     tlsCertPath: m.tlsCertPath ?? '',
     tlsKeyPath: m.tlsKeyPath ?? '',
     redirectHttp: m.redirectHttp === 1,
@@ -74,6 +79,7 @@ async function loadExisting() {
       listenPath: m.listenPath ?? '/',
       upstreamHost: m.upstreamHost,
       upstreamPort: m.upstreamPort,
+      proxyPassUrl: m.proxyPassUrl ?? '',
       tlsCertPath: m.tlsCertPath ?? '',
       tlsKeyPath: m.tlsKeyPath ?? '',
       redirectHttp: m.redirectHttp === 1,
@@ -180,6 +186,7 @@ async function save() {
       listenPath: (isHttp.value || isHttps.value) ? f.listenPath : null,
       upstreamHost: f.upstreamHost,
       upstreamPort: f.upstreamPort,
+      proxyPassUrl: (isHttp.value || isHttps.value) && f.proxyPassUrl.trim() ? f.proxyPassUrl.trim() : null,
       tlsCertPath: isHttps.value ? f.tlsCertPath : null,
       tlsKeyPath: isHttps.value ? f.tlsKeyPath : null,
       redirectHttp: isHttps.value && f.redirectHttp ? 1 : 0,
@@ -222,17 +229,8 @@ async function saveAsTemplate() {
       category: '自定义',
       description: `用户保存 · ${form.protocol.toUpperCase()} ${form.upstreamPort || ''}`,
       builtin: false,
-      mapping: {
-        name,
-        protocol: form.protocol,
-        listenPort: form.listenPort,
-        upstreamHost: '',
-        upstreamPort: form.upstreamPort,
-        serverNames: form.serverNames || null,
-        listenPath: form.listenPath || '/',
-        proxyMode: form.proxyMode,
-        proxyHeaders: form.proxyMode === 'custom' ? (form.proxyHeaders || null) : null,
-      },
+      // 用工具函数统一字段映射，补齐全部 16 字段（修旧版漏 tls/healthCheck + upstreamHost 硬编码 ''）
+      mapping: formToTemplateMapping({ ...form, name }),
       extraDirectives: form.extraDirectives || undefined,
     })
     toast('模板已保存', 'ok')
@@ -240,22 +238,21 @@ async function saveAsTemplate() {
     toast('保存模板失败: ' + e.message, 'err')
   }
 }
+
+// Ctrl/Cmd+S 保存（preventDefault 避免 Electron 触发保存网页对话框）
+function onKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    save()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('cancel')">
-    <div class="modal xl">
-      <div class="modal-hd">
-        <div>
-          <h3>{{ props.mappingId ? '编辑映射' : '新建映射' }}</h3>
-          <div class="sub">带 <span style="color:var(--color-accent)">*</span> 为必填 · 保存后需点「应用」才生效</div>
-        </div>
-        <button class="close-x" @click="emit('cancel')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-
-      <div class="modal-bd">
+  <ModalShell :title="props.mappingId ? '编辑映射' : '新建映射'" sub="带 * 为必填 · 保存后需点「应用」才生效" size="xl" @cancel="emit('cancel')">
+    <div>
         <!-- 基础信息 -->
         <div class="form-sec">
           <div class="form-sec-tit">基础信息</div>
@@ -304,6 +301,12 @@ async function saveAsTemplate() {
               <label>内网服务端口 <span class="req">*</span></label>
               <input class="input mono" type="number" v-model="form.upstreamPort" placeholder="3306">
               <div v-if="errors.upstreamPort" class="err-msg">{{ errors.upstreamPort }}</div>
+            </div>
+            <!-- proxy_pass 自定义（仅 HTTP/HTTPS）：填了原样透传，留空自动拼 host:port -->
+            <div v-if="isHttp || isHttps" class="field">
+              <label>proxy_pass 自定义 <span class="hint-inline">可选</span></label>
+              <input class="input mono" v-model="form.proxyPassUrl" placeholder="留空自动拼 http://IP:端口/，填写则原样使用">
+              <div class="hint">填写后 proxy_pass 完全用此值（如 http://27.196.154.94/），上面的 IP/端口仅用于显示。</div>
             </div>
           </div>
         </div>
@@ -375,10 +378,7 @@ async function saveAsTemplate() {
               </div>
             </div>
             <div class="switch-row">
-              <label class="toggle">
-                <input type="checkbox" v-model="form.redirectHttp">
-                <span class="track"><span class="knob"></span></span>
-              </label>
+              <ToggleSwitch v-model="form.redirectHttp" />
               <span>HTTP → HTTPS 自动跳转</span>
             </div>
           </template>
@@ -416,10 +416,7 @@ async function saveAsTemplate() {
               placeholder="# 高级用户可直接书写 nginx 指令&#10;proxy_read_timeout 60s;&#10;proxy_buffering off;"></textarea>
           </div>
           <div class="switch-row">
-            <label class="toggle">
-              <input type="checkbox" v-model="form.healthCheckEnabled">
-              <span class="track"><span class="knob"></span></span>
-            </label>
+            <ToggleSwitch v-model="form.healthCheckEnabled" />
             <span>启用健康检查</span>
           </div>
           <div v-if="form.healthCheckEnabled" class="field-row c3">
@@ -443,31 +440,21 @@ async function saveAsTemplate() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
           保存时会检测监听端口是否被占用，并提示冲突。
         </div>
-      </div>
-
-      <div class="modal-ft">
-        <button class="btn btn-ghost" @click="emit('cancel')">取消</button>
-        <div style="flex:1"></div>
-        <button class="btn btn-dark" @click="saveAsTemplate" title="把当前配置存成可复用模板">另存为模板</button>
-        <button class="btn btn-accent" :disabled="saving" @click="save">
-          {{ saving ? '保存中…' : '保存映射' }}
-        </button>
-      </div>
     </div>
-  </div>
+
+    <template #footer>
+      <button class="btn btn-ghost" @click="emit('cancel')">取消</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-dark" @click="saveAsTemplate" title="把当前配置存成可复用模板">另存为模板</button>
+      <button class="btn btn-accent" :disabled="saving" @click="save">
+        {{ saving ? '保存中…' : '保存映射' }}
+      </button>
+    </template>
+  </ModalShell>
 </template>
 
 <style scoped>
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(2px); z-index: 50; display: flex; align-items: center; justify-content: center; animation: fade .15s; }
-.modal { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--r-lg); box-shadow: var(--shadow-md); width: 92%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; animation: fadeUp .2s var(--ease); }
-.modal.xl { max-width: 1000px; }
-.modal-hd { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.modal-hd h3 { font-family: var(--font-display); font-size: 18px; font-weight: 500; }
-.modal-hd .sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-.close-x { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--muted); background: none; border: none; cursor: pointer; }
-.close-x:hover { background: var(--surface-2); color: var(--fg); }
-.modal-bd { padding: 20px; overflow: auto; flex: 1; }
-.modal-ft { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+/* overlay/modal 骨架抽为 ModalShell 组件 */
 
 .form-sec { margin-bottom: 20px; }
 .form-sec-tit { font-family: var(--font-mono); font-size: 10.5px; color: var(--meta); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
@@ -519,14 +506,8 @@ async function saveAsTemplate() {
 .ip-it .ad { color: var(--fg); }
 .ip-empty { padding: 8px; color: var(--meta); font-size: 11px; text-align: center; }
 
-/* 开关 */
+/* 开关：switch-row 是 toggle 外层排版；toggle 本身抽为 ToggleSwitch 组件 */
 .switch-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--fg-2); margin-bottom: 14px; }
-.toggle { position: relative; width: 34px; height: 18px; flex: none; cursor: pointer; display: inline-block; }
-.toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.toggle .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-md); transition: all 0.18s var(--ease); }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--muted); border-radius: var(--r-sm); transition: all 0.18s var(--ease); }
-.toggle input:checked + .track { background: rgba(91,154,74,.22); border-color: rgba(91,154,74,.5); }
-.toggle input:checked + .track .knob { left: 18px; background: var(--color-success); }
 
 /* 折叠面板 */
 .collapse-hd { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 14px; background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: var(--r); font-size: 12.5px; color: var(--fg-2); font-weight: 500; cursor: pointer; }
