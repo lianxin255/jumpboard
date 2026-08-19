@@ -148,20 +148,36 @@ git commit -m "feat(templates): 安装 yaml 包 + 定义 TemplateDefinition 类�
 - [ ] **Step 1: 写失败测试 `tests/main/nginx/renderers.test.ts`**
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { renderTcpServer, renderUdpServer, renderHttpServer, renderHttpsServer } from '@main/nginx/renderers'
 import type { Mapping } from '@shared/types'
+import { renderHttpServer, renderHttpsServer, renderTcpServer, renderUdpServer } from '@main/nginx/renderers'
+import { describe, expect, it } from 'vitest'
 
 function base(over: Partial<Mapping> = {}): Mapping {
   return {
-    id: 'm1', hostId: 'h1', name: '测试', enabled: 1, protocol: 'tcp',
-    listenPort: 9000, serverNames: null, listenPath: null,
-    upstreamHost: '10.0.0.1', upstreamPort: 3306,
-    tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0, extraDirectives: null,
-    healthCheckEnabled: 0, healthCheckIntervalSec: 30,
-    healthCheckTargetPath: null, healthCheckExpectedStatus: null,
-    healthStatus: 'unknown', lastCheckedAt: null, sortOrder: 0,
-    createdAt: 0, updatedAt: 0, ...over
+    id: 'm1',
+    hostId: 'h1',
+    name: '测试',
+    enabled: 1,
+    protocol: 'tcp',
+    listenPort: 9000,
+    serverNames: null,
+    listenPath: null,
+    upstreamHost: '10.0.0.1',
+    upstreamPort: 3306,
+    tlsCertPath: null,
+    tlsKeyPath: null,
+    redirectHttp: 0,
+    extraDirectives: null,
+    healthCheckEnabled: 0,
+    healthCheckIntervalSec: 30,
+    healthCheckTargetPath: null,
+    healthCheckExpectedStatus: null,
+    healthStatus: 'unknown',
+    lastCheckedAt: null,
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...over
   } as Mapping
 }
 
@@ -211,9 +227,15 @@ describe('renderHttpServer', () => {
 describe('renderHttpsServer', () => {
   it('生成 443 ssl + 证书 + HTTP→HTTPS 跳转（redirectHttp=1）', () => {
     const out = renderHttpsServer(base({
-      protocol: 'https', listenPort: null, serverNames: 'secure.gw.local', listenPath: '/',
-      upstreamHost: '10.0.0.4', upstreamPort: 8443,
-      tlsCertPath: '/data/cert.pem', tlsKeyPath: '/data/key.pem', redirectHttp: 1
+      protocol: 'https',
+      listenPort: null,
+      serverNames: 'secure.gw.local',
+      listenPath: '/',
+      upstreamHost: '10.0.0.4',
+      upstreamPort: 8443,
+      tlsCertPath: '/data/cert.pem',
+      tlsKeyPath: '/data/key.pem',
+      redirectHttp: 1
     }))
     const conf = out.join('\n')
     // 跳转块
@@ -227,9 +249,13 @@ describe('renderHttpsServer', () => {
   })
   it('redirectHttp=0 时不生成 80 跳转块', () => {
     const out = renderHttpsServer(base({
-      protocol: 'https', serverNames: 's.gw.local',
-      upstreamHost: '10.0.0.4', upstreamPort: 8443,
-      tlsCertPath: '/c.pem', tlsKeyPath: '/k.pem', redirectHttp: 0
+      protocol: 'https',
+      serverNames: 's.gw.local',
+      upstreamHost: '10.0.0.4',
+      upstreamPort: 8443,
+      tlsCertPath: '/c.pem',
+      tlsKeyPath: '/k.pem',
+      redirectHttp: 0
     }))
     expect(out.join('\n')).not.toContain('listen 80;')
   })
@@ -248,10 +274,12 @@ import type { Mapping } from '@shared/types'
 
 /** 公共：渲染 extraDirectives，每行 trim + 缩进 4 空格 */
 function renderExtra(extra: string | null, indent = '    '): string[] {
-  if (!extra || !extra.trim()) return []
+  if (!extra || !extra.trim())
+    return []
   const out: string[] = []
   for (const line of extra.split('\n')) {
-    if (line.trim()) out.push(indent + line.trim())
+    if (line.trim())
+      out.push(indent + line.trim())
   }
   return out
 }
@@ -267,7 +295,8 @@ function proxyHeaders(indent = '        '): string[] {
 }
 
 export function renderTcpServer(m: Mapping): string[] {
-  if (m.listenPort == null) return []
+  if (m.listenPort == null)
+    return []
   return [
     `  # mapping: ${m.name}`,
     '  server {',
@@ -279,7 +308,8 @@ export function renderTcpServer(m: Mapping): string[] {
 }
 
 export function renderUdpServer(m: Mapping): string[] {
-  if (m.listenPort == null) return []
+  if (m.listenPort == null)
+    return []
   return [
     `  # mapping: ${m.name}`,
     '  server {',
@@ -297,7 +327,8 @@ export function renderHttpServer(m: Mapping): string[] {
   lines.push(`  # mapping: ${m.name}`)
   lines.push('  server {')
   lines.push(`    listen ${port};`)
-  if (m.serverNames) lines.push(`    server_name ${m.serverNames};`)
+  if (m.serverNames)
+    lines.push(`    server_name ${m.serverNames};`)
   lines.push(`    location ${path} {`)
   lines.push(`      proxy_pass http://${m.upstreamHost}:${m.upstreamPort};`)
   lines.push(...proxyHeaders())
@@ -325,9 +356,12 @@ export function renderHttpsServer(m: Mapping): string[] {
   // HTTPS 主块
   lines.push('  server {')
   lines.push('    listen 443 ssl;')
-  if (m.serverNames) lines.push(`    server_name ${m.serverNames};`)
-  if (m.tlsCertPath) lines.push(`    ssl_certificate ${m.tlsCertPath};`)
-  if (m.tlsKeyPath) lines.push(`    ssl_certificate_key ${m.tlsKeyPath};`)
+  if (m.serverNames)
+    lines.push(`    server_name ${m.serverNames};`)
+  if (m.tlsCertPath)
+    lines.push(`    ssl_certificate ${m.tlsCertPath};`)
+  if (m.tlsKeyPath)
+    lines.push(`    ssl_certificate_key ${m.tlsKeyPath};`)
   lines.push(`    location ${path} {`)
   lines.push(`      proxy_pass http://${m.upstreamHost}:${m.upstreamPort};`)
   lines.push(...proxyHeaders())
@@ -371,7 +405,7 @@ git commit -m "feat(nginx): 4 种协议 render 函数（TCP/UDP/HTTP/HTTPS）+ �
 
 ```typescript
 import type { Mapping } from '@shared/types'
-import { renderTcpServer, renderUdpServer, renderHttpServer, renderHttpsServer } from './renderers'
+import { renderHttpServer, renderHttpsServer, renderTcpServer, renderUdpServer } from './renderers'
 
 export interface ConfGenOptions {
   nginxLogDir: string
@@ -393,8 +427,8 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
   lines.push('# 由 nginx-jump-gui 自动生成，请勿手动编辑')
   lines.push(`# 生成时间: ${new Date().toISOString()}`)
   lines.push('worker_processes 1;')
-  lines.push('error_log ' + opts.nginxLogDir + '/error.log warn;')
-  lines.push('pid ' + opts.nginxTempDir + '/nginx.pid;')
+  lines.push(`error_log ${opts.nginxLogDir}/error.log warn;`)
+  lines.push(`pid ${opts.nginxTempDir}/nginx.pid;`)
   lines.push('')
   lines.push('events {')
   lines.push('  worker_connections 1024;')
@@ -403,9 +437,9 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
 
   if (hasHttp) {
     lines.push('http {')
-    lines.push('  access_log ' + opts.nginxLogDir + '/access.log;')
-    lines.push('  client_body_temp_path ' + opts.nginxTempDir + '/client_body;')
-    lines.push('  proxy_temp_path ' + opts.nginxTempDir + '/proxy;')
+    lines.push(`  access_log ${opts.nginxLogDir}/access.log;`)
+    lines.push(`  client_body_temp_path ${opts.nginxTempDir}/client_body;`)
+    lines.push(`  proxy_temp_path ${opts.nginxTempDir}/proxy;`)
     lines.push('  include mime.types;')
     lines.push('  # ---------- HTTP server 块 ----------')
     for (const m of httpMappings) lines.push(...renderHttpServer(m))
@@ -442,28 +476,28 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
 在 describe 块里加：
 
 ```typescript
-  it('UDP only 时生成 stream 块含 listen udp', () => {
-    const conf = generateFullConf([tcpMapping({ protocol: 'udp', listenPort: 5353, upstreamPort: 53 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
-    expect(conf).toContain('stream {')
-    expect(conf).toContain('listen 5353 udp;')
-  })
+it('UDP only 时生成 stream 块含 listen udp', () => {
+  const conf = generateFullConf([tcpMapping({ protocol: 'udp', listenPort: 5353, upstreamPort: 53 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+  expect(conf).toContain('stream {')
+  expect(conf).toContain('listen 5353 udp;')
+})
 
-  it('HTTP 映射生成 http 块', () => {
-    const conf = generateFullConf([tcpMapping({ protocol: 'http', listenPort: 8080, serverNames: 'a.local', listenPath: '/', upstreamPort: 3000 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
-    expect(conf).toContain('http {')
-    expect(conf).toContain('server_name a.local;')
-    expect(conf).toContain('proxy_pass http://')
-  })
+it('HTTP 映射生成 http 块', () => {
+  const conf = generateFullConf([tcpMapping({ protocol: 'http', listenPort: 8080, serverNames: 'a.local', listenPath: '/', upstreamPort: 3000 })], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+  expect(conf).toContain('http {')
+  expect(conf).toContain('server_name a.local;')
+  expect(conf).toContain('proxy_pass http://')
+})
 
-  it('混合 TCP + HTTPS 同时生成 stream 和 http 块', () => {
-    const conf = generateFullConf([
-      tcpMapping({ protocol: 'tcp', listenPort: 9000, upstreamPort: 3306 }),
-      tcpMapping({ protocol: 'https', listenPort: null, serverNames: 's.local', tlsCertPath: '/c.pem', tlsKeyPath: '/k.pem', upstreamPort: 8443, redirectHttp: 1 })
-    ], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
-    expect(conf).toContain('stream {')
-    expect(conf).toContain('http {')
-    expect(conf).toContain('listen 443 ssl;')
-  })
+it('混合 TCP + HTTPS 同时生成 stream 和 http 块', () => {
+  const conf = generateFullConf([
+    tcpMapping({ protocol: 'tcp', listenPort: 9000, upstreamPort: 3306 }),
+    tcpMapping({ protocol: 'https', listenPort: null, serverNames: 's.local', tlsCertPath: '/c.pem', tlsKeyPath: '/k.pem', upstreamPort: 8443, redirectHttp: 1 })
+  ], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp' })
+  expect(conf).toContain('stream {')
+  expect(conf).toContain('http {')
+  expect(conf).toContain('listen 443 ssl;')
+})
 ```
 
 （`tcpMapping` 是测试文件里已有的 helper，只是名字沿用——它构造的是 base Mapping，protocol 通过 over 覆盖。）
@@ -496,20 +530,36 @@ git commit -m "feat(nginx): confGenerator 集成全部 4 协议分派到 stream/
 - [ ] **Step 1: 写失败测试 `tests/main/nginx/applyFlow.test.ts`**
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest'
+import type { EngineTestResult, Mapping } from '@shared/types'
 import { applyMappings } from '@main/nginx/applyFlow'
-import type { Mapping, EngineTestResult } from '@shared/types'
+import { describe, expect, it, vi } from 'vitest'
 
 function mapping(over: Partial<Mapping> = {}): Mapping {
   return {
-    id: 'm1', hostId: 'h1', name: 't', enabled: 1, protocol: 'tcp',
-    listenPort: 9000, serverNames: null, listenPath: null,
-    upstreamHost: '10.0.0.1', upstreamPort: 3306,
-    tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0, extraDirectives: null,
-    healthCheckEnabled: 0, healthCheckIntervalSec: 30,
-    healthCheckTargetPath: null, healthCheckExpectedStatus: null,
-    healthStatus: 'unknown', lastCheckedAt: null, sortOrder: 0,
-    createdAt: 0, updatedAt: 0, ...over
+    id: 'm1',
+    hostId: 'h1',
+    name: 't',
+    enabled: 1,
+    protocol: 'tcp',
+    listenPort: 9000,
+    serverNames: null,
+    listenPath: null,
+    upstreamHost: '10.0.0.1',
+    upstreamPort: 3306,
+    tlsCertPath: null,
+    tlsKeyPath: null,
+    redirectHttp: 0,
+    extraDirectives: null,
+    healthCheckEnabled: 0,
+    healthCheckIntervalSec: 30,
+    healthCheckTargetPath: null,
+    healthCheckExpectedStatus: null,
+    healthStatus: 'unknown',
+    lastCheckedAt: null,
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...over
   } as Mapping
 }
 
@@ -567,8 +617,9 @@ Expected: FAIL。
 
 ```typescript
 import type { Mapping } from '@shared/types'
+import type { ConfGenOptions } from './confGenerator';
 import type { NginxEngine } from './types'
-import { generateFullConf, type ConfGenOptions } from './confGenerator'
+import { generateFullConf } from './confGenerator'
 
 export interface ApplyResult {
   ok: boolean
@@ -609,7 +660,8 @@ export async function applyMappings(
   try {
     await engine.reload()
     return { ok: true, conf, output: testResult.output }
-  } catch (e: any) {
+  }
+  catch (e: any) {
     return { ok: false, conf, output: e?.message ?? String(e) }
   }
 }
@@ -890,11 +942,11 @@ git commit -m "feat(templates): 13 个内置模板 YAML（TCP/UDP/SSH/RDP/Web/HT
 - [ ] **Step 1: 写失败测试 `tests/main/templates/templateRepo.test.ts`**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { listBuiltinTemplates, listCustomTemplates, listAllTemplates, saveCustomTemplate, deleteCustomTemplate, __setCustomDirForTest } from '@main/templates/templateRepo'
-import { existsSync, mkdirSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setCustomDirForTest, deleteCustomTemplate, listAllTemplates, listBuiltinTemplates, listCustomTemplates, saveCustomTemplate } from '@main/templates/templateRepo'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('templateRepo', () => {
   let customDir: string
@@ -942,7 +994,12 @@ describe('templateRepo', () => {
 
   it('listAllTemplates 合并内置 + 自定义', () => {
     saveCustomTemplate({
-      id: 'c1', name: '自定义1', icon: 'x', category: '自定义', description: '', builtin: false,
+      id: 'c1',
+      name: '自定义1',
+      icon: 'x',
+      category: '自定义',
+      description: '',
+      builtin: false,
       mapping: { protocol: 'tcp', upstreamHost: '1.1.1.1', upstreamPort: 80 }
     })
     const all = listAllTemplates()
@@ -951,7 +1008,12 @@ describe('templateRepo', () => {
 
   it('deleteCustomTemplate 删除', () => {
     saveCustomTemplate({
-      id: 'del', name: '待删', icon: 'x', category: '自定义', description: '', builtin: false,
+      id: 'del',
+      name: '待删',
+      icon: 'x',
+      category: '自定义',
+      description: '',
+      builtin: false,
       mapping: { protocol: 'tcp', upstreamHost: '1.1.1.1', upstreamPort: 80 }
     })
     deleteCustomTemplate('del')
@@ -976,10 +1038,10 @@ Expected: FAIL。
 - [ ] **Step 3: 实现 `src/main/templates/templateRepo.ts`**
 
 ```typescript
-import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs'
-import { join, basename, extname } from 'path'
-import { parse, stringify } from 'yaml'
 import type { TemplateDefinition } from './types'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, extname, join } from 'node:path'
+import { parse, stringify } from 'yaml'
 
 // 内置模板目录：源码在 src/main/templates/builtin，打包后在 resources/templates/builtin
 function getBuiltinDir(): string {
@@ -999,12 +1061,14 @@ export function __setCustomDirForTest(dir: string): void {
 }
 
 function getCustomDir(): string {
-  if (customDirForTest) return customDirForTest
+  if (customDirForTest)
+    return customDirForTest
   // 正式：data/templates/custom
   const { resolvePaths } = require('../paths')
   const paths = resolvePaths()
   const dir = join(paths.dataDir, 'templates', 'custom')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  if (!existsSync(dir))
+    mkdirSync(dir, { recursive: true })
   return dir
 }
 
@@ -1012,7 +1076,8 @@ function loadYamlFile(filePath: string, id: string, builtin: boolean): TemplateD
   try {
     const content = readFileSync(filePath, 'utf-8')
     const raw = parse(content) as Partial<TemplateDefinition>
-    if (!raw || !raw.mapping || !raw.mapping.protocol) return null
+    if (!raw || !raw.mapping || !raw.mapping.protocol)
+      return null
     return {
       id: raw.id ?? id,
       name: raw.name ?? id,
@@ -1023,33 +1088,38 @@ function loadYamlFile(filePath: string, id: string, builtin: boolean): TemplateD
       mapping: raw.mapping,
       extraDirectives: raw.extraDirectives
     }
-  } catch {
+  }
+  catch {
     return null
   }
 }
 
 export function listBuiltinTemplates(): TemplateDefinition[] {
   const dir = getBuiltinDir()
-  if (!existsSync(dir)) return []
+  if (!existsSync(dir))
+    return []
   const files = readdirSync(dir).filter(f => extname(f) === '.yml' || extname(f) === '.yaml')
   const list: TemplateDefinition[] = []
   for (const f of files) {
     const id = basename(f, extname(f))
     const tpl = loadYamlFile(join(dir, f), id, true)
-    if (tpl) list.push(tpl)
+    if (tpl)
+      list.push(tpl)
   }
   return list.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
 }
 
 export function listCustomTemplates(): TemplateDefinition[] {
   const dir = getCustomDir()
-  if (!existsSync(dir)) return []
+  if (!existsSync(dir))
+    return []
   const files = readdirSync(dir).filter(f => extname(f) === '.yml' || extname(f) === '.yaml')
   const list: TemplateDefinition[] = []
   for (const f of files) {
     const id = basename(f, extname(f))
     const tpl = loadYamlFile(join(dir, f), id, false)
-    if (tpl) list.push(tpl)
+    if (tpl)
+      list.push(tpl)
   }
   return list.sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -1060,7 +1130,8 @@ export function listAllTemplates(): TemplateDefinition[] {
 
 export function saveCustomTemplate(tpl: TemplateDefinition): void {
   const dir = getCustomDir()
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  if (!existsSync(dir))
+    mkdirSync(dir, { recursive: true })
   const data = {
     id: tpl.id,
     name: tpl.name,
@@ -1076,7 +1147,8 @@ export function saveCustomTemplate(tpl: TemplateDefinition): void {
 export function deleteCustomTemplate(id: string): void {
   const dir = getCustomDir()
   const file = join(dir, `${id}.yml`)
-  if (existsSync(file)) rmSync(file)
+  if (existsSync(file))
+    rmSync(file)
 }
 ```
 
@@ -1110,37 +1182,42 @@ git commit -m "feat(templates): TemplateRepo 加载内置/自定义 + 存/删自
 在 `registerIpcHandlers()` 里加（import `listAllTemplates, listBuiltinTemplates, saveCustomTemplate, deleteCustomTemplate` from `../templates/templateRepo`，import `applyMappings` from `../nginx/applyFlow`）：
 
 ```typescript
-  // Template
-  ipcMain.handle(IPC.TEMPLATE_LIST, () => listAllTemplates())
-  ipcMain.handle(IPC.TEMPLATE_LIST_BUILTIN, () => listBuiltinTemplates())
-  ipcMain.handle(IPC.TEMPLATE_SAVE_CUSTOM, (_e, tpl: any) => { saveCustomTemplate(tpl); return true })
-  ipcMain.handle(IPC.TEMPLATE_DELETE_CUSTOM, (_e, id: string) => { deleteCustomTemplate(id); return true })
+// Template
+ipcMain.handle(IPC.TEMPLATE_LIST, () => listAllTemplates())
+ipcMain.handle(IPC.TEMPLATE_LIST_BUILTIN, () => listBuiltinTemplates())
+ipcMain.handle(IPC.TEMPLATE_SAVE_CUSTOM, (_e, tpl: any) => { saveCustomTemplate(tpl); return true })
+ipcMain.handle(IPC.TEMPLATE_DELETE_CUSTOM, (_e, id: string) => { deleteCustomTemplate(id); return true })
 ```
 
 - [ ] **Step 2: handlers.ts 把 ENGINE_RELOAD 改走 applyFlow**
 
 旧的 ENGINE_RELOAD：
 ```typescript
-  ipcMain.handle(IPC.ENGINE_RELOAD, async () => { const eng = getActiveEngine(); if (eng) await eng.reload(); return true })
+ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
+  const eng = getActiveEngine(); if (eng)
+    await eng.reload(); return true
+})
 ```
 
 改为：reload 时重新生成 conf + test + write + reload。需要拿到当前 host 的 enabled mappings。需要 hostId —— 从 getDefaultHost 拿。
 
 ```typescript
-  ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
-    const eng = getActiveEngine()
-    if (!eng) return { ok: false, output: 'no active engine' }
-    const host = getDefaultHost()
-    if (!host) return { ok: false, output: 'no default host' }
-    const { resolvePaths } = require('../paths')
-    const paths = resolvePaths()
-    const mappings = listEnabledMappings(host.id)
-    const result = await applyMappings(eng, mappings, {
-      nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir
-    })
-    return { ok: result.ok, output: result.output }
+ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
+  const eng = getActiveEngine()
+  if (!eng)
+    return { ok: false, output: 'no active engine' }
+  const host = getDefaultHost()
+  if (!host)
+    return { ok: false, output: 'no default host' }
+  const { resolvePaths } = require('../paths')
+  const paths = resolvePaths()
+  const mappings = listEnabledMappings(host.id)
+  const result = await applyMappings(eng, mappings, {
+    nginxLogDir: paths.nginxLogDir,
+    nginxTempDir: paths.tempDir
   })
+  return { ok: result.ok, output: result.output }
+})
 ```
 
 （import `getDefaultHost` from `../db/hostRepo`，`listEnabledMappings` from `../db/mappingRepo`，`applyMappings` from `../nginx/applyFlow`。）
@@ -1173,11 +1250,12 @@ async function reload() {
   busy.value = true; error.value = ''
   try {
     const r = await api.testEngine()
-    if (!r.ok) { alert('配置校验失败:\n' + r.output); return }
+    if (!r.ok) { alert(`配置校验失败:\n${r.output}`); return }
     const result = await api.reloadEngine()
-    if (!result.ok) { alert('应用失败:\n' + result.output); return }
+    if (!result.ok) { alert(`应用失败:\n${result.output}`); return }
     status.value = await api.engineStatus()
-  } catch (e: any) { error.value = e.message; alert('应用失败:\n' + e.message) }
+  }
+  catch (e: any) { error.value = e.message; alert(`应用失败:\n${e.message}`) }
   finally { busy.value = false }
 }
 ```
@@ -1206,9 +1284,9 @@ git commit -m "feat(ipc): 模板 IPC 通道 + reload 改走 applyFlow（test→w
 - [ ] **Step 1: 创建 `src/renderer/stores/templates.ts`**
 
 ```typescript
+import { api } from '@renderer/api/ipc'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@renderer/api/ipc'
 
 export interface Template {
   id: string
@@ -1229,7 +1307,8 @@ export const useTemplatesStore = defineStore('templates', () => {
     loading.value = true
     try {
       list.value = await api.listTemplates()
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -1242,18 +1321,18 @@ export const useTemplatesStore = defineStore('templates', () => {
 
 ```vue
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useTemplatesStore } from '@renderer/stores/templates'
 import type { Template } from '@renderer/stores/templates'
+import { useTemplatesStore } from '@renderer/stores/templates'
+import { computed } from 'vue'
 
+const emit = defineEmits<{ (e: 'pick', tpl: Template): void, (e: 'cancel'): void }>()
 const store = useTemplatesStore()
-const emit = defineEmits<{ (e: 'pick', tpl: Template): void; (e: 'cancel'): void }>()
-
 // 按 category 分组
 const grouped = computed(() => {
   const map = new Map<string, Template[]>()
   for (const t of store.list) {
-    if (!map.has(t.category)) map.set(t.category, [])
+    if (!map.has(t.category))
+      map.set(t.category, [])
     map.get(t.category)!.push(t)
   }
   return Array.from(map.entries())
@@ -1261,8 +1340,16 @@ const grouped = computed(() => {
 
 // icon 映射到 emoji（毛玻璃版会换 SVG，Plan 4）
 const iconEmoji: Record<string, string> = {
-  network: '🔌', terminal: '💻', monitor: '🖥️', globe: '🌐', lock: '🔒',
-  code: '⚙️', bolt: '⚡', database: '🗄️', message: '📡', default: '📦'
+  network: '🔌',
+  terminal: '💻',
+  monitor: '🖥️',
+  globe: '🌐',
+  lock: '🔒',
+  code: '⚙️',
+  bolt: '⚡',
+  database: '🗄️',
+  message: '📡',
+  default: '📦'
 }
 </script>
 
@@ -1271,19 +1358,27 @@ const iconEmoji: Record<string, string> = {
     <div class="picker-card">
       <h3>选择模板</h3>
       <div v-for="[cat, items] in grouped" :key="cat" class="group">
-        <div class="group-title">{{ cat }}</div>
+        <div class="group-title">
+          {{ cat }}
+        </div>
         <div class="cards">
           <button v-for="t in items" :key="t.id" class="tpl-card" @click="emit('pick', t)">
             <span class="icon">{{ iconEmoji[t.icon] ?? '📦' }}</span>
             <div class="info">
-              <div class="name">{{ t.name }}<span v-if="!t.builtin" class="custom-tag">自定义</span></div>
-              <div class="desc">{{ t.description }}</div>
+              <div class="name">
+                {{ t.name }}<span v-if="!t.builtin" class="custom-tag">自定义</span>
+              </div>
+              <div class="desc">
+                {{ t.description }}
+              </div>
             </div>
           </button>
         </div>
       </div>
       <div class="actions">
-        <button class="ghost" @click="emit('cancel')">取消</button>
+        <button class="ghost" @click="emit('cancel')">
+          取消
+        </button>
       </div>
     </div>
   </div>
@@ -1345,12 +1440,12 @@ git commit -m "feat(ui): TemplatePicker 模板选择器（按 category 分组卡
 
 ```vue
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { api } from '@renderer/api/ipc'
 import type { Template } from '@renderer/stores/templates'
+import { api } from '@renderer/api/ipc'
+import { computed, ref, watch } from 'vue'
 
-const props = defineProps<{ hostId: string; mappingId?: string; template?: Template | null }>()
-const emit = defineEmits<{ (e: 'saved'): void; (e: 'cancel'): void }>()
+const props = defineProps<{ hostId: string, mappingId?: string, template?: Template | null }>()
+const emit = defineEmits<{ (e: 'saved'): void, (e: 'cancel'): void }>()
 
 interface FormState {
   name: string
@@ -1387,7 +1482,8 @@ const form = ref<FormState>(templateToForm(props.template))
 
 // 编辑模式：加载已有 mapping
 async function loadExisting() {
-  if (!props.mappingId) return
+  if (!props.mappingId)
+    return
   const list = await api.listMappings(props.hostId)
   const m = list.find((x: any) => x.id === props.mappingId)
   if (m) {
@@ -1446,12 +1542,15 @@ async function save() {
       healthCheckTargetPath: null,
       healthCheckExpectedStatus: null,
     }
-    if (props.mappingId) await api.updateMapping(props.mappingId, input)
+    if (props.mappingId)
+      await api.updateMapping(props.mappingId, input)
     else await api.createMapping(input)
     emit('saved')
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.message
-  } finally {
+  }
+  finally {
     saving.value = false
   }
 }
@@ -1461,7 +1560,7 @@ async function save() {
   <div class="form-overlay" @click.self="emit('cancel')">
     <div class="form-card">
       <h3>{{ mappingId ? '编辑映射' : (template ? '从模板新建' : '新建映射') }}</h3>
-      <label>名称<input v-model="form.name" placeholder="如：MySQL 内库" /></label>
+      <label>名称<input v-model="form.name" placeholder="如：MySQL 内库"></label>
       <label>协议
         <select v-model="form.protocol">
           <option value="tcp">TCP</option>
@@ -1472,27 +1571,33 @@ async function save() {
       </label>
 
       <!-- TCP/UDP: 监听端口 -->
-      <label v-if="isStream">监听端口<input v-model.number="form.listenPort" type="number" placeholder="9000" /></label>
+      <label v-if="isStream">监听端口<input v-model.number="form.listenPort" type="number" placeholder="9000"></label>
 
       <!-- HTTP/HTTPS: 监听端口 + 域名 + 路径 -->
-      <label v-if="isHttp">监听端口<input v-model.number="form.listenPort" type="number" placeholder="80" /></label>
-      <label v-if="isHttp || isHttps">域名 (server_name)<input v-model="form.serverNames" placeholder="app1.gw.local（可留空）" /></label>
-      <label v-if="isHttp || isHttps">路径前缀 (location)<input v-model="form.listenPath" placeholder="/" /></label>
+      <label v-if="isHttp">监听端口<input v-model.number="form.listenPort" type="number" placeholder="80"></label>
+      <label v-if="isHttp || isHttps">域名 (server_name)<input v-model="form.serverNames" placeholder="app1.gw.local（可留空）"></label>
+      <label v-if="isHttp || isHttps">路径前缀 (location)<input v-model="form.listenPath" placeholder="/"></label>
 
       <!-- HTTPS: 证书 + 跳转 -->
       <template v-if="isHttps">
-        <label>证书路径 (ssl_certificate)<input v-model="form.tlsCertPath" placeholder="/data/cert.pem" /></label>
-        <label>私钥路径 (ssl_certificate_key)<input v-model="form.tlsKeyPath" placeholder="/data/key.pem" /></label>
-        <label class="checkbox"><input type="checkbox" v-model="form.redirectHttp" /> HTTP→HTTPS 自动跳转</label>
+        <label>证书路径 (ssl_certificate)<input v-model="form.tlsCertPath" placeholder="/data/cert.pem"></label>
+        <label>私钥路径 (ssl_certificate_key)<input v-model="form.tlsKeyPath" placeholder="/data/key.pem"></label>
+        <label class="checkbox"><input v-model="form.redirectHttp" type="checkbox"> HTTP→HTTPS 自动跳转</label>
       </template>
 
-      <label>目标主机<input v-model="form.upstreamHost" placeholder="192.168.1.10" /></label>
-      <label>目标端口<input v-model.number="form.upstreamPort" type="number" placeholder="3306" /></label>
-      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2" placeholder="proxy_timeout 1h;"></textarea></label>
-      <div v-if="error" class="error">{{ error }}</div>
+      <label>目标主机<input v-model="form.upstreamHost" placeholder="192.168.1.10"></label>
+      <label>目标端口<input v-model.number="form.upstreamPort" type="number" placeholder="3306"></label>
+      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2" placeholder="proxy_timeout 1h;" /></label>
+      <div v-if="error" class="error">
+        {{ error }}
+      </div>
       <div class="actions">
-        <button class="ghost" @click="emit('cancel')">取消</button>
-        <button :disabled="saving" @click="save">保存</button>
+        <button class="ghost" @click="emit('cancel')">
+          取消
+        </button>
+        <button :disabled="saving" @click="save">
+          保存
+        </button>
       </div>
     </div>
   </div>

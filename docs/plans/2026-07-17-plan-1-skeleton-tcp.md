@@ -175,9 +175,9 @@ data/
 - [ ] **Step 5: 创建 electron-vite.config.ts**
 
 ```typescript
-import { defineConfig } from 'electron-vite'
+import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { defineConfig } from 'electron-vite'
 
 export default defineConfig({
   main: {
@@ -253,8 +253,8 @@ export {}
 - [ ] **Step 10: 创建 src/renderer/main.ts**
 
 ```typescript
-import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { createApp } from 'vue'
 import App from './App.vue'
 
 createApp(App).use(createPinia()).mount('#app')
@@ -266,7 +266,9 @@ createApp(App).use(createPinia()).mount('#app')
 <script setup lang="ts"></script>
 
 <template>
-  <div class="app">骨架就绪</div>
+  <div class="app">
+    骨架就绪
+  </div>
 </template>
 
 <style scoped>
@@ -279,9 +281,9 @@ createApp(App).use(createPinia()).mount('#app')
 创建 `vitest.config.ts`：
 
 ```typescript
-import { defineConfig } from 'vitest/config'
+import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [vue()],
@@ -331,11 +333,11 @@ git commit -m "chore: 初始化 Electron + Vue 骨架"
 - [ ] **Step 1: 写失败测试 tests/main/paths.test.ts**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { resolvePaths, __setAppRootForTest } from '@main/paths'
-import { existsSync, mkdirSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setAppRootForTest, resolvePaths } from '@main/paths'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('paths', () => {
   let testRoot: string
@@ -388,8 +390,8 @@ Expected: FAIL，`resolvePaths` 未定义。
 - [ ] **Step 3: 实现 src/main/paths.ts**
 
 ```typescript
-import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 let appRootForTest: string | null = null
 
@@ -398,11 +400,12 @@ export function __setAppRootForTest(root: string): void {
 }
 
 function getAppRoot(): string {
-  if (appRootForTest) return appRootForTest
+  if (appRootForTest)
+    return appRootForTest
   // 生产环境：exe 所在目录；开发环境：项目根目录
   if (process.env.NODE_ENV === 'production') {
     // electron-builder portable 下，process.execPath 指向 exe
-    return require('path').dirname(process.execPath)
+    return require('node:path').dirname(process.execPath)
   }
   return process.cwd()
 }
@@ -439,7 +442,8 @@ export function resolvePaths(): AppPaths {
     bundledNginxDir: join(resourcesDir, 'nginx'),
     ensureDataDirs: () => {
       for (const d of [dataDir, join(dataDir, 'nginx-conf'), join(dataDir, 'nginx-conf', 'http'), join(dataDir, 'nginx-conf', 'stream'), join(dataDir, 'logs'), join(dataDir, 'snapshots'), join(dataDir, 'temp')]) {
-        if (!existsSync(d)) mkdirSync(d, { recursive: true })
+        if (!existsSync(d))
+          mkdirSync(d, { recursive: true })
       }
     }
   }
@@ -483,22 +487,22 @@ export interface Host {
 }
 
 export interface LocalHostConfig {
-  nginxPath: string       // 可空，空则用 bundled
-  confDir: string         // 可空，空则用 data/nginx-conf
-  logDir: string          // 可空
+  nginxPath: string // 可空，空则用 bundled
+  confDir: string // 可空，空则用 data/nginx-conf
+  logDir: string // 可空
 }
 
 export interface RemoteHostConfig {
   host: string
-  port: number            // SSH 端口，默认 22
+  port: number // SSH 端口，默认 22
   username: string
   authType: 'password' | 'key'
-  passwordEncrypted: string | null  // safeStorage 加密后 base64
+  passwordEncrypted: string | null // safeStorage 加密后 base64
   keyPath: string | null
   nginxPath: string
-  confPath: string        // 远程 conf 主文件路径
-  reloadCmd: string       // 默认 nginx -s reload
-  testCmd: string         // 默认 nginx -t
+  confPath: string // 远程 conf 主文件路径
+  reloadCmd: string // 默认 nginx -s reload
+  testCmd: string // 默认 nginx -t
 }
 
 // ============ Mapping ============
@@ -509,7 +513,7 @@ export interface Mapping {
   id: string
   hostId: string
   name: string
-  enabled: number         // 0 | 1
+  enabled: number // 0 | 1
   protocol: Protocol
   listenPort: number | null
   serverNames: string | null
@@ -518,7 +522,7 @@ export interface Mapping {
   upstreamPort: number
   tlsCertPath: string | null
   tlsKeyPath: string | null
-  redirectHttp: number    // 0 | 1
+  redirectHttp: number // 0 | 1
   extraDirectives: string | null
   healthCheckEnabled: number
   healthCheckIntervalSec: number
@@ -588,12 +592,11 @@ git commit -m "feat(types): 定义 Host/Mapping/Engine/IPC 共享类型"
 - [ ] **Step 1: 写失败测试 tests/main/db/connection.test.ts**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb } from '@main/db/connection'
-import { __setDbPathForTest } from '@main/db/connection'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('db connection', () => {
   let dbPath: string
@@ -605,7 +608,8 @@ describe('db connection', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('openDb 创建数据库文件', () => {
@@ -706,10 +710,10 @@ export function runMigrations(db: Database): void {
 - [ ] **Step 4: 实现 src/main/db/connection.ts**
 
 ```typescript
-import Database from 'better-sqlite3'
 import type { Database as DB } from 'better-sqlite3'
-import { runMigrations } from './migrations'
+import Database from 'better-sqlite3'
 import { resolvePaths } from '../paths'
+import { runMigrations } from './migrations'
 
 let dbInstance: DB | null = null
 let dbPathForTest: string | null = null
@@ -719,14 +723,16 @@ export function __setDbPathForTest(path: string): void {
 }
 
 function resolveDbPath(): string {
-  if (dbPathForTest) return dbPathForTest
+  if (dbPathForTest)
+    return dbPathForTest
   const paths = resolvePaths()
   paths.ensureDataDirs()
   return paths.dbPath
 }
 
 export function openDb(): DB {
-  if (dbInstance) return dbInstance
+  if (dbInstance)
+    return dbInstance
   const path = resolveDbPath()
   const db = new Database(path)
   runMigrations(db)
@@ -742,7 +748,8 @@ export function closeDb(): void {
 }
 
 export function getDb(): DB {
-  if (!dbInstance) throw new Error('DB not opened. Call openDb() first.')
+  if (!dbInstance)
+    throw new Error('DB not opened. Call openDb() first.')
   return dbInstance
 }
 ```
@@ -770,13 +777,13 @@ git commit -m "feat(db): SQLite 连接 + 建表迁移（hosts/mappings/snapshots
 - [ ] **Step 1: 写失败测试**
 
 ```typescript
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
+import { createHost, deleteHost, getDefaultHost, getHost, listHosts, setDefaultHost, updateHost } from '@main/db/hostRepo'
 // tests/main/db/hostRepo.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
-import { createHost, listHosts, getHost, updateHost, deleteHost, setDefaultHost, getDefaultHost } from '@main/db/hostRepo'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('hostRepo', () => {
   let dbPath: string
@@ -789,7 +796,8 @@ describe('hostRepo', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('createHost 创建并返回 local host', () => {
@@ -843,9 +851,9 @@ Expected: FAIL。
 - [ ] **Step 3: 实现 src/main/db/hostRepo.ts**
 
 ```typescript
-import { randomUUID } from 'crypto'
-import { getDb } from './connection'
 import type { Host, HostType, LocalHostConfig, RemoteHostConfig } from '@shared/types'
+import { randomUUID } from 'node:crypto'
+import { getDb } from './connection'
 
 interface HostRow {
   id: string
@@ -885,10 +893,7 @@ export function createHost(input: CreateHostInput): Host {
   const now = Date.now()
   db.prepare(`INSERT INTO hosts (id, name, type, is_default, local_config, remote_config, status, created_at)
               VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?)`)
-    .run(id, input.name, input.type, input.isDefault,
-      input.localConfig ? JSON.stringify(input.localConfig) : null,
-      input.remoteConfig ? JSON.stringify(input.remoteConfig) : null,
-      now)
+    .run(id, input.name, input.type, input.isDefault, input.localConfig ? JSON.stringify(input.localConfig) : null, input.remoteConfig ? JSON.stringify(input.remoteConfig) : null, now)
   return getHost(id)!
 }
 
@@ -904,13 +909,10 @@ export function getHost(id: string): Host | undefined {
 
 export function updateHost(id: string, patch: Partial<CreateHostInput>): void {
   const cur = getHost(id)
-  if (!cur) throw new Error(`Host not found: ${id}`)
+  if (!cur)
+    throw new Error(`Host not found: ${id}`)
   const merged = { ...cur, ...patch } as CreateHostInput & Host
-  getDb().prepare(`UPDATE hosts SET name=?, type=?, is_default=?, local_config=?, remote_config=? WHERE id=?`)
-    .run(merged.name, merged.type, merged.isDefault,
-      merged.localConfig ? JSON.stringify(merged.localConfig) : null,
-      merged.remoteConfig ? JSON.stringify(merged.remoteConfig) : null,
-      id)
+  getDb().prepare(`UPDATE hosts SET name=?, type=?, is_default=?, local_config=?, remote_config=? WHERE id=?`).run(merged.name, merged.type, merged.isDefault, merged.localConfig ? JSON.stringify(merged.localConfig) : null, merged.remoteConfig ? JSON.stringify(merged.remoteConfig) : null, id)
 }
 
 export function deleteHost(id: string): void {
@@ -954,17 +956,22 @@ git commit -m "feat(db): Host 仓库 CRUD + 默认实例切换"
 - [ ] **Step 1: 写失败测试**
 
 ```typescript
-// tests/main/db/mappingRepo.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
+import type { MappingInput } from '@shared/types'
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
 import { createHost } from '@main/db/hostRepo'
 import {
-  createMapping, listMappings, getMapping, updateMapping, deleteMapping, listEnabledMappings
+  createMapping,
+  deleteMapping,
+  getMapping,
+  listEnabledMappings,
+  listMappings,
+  updateMapping
 } from '@main/db/mappingRepo'
-import type { MappingInput } from '@shared/types'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+// tests/main/db/mappingRepo.test.ts
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 function tcpInput(hostId: string, over: Partial<MappingInput> = {}): MappingInput {
   return {
@@ -1003,7 +1010,8 @@ describe('mappingRepo', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('createMapping 创建 TCP 映射', () => {
@@ -1057,9 +1065,9 @@ Expected: FAIL。
 - [ ] **Step 3: 实现 src/main/db/mappingRepo.ts**
 
 ```typescript
-import { randomUUID } from 'crypto'
+import type { HealthStatus, Mapping, MappingInput, Protocol } from '@shared/types'
+import { randomUUID } from 'node:crypto'
 import { getDb } from './connection'
-import type { Mapping, MappingInput, Protocol, HealthStatus } from '@shared/types'
 
 interface MappingRow {
   id: string
@@ -1089,15 +1097,29 @@ interface MappingRow {
 
 function rowToMapping(r: MappingRow): Mapping {
   return {
-    id: r.id, hostId: r.host_id, name: r.name, enabled: r.enabled, protocol: r.protocol,
-    listenPort: r.listen_port, serverNames: r.server_names, listenPath: r.listen_path,
-    upstreamHost: r.upstream_host, upstreamPort: r.upstream_port,
-    tlsCertPath: r.tls_cert_path, tlsKeyPath: r.tls_key_path, redirectHttp: r.redirect_http,
+    id: r.id,
+    hostId: r.host_id,
+    name: r.name,
+    enabled: r.enabled,
+    protocol: r.protocol,
+    listenPort: r.listen_port,
+    serverNames: r.server_names,
+    listenPath: r.listen_path,
+    upstreamHost: r.upstream_host,
+    upstreamPort: r.upstream_port,
+    tlsCertPath: r.tls_cert_path,
+    tlsKeyPath: r.tls_key_path,
+    redirectHttp: r.redirect_http,
     extraDirectives: r.extra_directives,
-    healthCheckEnabled: r.health_check_enabled, healthCheckIntervalSec: r.health_check_interval_sec,
-    healthCheckTargetPath: r.health_check_target_path, healthCheckExpectedStatus: r.health_check_expected_status,
-    healthStatus: r.health_status as HealthStatus, lastCheckedAt: r.last_checked_at,
-    sortOrder: r.sort_order, createdAt: r.created_at, updatedAt: r.updated_at
+    healthCheckEnabled: r.health_check_enabled,
+    healthCheckIntervalSec: r.health_check_interval_sec,
+    healthCheckTargetPath: r.health_check_target_path,
+    healthCheckExpectedStatus: r.health_check_expected_status,
+    healthStatus: r.health_status as HealthStatus,
+    lastCheckedAt: r.last_checked_at,
+    sortOrder: r.sort_order,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
   }
 }
 
@@ -1113,13 +1135,7 @@ export function createMapping(input: MappingInput): Mapping {
   const maxOrder = (db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM mappings WHERE host_id = ?').get(input.hostId) as { m: number }).m
   db.prepare(`INSERT INTO mappings (${COLUMNS})
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, input.hostId, input.name, input.enabled, input.protocol,
-      input.listenPort, input.serverNames, input.listenPath,
-      input.upstreamHost, input.upstreamPort, input.tlsCertPath, input.tlsKeyPath,
-      input.redirectHttp, input.extraDirectives,
-      input.healthCheckEnabled, input.healthCheckIntervalSec,
-      input.healthCheckTargetPath, input.healthCheckExpectedStatus,
-      'unknown', null, maxOrder + 1, now, now)
+    .run(id, input.hostId, input.name, input.enabled, input.protocol, input.listenPort, input.serverNames, input.listenPath, input.upstreamHost, input.upstreamPort, input.tlsCertPath, input.tlsKeyPath, input.redirectHttp, input.extraDirectives, input.healthCheckEnabled, input.healthCheckIntervalSec, input.healthCheckTargetPath, input.healthCheckExpectedStatus, 'unknown', null, maxOrder + 1, now, now)
   return getMapping(id)!
 }
 
@@ -1140,17 +1156,14 @@ export function getMapping(id: string): Mapping | undefined {
 
 export function updateMapping(id: string, patch: Partial<MappingInput>): void {
   const cur = getMapping(id)
-  if (!cur) throw new Error(`Mapping not found: ${id}`)
+  if (!cur)
+    throw new Error(`Mapping not found: ${id}`)
   const merged = { ...cur, ...patch } as Mapping & MappingInput
   getDb().prepare(`UPDATE mappings SET
     name=?, enabled=?, protocol=?, listen_port=?, server_names=?, listen_path=?,
     upstream_host=?, upstream_port=?, tls_cert_path=?, tls_key_path=?, redirect_http=?,
     extra_directives=?, health_check_enabled=?, health_check_interval_sec=?,
-    health_check_target_path=?, health_check_expected_status=?, updated_at=? WHERE id=?`)
-    .run(merged.name, merged.enabled, merged.protocol, merged.listenPort, merged.serverNames, merged.listenPath,
-      merged.upstreamHost, merged.upstreamPort, merged.tlsCertPath, merged.tlsKeyPath, merged.redirectHttp,
-      merged.extraDirectives, merged.healthCheckEnabled, merged.healthCheckIntervalSec,
-      merged.healthCheckTargetPath, merged.healthCheckExpectedStatus, Date.now(), id)
+    health_check_target_path=?, health_check_expected_status=?, updated_at=? WHERE id=?`).run(merged.name, merged.enabled, merged.protocol, merged.listenPort, merged.serverNames, merged.listenPath, merged.upstreamHost, merged.upstreamPort, merged.tlsCertPath, merged.tlsKeyPath, merged.redirectHttp, merged.extraDirectives, merged.healthCheckEnabled, merged.healthCheckIntervalSec, merged.healthCheckTargetPath, merged.healthCheckExpectedStatus, Date.now(), id)
 }
 
 export function deleteMapping(id: string): void {
@@ -1183,21 +1196,37 @@ git commit -m "feat(db): Mapping 仓库 CRUD + enabled 过滤 + sortOrder 自增
 - [ ] **Step 1: 写失败测试**
 
 ```typescript
-// tests/main/nginx/confGenerator.test.ts
-import { describe, it, expect } from 'vitest'
-import { generateFullConf } from '@main/nginx/confGenerator'
 import type { Mapping } from '@shared/types'
+import { generateFullConf } from '@main/nginx/confGenerator'
+// tests/main/nginx/confGenerator.test.ts
+import { describe, expect, it } from 'vitest'
 
 function tcpMapping(over: Partial<Mapping> = {}): Mapping {
   return {
-    id: 'm1', hostId: 'h1', name: 'MySQL 内库', enabled: 1, protocol: 'tcp',
-    listenPort: 9000, serverNames: null, listenPath: null,
-    upstreamHost: '192.168.1.10', upstreamPort: 3306,
-    tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0, extraDirectives: 'proxy_timeout 1h;',
-    healthCheckEnabled: 0, healthCheckIntervalSec: 30,
-    healthCheckTargetPath: null, healthCheckExpectedStatus: null,
-    healthStatus: 'unknown', lastCheckedAt: null, sortOrder: 0,
-    createdAt: 0, updatedAt: 0, ...over
+    id: 'm1',
+    hostId: 'h1',
+    name: 'MySQL 内库',
+    enabled: 1,
+    protocol: 'tcp',
+    listenPort: 9000,
+    serverNames: null,
+    listenPath: null,
+    upstreamHost: '192.168.1.10',
+    upstreamPort: 3306,
+    tlsCertPath: null,
+    tlsKeyPath: null,
+    redirectHttp: 0,
+    extraDirectives: 'proxy_timeout 1h;',
+    healthCheckEnabled: 0,
+    healthCheckIntervalSec: 30,
+    healthCheckTargetPath: null,
+    healthCheckExpectedStatus: null,
+    healthStatus: 'unknown',
+    lastCheckedAt: null,
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...over
   } as Mapping
 }
 
@@ -1262,8 +1291,8 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
   lines.push('# 由 nginx-jump-gui 自动生成，请勿手动编辑')
   lines.push(`# 生成时间: ${new Date().toISOString()}`)
   lines.push('worker_processes 1;')
-  lines.push('error_log ' + opts.nginxLogDir + '/error.log warn;')
-  lines.push('pid ' + opts.nginxTempDir + '/nginx.pid;')
+  lines.push(`error_log ${opts.nginxLogDir}/error.log warn;`)
+  lines.push(`pid ${opts.nginxTempDir}/nginx.pid;`)
   lines.push('')
   lines.push('events {')
   lines.push('  worker_connections 1024;')
@@ -1272,9 +1301,9 @@ export function generateFullConf(mappings: Mapping[], opts: ConfGenOptions): str
 
   if (hasHttp) {
     lines.push('http {')
-    lines.push('  access_log ' + opts.nginxLogDir + '/access.log;')
-    lines.push('  client_body_temp_path ' + opts.nginxTempDir + '/client_body;')
-    lines.push('  proxy_temp_path ' + opts.nginxTempDir + '/proxy;')
+    lines.push(`  access_log ${opts.nginxLogDir}/access.log;`)
+    lines.push(`  client_body_temp_path ${opts.nginxTempDir}/client_body;`)
+    lines.push(`  proxy_temp_path ${opts.nginxTempDir}/proxy;`)
     lines.push('  include mime.types;')
     lines.push('  # http/https server 块在 Plan 2 实现')
     lines.push('}')
@@ -1302,7 +1331,8 @@ function renderTcpServer(m: Mapping): string[] {
   out.push(`    proxy_pass ${m.upstreamHost}:${m.upstreamPort};`)
   if (m.extraDirectives && m.extraDirectives.trim()) {
     for (const line of m.extraDirectives.split('\n')) {
-      if (line.trim()) out.push('    ' + line.trim())
+      if (line.trim())
+        out.push(`    ${line.trim()}`)
     }
   }
   out.push('  }')
@@ -1406,18 +1436,18 @@ import type { EngineStatus, EngineTestResult } from '@shared/types'
 export type { EngineStatus, EngineTestResult }
 
 export interface NginxEngine {
-  start(): Promise<void>
-  stop(): Promise<void>
-  reload(): Promise<void>
-  test(): Promise<EngineTestResult>
-  status(): EngineStatus
-  writeConf(content: string): Promise<void>
-  readConf(): Promise<string>
+  start: () => Promise<void>
+  stop: () => Promise<void>
+  reload: () => Promise<void>
+  test: () => Promise<EngineTestResult>
+  status: () => EngineStatus
+  writeConf: (content: string) => Promise<void>
+  readConf: () => Promise<string>
 }
 
 export interface LocalEngineConfig {
-  nginxPath: string      // nginx.exe 路径（bundled 或用户指定）
-  confPath: string       // 主 conf 路径
+  nginxPath: string // nginx.exe 路径（bundled 或用户指定）
+  confPath: string // 主 conf 路径
   logDir: string
   tempDir: string
 }
@@ -1426,9 +1456,10 @@ export interface LocalEngineConfig {
 - [ ] **Step 4: 实现 src/main/nginx/localEngine.ts**
 
 ```typescript
-import { spawn, type ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
-import type { NginxEngine, EngineStatus, EngineTestResult, LocalEngineConfig } from './types'
+import type { ChildProcess } from 'node:child_process';
+import type { EngineStatus, EngineTestResult, LocalEngineConfig, NginxEngine } from './types'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 export class LocalNginxEngine implements NginxEngine {
   private child: ChildProcess | null = null
@@ -1450,14 +1481,18 @@ export class LocalNginxEngine implements NginxEngine {
       throw new Error(`nginx binary not found: ${this.cfg.nginxPath}`)
     }
     for (const d of [this.cfg.logDir, this.cfg.tempDir]) {
-      if (!existsSync(d)) mkdirSync(d, { recursive: true })
+      if (!existsSync(d))
+        mkdirSync(d, { recursive: true })
     }
     // nginx 启动会 daemonize（-fork），所以 spawn 返回后子进程很快退出，
     // 真正的 master 进程独立运行。我们用 -g 'daemon off;' 前台运行便于管理。
     this.child = spawn(this.cfg.nginxPath, [
-      '-c', this.cfg.confPath,
-      '-p', this.cfg.tempDir,
-      '-g', 'daemon off;'
+      '-c',
+      this.cfg.confPath,
+      '-p',
+      this.cfg.tempDir,
+      '-g',
+      'daemon off;'
     ], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
@@ -1468,7 +1503,8 @@ export class LocalNginxEngine implements NginxEngine {
     // 等待一小段时间确认进程还在（没立即崩）
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
-        if (this.child && !this.child.killed) resolve()
+        if (this.child && !this.child.killed)
+          resolve()
         else reject(new Error('nginx exited immediately after start'))
       }, 500)
       this.child!.once('exit', (code) => {
@@ -1481,12 +1517,14 @@ export class LocalNginxEngine implements NginxEngine {
   }
 
   async stop(): Promise<void> {
-    if (!this.child) return
+    if (!this.child)
+      return
     // daemon off 模式下杀子进程即停（nginx master 会带走 worker）
     this.child.kill('SIGTERM')
     await new Promise<void>((resolve) => {
       const t = setTimeout(() => {
-        if (this.child) this.child!.kill('SIGKILL')
+        if (this.child)
+          this.child!.kill('SIGKILL')
         resolve()
       }, 3000)
       const onExit = () => { clearTimeout(t); this.child = null; resolve() }
@@ -1496,22 +1534,23 @@ export class LocalNginxEngine implements NginxEngine {
 
   async reload(): Promise<void> {
     // 前台模式没有 pid 文件，reload 通过对进程发 HUP
-    if (!this.child) throw new Error('nginx not running, cannot reload')
+    if (!this.child)
+      throw new Error('nginx not running, cannot reload')
     this.child.kill('SIGHUP')
     // Windows 不支持 SIGHUP，实际 reload 在 Windows 上需调 nginx -s reload（依赖 pid 文件）
     // daemon off 模式下 Windows reload 较复杂，本 plan 先用 HUP，集成测试验证
   }
 
   async test(): Promise<EngineTestResult> {
-    const { execFile } = require('child_process')
+    const { execFile } = require('node:child_process')
     return new Promise((resolve) => {
-      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', this.cfg.tempDir],
-        (err: any, stdout: string, stderr: string) => {
-          // nginx -t 把诊断写到 stderr，即使成功
-          const output = (stdout + stderr).trim()
-          if (err) resolve({ ok: false, output })
-          else resolve({ ok: true, output })
-        })
+      execFile(this.cfg.nginxPath, ['-t', '-c', this.cfg.confPath, '-p', this.cfg.tempDir], (err: any, stdout: string, stderr: string) => {
+        // nginx -t 把诊断写到 stderr，即使成功
+        const output = (stdout + stderr).trim()
+        if (err)
+          resolve({ ok: false, output })
+        else resolve({ ok: true, output })
+      })
     })
   }
 
@@ -1520,7 +1559,8 @@ export class LocalNginxEngine implements NginxEngine {
   }
 
   async readConf(): Promise<string> {
-    if (!existsSync(this.cfg.confPath)) return ''
+    if (!existsSync(this.cfg.confPath))
+      return ''
     return readFileSync(this.cfg.confPath, 'utf-8')
   }
 }
@@ -1564,12 +1604,13 @@ git commit -m "feat(nginx): 本地 NginxEngine 子进程管理（start/stop/relo
 - [ ] **Step 1: 实现 src/main/ipc/handlers.ts**
 
 ```typescript
-import { ipcMain } from 'electron'
-import { IPC } from '@shared/types'
-import { listHosts, createHost, updateHost, deleteHost, type CreateHostInput } from '../db/hostRepo'
-import { listMappings, createMapping, updateMapping, deleteMapping } from '../db/mappingRepo'
 import type { MappingInput } from '@shared/types'
+import type { CreateHostInput } from '../db/hostRepo';
 import type { LocalNginxEngine } from '../nginx/localEngine'
+import { IPC } from '@shared/types'
+import { ipcMain } from 'electron'
+import { createHost, deleteHost, listHosts, updateHost } from '../db/hostRepo'
+import { createMapping, deleteMapping, listMappings, updateMapping } from '../db/mappingRepo'
 
 let activeEngine: LocalNginxEngine | null = null
 
@@ -1591,9 +1632,18 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.MAPPING_DELETE, (_e, id: string) => { deleteMapping(id); return true })
 
   // Engine
-  ipcMain.handle(IPC.ENGINE_START, async () => { if (activeEngine) await activeEngine.start(); return activeEngine?.status() })
-  ipcMain.handle(IPC.ENGINE_STOP, async () => { if (activeEngine) await activeEngine.stop(); return activeEngine?.status() })
-  ipcMain.handle(IPC.ENGINE_RELOAD, async () => { if (activeEngine) await activeEngine.reload(); return true })
+  ipcMain.handle(IPC.ENGINE_START, async () => {
+    if (activeEngine)
+      await activeEngine.start(); return activeEngine?.status()
+  })
+  ipcMain.handle(IPC.ENGINE_STOP, async () => {
+    if (activeEngine)
+      await activeEngine.stop(); return activeEngine?.status()
+  })
+  ipcMain.handle(IPC.ENGINE_RELOAD, async () => {
+    if (activeEngine)
+      await activeEngine.reload(); return true
+  })
   ipcMain.handle(IPC.ENGINE_TEST, async () => activeEngine ? activeEngine.test() : { ok: false, output: 'no engine' })
   ipcMain.handle(IPC.ENGINE_STATUS, () => activeEngine?.status() ?? 'unknown')
 }
@@ -1602,8 +1652,8 @@ export function registerIpcHandlers(): void {
 - [ ] **Step 2: 实现 src/preload/index.ts**
 
 ```typescript
-import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/types'
+import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   // Host
@@ -1632,15 +1682,15 @@ export type ElectronAPI = typeof api
 - [ ] **Step 3: 实现 src/main/index.ts**
 
 ```typescript
+import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
-import { join } from 'path'
-import { resolvePaths } from './paths'
-import { openDb, closeDb } from './db/connection'
-import { registerIpcHandlers, setActiveEngine } from './ipc/handlers'
-import { LocalNginxEngine } from './nginx/localEngine'
+import { closeDb, openDb } from './db/connection'
 import { getDefaultHost } from './db/hostRepo'
 import { listEnabledMappings } from './db/mappingRepo'
+import { registerIpcHandlers, setActiveEngine } from './ipc/handlers'
 import { generateFullConf } from './nginx/confGenerator'
+import { LocalNginxEngine } from './nginx/localEngine'
+import { resolvePaths } from './paths'
 
 // 关键：绿色版 - 禁用 userData 默认位置，全部用 exe 旁的 data/
 // Electron 仍会创建默认 userData 目录（存放扩展/缓存），但我们自己的数据不进那里。
@@ -1660,20 +1710,25 @@ function createWindow() {
 
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
+  }
+  else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
 async function initEngineForDefaultHost() {
   const host = getDefaultHost()
-  if (!host || host.type !== 'local') return
+  if (!host || host.type !== 'local')
+    return
   const paths = resolvePaths()
   const nginxPath = host.localConfig?.nginxPath
     || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
   const confPath = join(paths.nginxConfDir, 'nginx.conf')
   const engine = new LocalNginxEngine({
-    nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir
+    nginxPath,
+    confPath,
+    logDir: paths.nginxLogDir,
+    tempDir: paths.tempDir
   })
   // 生成初始 conf（即使没 mapping，也要有最小 conf 让 nginx 能启动）
   const mappings = listEnabledMappings(host.id)
@@ -1694,7 +1749,8 @@ app.whenReady().then(async () => {
   createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0)
+      createWindow()
   })
 })
 
@@ -1749,7 +1805,7 @@ export function getActiveEngine(): NginxEngine | null {
 
 修改 `src/main/index.ts`：删掉末尾的 hack 段落，改用：
 ```typescript
-import { setActiveEngine, getActiveEngine } from './nginx/engineRegistry'
+import { getActiveEngine, setActiveEngine } from './nginx/engineRegistry'
 // ...
 app.on('before-quit', async (e) => {
   const eng = getActiveEngine()
@@ -1766,7 +1822,8 @@ app.on('before-quit', async (e) => {
 
 `src/main/ipc/handlers.ts` 顶部改为：
 ```typescript
-import { setActiveEngine, getActiveEngine } from '../nginx/engineRegistry'
+import { getActiveEngine, setActiveEngine } from '../nginx/engineRegistry'
+
 export { setActiveEngine }
 ```
 所有 `activeEngine` 改为 `getActiveEngine()`。
@@ -1797,19 +1854,19 @@ git commit -m "feat(ipc): IPC handlers + preload bridge + main 入口 + 退出�
 
 ```typescript
 export interface ElectronAPI {
-  listHosts(): Promise<any[]>
-  createHost(input: any): Promise<any>
-  updateHost(id: string, patch: any): Promise<any>
-  deleteHost(id: string): Promise<boolean>
-  listMappings(hostId: string): Promise<any[]>
-  createMapping(input: any): Promise<any>
-  updateMapping(id: string, patch: any): Promise<any>
-  deleteMapping(id: string): Promise<boolean>
-  startEngine(): Promise<string>
-  stopEngine(): Promise<string>
-  reloadEngine(): Promise<boolean>
-  testEngine(): Promise<{ ok: boolean; output: string }>
-  engineStatus(): Promise<string>
+  listHosts: () => Promise<any[]>
+  createHost: (input: any) => Promise<any>
+  updateHost: (id: string, patch: any) => Promise<any>
+  deleteHost: (id: string) => Promise<boolean>
+  listMappings: (hostId: string) => Promise<any[]>
+  createMapping: (input: any) => Promise<any>
+  updateMapping: (id: string, patch: any) => Promise<any>
+  deleteMapping: (id: string) => Promise<boolean>
+  startEngine: () => Promise<string>
+  stopEngine: () => Promise<string>
+  reloadEngine: () => Promise<boolean>
+  testEngine: () => Promise<{ ok: boolean, output: string }>
+  engineStatus: () => Promise<string>
 }
 
 declare global {
@@ -1822,9 +1879,9 @@ export const api: ElectronAPI = window.electronAPI
 - [ ] **Step 2: 创建 src/renderer/stores/hosts.ts**
 
 ```typescript
+import { api } from '@renderer/api/ipc'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@renderer/api/ipc'
 
 export interface Host {
   id: string
@@ -1852,9 +1909,9 @@ export const useHostsStore = defineStore('hosts', () => {
 - [ ] **Step 3: 创建 src/renderer/stores/mappings.ts**
 
 ```typescript
+import { api } from '@renderer/api/ipc'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@renderer/api/ipc'
 
 export interface Mapping {
   id: string
@@ -1875,7 +1932,8 @@ export const useMappingsStore = defineStore('mappings', () => {
     loading.value = true
     try {
       list.value = await api.listMappings(hostId)
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -1901,8 +1959,9 @@ export const useMappingsStore = defineStore('mappings', () => {
 ```vue
 <script setup lang="ts">
 import { useMappingsStore } from '@renderer/stores/mappings'
+
+const emit = defineEmits<{ (e: 'new'): void, (e: 'edit', id: string): void }>()
 const store = useMappingsStore()
-const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
 </script>
 
 <template>
@@ -1911,15 +1970,23 @@ const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
       还没有映射规则，点下方按钮新建一条 TCP 转发试试
     </div>
     <div v-for="m in store.list" :key="m.id" class="card" @click="emit('edit', m.id)">
-      <span class="dot" :class="m.healthStatus"></span>
+      <span class="dot" :class="m.healthStatus" />
       <div class="info">
-        <div class="name">{{ m.name }}</div>
-        <div class="meta">{{ m.protocol.toUpperCase() }} · {{ m.listenPort }} → {{ m.upstreamHost }}:{{ m.upstreamPort }}</div>
+        <div class="name">
+          {{ m.name }}
+        </div>
+        <div class="meta">
+          {{ m.protocol.toUpperCase() }} · {{ m.listenPort }} → {{ m.upstreamHost }}:{{ m.upstreamPort }}
+        </div>
       </div>
-      <input type="checkbox" :checked="m.enabled === 1"
-        @click.stop @change="store.toggle(m.id, m.enabled === 1 ? 0 : 1)" />
+      <input
+        type="checkbox" :checked="m.enabled === 1"
+        @click.stop @change="store.toggle(m.id, m.enabled === 1 ? 0 : 1)"
+      >
     </div>
-    <button class="new-btn" @click="emit('new')">+ 新建映射</button>
+    <button class="new-btn" @click="emit('new')">
+      + 新建映射
+    </button>
   </div>
 </template>
 
@@ -1944,11 +2011,11 @@ const emit = defineEmits<{ (e: 'new'): void; (e: 'edit', id: string): void }>()
 
 ```vue
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { api } from '@renderer/api/ipc'
+import { ref, watch } from 'vue'
 
-const props = defineProps<{ hostId: string; mappingId?: string }>()
-const emit = defineEmits<{ (e: 'saved'): void; (e: 'cancel'): void }>()
+const props = defineProps<{ hostId: string, mappingId?: string }>()
+const emit = defineEmits<{ (e: 'saved'): void, (e: 'cancel'): void }>()
 
 const form = ref({
   name: '',
@@ -1964,7 +2031,8 @@ const saving = ref(false)
 const error = ref('')
 
 async function loadExisting() {
-  if (!props.mappingId) return
+  if (!props.mappingId)
+    return
   const list = await api.listMappings(props.hostId)
   const m = list.find((x: any) => x.id === props.mappingId)
   if (m) {
@@ -1994,20 +2062,28 @@ async function save() {
       enabled: 1,
       protocol: form.value.protocol,
       listenPort: form.value.listenPort,
-      serverNames: null, listenPath: null,
+      serverNames: null,
+      listenPath: null,
       upstreamHost: form.value.upstreamHost,
       upstreamPort: form.value.upstreamPort,
-      tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0,
+      tlsCertPath: null,
+      tlsKeyPath: null,
+      redirectHttp: 0,
       extraDirectives: form.value.extraDirectives,
-      healthCheckEnabled: 0, healthCheckIntervalSec: 30,
-      healthCheckTargetPath: null, healthCheckExpectedStatus: null,
+      healthCheckEnabled: 0,
+      healthCheckIntervalSec: 30,
+      healthCheckTargetPath: null,
+      healthCheckExpectedStatus: null,
     }
-    if (props.mappingId) await api.updateMapping(props.mappingId, input)
+    if (props.mappingId)
+      await api.updateMapping(props.mappingId, input)
     else await api.createMapping(input)
     emit('saved')
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.message
-  } finally {
+  }
+  finally {
     saving.value = false
   }
 }
@@ -2017,21 +2093,27 @@ async function save() {
   <div class="form-overlay" @click.self="emit('cancel')">
     <div class="form-card">
       <h3>{{ mappingId ? '编辑映射' : '新建映射（TCP）' }}</h3>
-      <label>名称<input v-model="form.name" placeholder="如：MySQL 内库" /></label>
+      <label>名称<input v-model="form.name" placeholder="如：MySQL 内库"></label>
       <label>协议
         <select v-model="form.protocol">
           <option value="tcp">TCP</option>
         </select>
         <small>UDP/HTTP/HTTPS 将在后续版本支持</small>
       </label>
-      <label>监听端口<input v-model.number="form.listenPort" type="number" placeholder="9000" /></label>
-      <label>目标主机<input v-model="form.upstreamHost" placeholder="192.168.1.10" /></label>
-      <label>目标端口<input v-model.number="form.upstreamPort" type="number" placeholder="3306" /></label>
-      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2"></textarea></label>
-      <div v-if="error" class="error">{{ error }}</div>
+      <label>监听端口<input v-model.number="form.listenPort" type="number" placeholder="9000"></label>
+      <label>目标主机<input v-model="form.upstreamHost" placeholder="192.168.1.10"></label>
+      <label>目标端口<input v-model.number="form.upstreamPort" type="number" placeholder="3306"></label>
+      <label>附加指令（高级）<textarea v-model="form.extraDirectives" rows="2" /></label>
+      <div v-if="error" class="error">
+        {{ error }}
+      </div>
       <div class="actions">
-        <button class="ghost" @click="emit('cancel')">取消</button>
-        <button :disabled="saving" @click="save">保存</button>
+        <button class="ghost" @click="emit('cancel')">
+          取消
+        </button>
+        <button :disabled="saving" @click="save">
+          保存
+        </button>
       </div>
     </div>
   </div>
@@ -2058,23 +2140,30 @@ button:disabled { opacity: 0.5; }
 
 ```vue
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
 import { api } from '@renderer/api/ipc'
+import { onMounted, ref } from 'vue'
 
 const status = ref('unknown')
 const busy = ref(false)
 
 async function refresh() { status.value = await api.engineStatus() }
-async function start() { busy.value = true; try { status.value = await api.startEngine() } finally { busy.value = false } }
-async function stop() { busy.value = true; try { status.value = await api.stopEngine() } finally { busy.value = false } }
+async function start() {
+  busy.value = true; try { status.value = await api.startEngine() }
+  finally { busy.value = false }
+}
+async function stop() {
+  busy.value = true; try { status.value = await api.stopEngine() }
+  finally { busy.value = false }
+}
 async function reload() {
   busy.value = true
   try {
     const r = await api.testEngine()
-    if (!r.ok) { alert('配置校验失败:\n' + r.output); return }
+    if (!r.ok) { alert(`配置校验失败:\n${r.output}`); return }
     await api.reloadEngine()
     status.value = await api.engineStatus()
-  } finally { busy.value = false }
+  }
+  finally { busy.value = false }
 }
 
 onMounted(refresh)
@@ -2083,11 +2172,17 @@ defineExpose({ refresh })
 
 <template>
   <div class="engine-ctrl">
-    <span class="status-dot" :class="status"></span>
+    <span class="status-dot" :class="status" />
     <span class="status-text">{{ status }}</span>
-    <button :disabled="busy || status === 'running'" @click="start">启动</button>
-    <button :disabled="busy || status !== 'running'" @click="reload">应用</button>
-    <button :disabled="busy || status !== 'running'" @click="stop">停止</button>
+    <button :disabled="busy || status === 'running'" @click="start">
+      启动
+    </button>
+    <button :disabled="busy || status !== 'running'" @click="reload">
+      应用
+    </button>
+    <button :disabled="busy || status !== 'running'" @click="stop">
+      停止
+    </button>
   </div>
 </template>
 
@@ -2108,12 +2203,12 @@ button:disabled { opacity: 0.4; }
 
 ```vue
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import EngineControl from '@renderer/components/EngineControl.vue'
+import MappingForm from '@renderer/components/MappingForm.vue'
+import MappingList from '@renderer/components/MappingList.vue'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
-import MappingList from '@renderer/components/MappingList.vue'
-import MappingForm from '@renderer/components/MappingForm.vue'
-import EngineControl from '@renderer/components/EngineControl.vue'
+import { onMounted, ref, watch } from 'vue'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
@@ -2123,20 +2218,23 @@ const engineRef = ref()
 
 async function reloadAll() {
   await hosts.load()
-  if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
+  if (hosts.currentHostId)
+    await mappings.load(hosts.currentHostId)
 }
 
 onMounted(reloadAll)
 
 watch(() => hosts.currentHostId, async (id) => {
-  if (id) await mappings.load(id)
+  if (id)
+    await mappings.load(id)
 })
 
 function openNew() { editingId.value = undefined; showForm.value = true }
 function openEdit(id: string) { editingId.value = id; showForm.value = true }
 async function onSaved() {
   showForm.value = false
-  if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
+  if (hosts.currentHostId)
+    await mappings.load(hosts.currentHostId)
 }
 </script>
 
@@ -2145,18 +2243,22 @@ async function onSaved() {
     <header class="topbar">
       <h1>跳板机</h1>
       <select v-model="hosts.currentHostId" @change="mappings.load(hosts.currentHostId!)">
-        <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">{{ h.name }}</option>
+        <option v-for="h in hosts.hosts" :key="h.id" :value="h.id">
+          {{ h.name }}
+        </option>
       </select>
       <EngineControl ref="engineRef" />
     </header>
     <main>
       <MappingList @new="openNew" @edit="openEdit" />
     </main>
-    <MappingForm v-if="showForm"
+    <MappingForm
+      v-if="showForm"
       :host-id="hosts.currentHostId!"
       :mapping-id="editingId"
       @saved="onSaved"
-      @cancel="showForm = false" />
+      @cancel="showForm = false"
+    />
   </div>
 </template>
 
@@ -2206,18 +2308,18 @@ resources/icon.png          （放一个临时图标）
 ```typescript
 import { listHosts } from './db/hostRepo'
 // ...
-  // 首次启动：如果没有 host，创建默认 local host
-  if (listHosts().length === 0) {
-    const { createHost, setDefaultHost } = require('./db/hostRepo')
-    const h = createHost({
-      name: '本机网关',
-      type: 'local',
-      isDefault: 1,
-      localConfig: { nginxPath: '', confDir: '', logDir: '' },
-      remoteConfig: null
-    })
-    setDefaultHost(h.id)
-  }
+// 首次启动：如果没有 host，创建默认 local host
+if (listHosts().length === 0) {
+  const { createHost, setDefaultHost } = require('./db/hostRepo')
+  const h = createHost({
+    name: '本机网关',
+    type: 'local',
+    isDefault: 1,
+    localConfig: { nginxPath: '', confDir: '', logDir: '' },
+    remoteConfig: null
+  })
+  setDefaultHost(h.id)
+}
 ```
 
 - [ ] **Step 3: 类型检查**

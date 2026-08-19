@@ -56,8 +56,8 @@ Run: `npm install ssh2 && npm install -D @types/ssh2`
 safeStorage 是 Electron API，测试环境（vitest 跑在 node，无 Electron）不可用。所以 crypto.ts 要做环境检测：有 safeStorage 用它，否则用 fallback（node crypto 的简单对称加密，仅开发/测试用，明文警告）。
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { encryptPassword, decryptPassword, isEncryptionAvailable } from '@main/crypto'
+import { decryptPassword, encryptPassword, isEncryptionAvailable } from '@main/crypto'
+import { describe, expect, it } from 'vitest'
 
 describe('crypto', () => {
   it('isEncryptionAvailable 在测试环境返回布尔值', () => {
@@ -95,7 +95,7 @@ Expected: FAIL.
 - [ ] **Step 4: 实现 `src/main/crypto.ts`**
 
 ```typescript
-import { randomBytes, createCipheriv, createDecipheriv } from 'crypto'
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
 /**
  * 密码加密封装。
@@ -105,7 +105,7 @@ import { randomBytes, createCipheriv, createDecipheriv } from 'crypto'
  * 真正安全性依赖生产环境的 safeStorage。
  */
 
-const FALLBACK_KEY = randomBytes(32)  // 进程级随机 key（重启失效，仅测试可用）
+const FALLBACK_KEY = randomBytes(32) // 进程级随机 key（重启失效，仅测试可用）
 
 function trySafeStorage(): any | null {
   try {
@@ -114,7 +114,8 @@ function trySafeStorage(): any | null {
     if (electron?.safeStorage && electron.safeStorage.isEncryptionAvailable()) {
       return electron.safeStorage
     }
-  } catch {
+  }
+  catch {
     // 无 electron
   }
   return null
@@ -129,20 +130,21 @@ export function encryptPassword(plain: string): string {
   if (safe) {
     // 生产：safeStorage 加密，base64 存储
     const buf = safe.encryptString(plain)
-    return 'ss1:' + buf.toString('base64')
+    return `ss1:${buf.toString('base64')}`
   }
   // fallback：AES-256-GCM
   const iv = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', FALLBACK_KEY, iv)
   const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
-  return 'fb1:' + Buffer.concat([iv, tag, enc]).toString('base64')
+  return `fb1:${Buffer.concat([iv, tag, enc]).toString('base64')}`
 }
 
 export function decryptPassword(stored: string): string {
   const safe = trySafeStorage()
   if (stored.startsWith('ss1:')) {
-    if (!safe) throw new Error('密码用 safeStorage 加密，但当前环境不可用')
+    if (!safe)
+      throw new Error('密码用 safeStorage 加密，但当前环境不可用')
     const buf = Buffer.from(stored.slice(4), 'base64')
     return safe.decryptString(buf)
   }
@@ -189,7 +191,9 @@ git commit -m "feat(crypto): ssh2 依赖 + safeStorage 密码加密封装（含�
 SSH 真实连接需要远程服务器，单测里 mock ssh2。测试聚焦"接口形状 + 调用参数正确"，不测真实连接。
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest'
+import { SshClient } from '@main/ssh/client'
+
+import { describe, expect, it, vi } from 'vitest'
 
 // mock ssh2
 vi.mock('ssh2', () => {
@@ -198,7 +202,8 @@ vi.mock('ssh2', () => {
       const handlers: Record<string, Function[]> = {}
       return {
         on(event: string, cb: Function) {
-          if (!handlers[event]) handlers[event] = []
+          if (!handlers[event])
+            handlers[event] = []
           handlers[event].push(cb)
           return this
         },
@@ -215,19 +220,25 @@ vi.mock('ssh2', () => {
   }
 })
 
-import { SshClient } from '@main/ssh/client'
-
 describe('SshClient', () => {
   it('构造时不连接（懒连接）', () => {
     const client = new SshClient({
-      host: '1.1.1.1', port: 22, username: 'root', password: 'pwd', privateKey: undefined
+      host: '1.1.1.1',
+      port: 22,
+      username: 'root',
+      password: 'pwd',
+      privateKey: undefined
     })
     expect(client).toBeTruthy()
   })
 
   it('exec 返回 Promise<{stdout, stderr, code}>', async () => {
     const client = new SshClient({
-      host: '1.1.1.1', port: 22, username: 'root', password: 'pwd', privateKey: undefined
+      host: '1.1.1.1',
+      port: 22,
+      username: 'root',
+      password: 'pwd',
+      privateKey: undefined
     })
     // 这个测试验证接口形状；真实 exec 需要连接，这里只确认返回 Promise
     // 真正的 exec 逻辑集成测试在 Task 8 手动验证
@@ -249,8 +260,8 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/ssh/client.ts`**
 
 ```typescript
-import { Client } from 'ssh2'
 import type { ConnectConfig } from 'ssh2'
+import { Client } from 'ssh2'
 
 export interface SshConfig {
   host: string
@@ -291,8 +302,10 @@ export class SshClient {
 
   /** 建立连接（懒连接 + 复用） */
   async connect(): Promise<void> {
-    if (this.connected) return
-    if (this.connecting) return this.connecting
+    if (this.connected)
+      return
+    if (this.connecting)
+      return this.connecting
     this.connecting = new Promise<void>((resolve, reject) => {
       this.client.once('ready', () => {
         this.connected = true
@@ -392,8 +405,8 @@ git commit -m "feat(ssh): SshClient 封装 ssh2（懒连接/exec/sftp 读写）"
 - [ ] **Step 1: 写失败测试 `tests/main/nginx/remoteEngine.test.ts`**
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest'
 import { RemoteNginxEngine } from '@main/nginx/remoteEngine'
+import { describe, expect, it, vi } from 'vitest'
 
 // mock SshClient
 vi.mock('@main/ssh/client', () => {
@@ -416,9 +429,14 @@ vi.mock('@main/ssh/client', () => {
 describe('RemoteNginxEngine', () => {
   function makeEngine() {
     return new RemoteNginxEngine({
-      host: '1.1.1.1', port: 22, username: 'root', password: 'pwd',
-      nginxPath: '/usr/sbin/nginx', confPath: '/etc/nginx/nginx.conf',
-      reloadCmd: 'nginx -s reload', testCmd: 'nginx -t'
+      host: '1.1.1.1',
+      port: 22,
+      username: 'root',
+      password: 'pwd',
+      nginxPath: '/usr/sbin/nginx',
+      confPath: '/etc/nginx/nginx.conf',
+      reloadCmd: 'nginx -s reload',
+      testCmd: 'nginx -t'
     })
   }
 
@@ -492,16 +510,16 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/nginx/remoteEngine.ts`**
 
 ```typescript
-import { SshClient } from '../ssh/client'
-import { decryptPassword } from '../crypto'
-import type { NginxEngine } from './types'
 import type { EngineStatus, EngineTestResult } from '@shared/types'
+import type { NginxEngine } from './types'
+import { decryptPassword } from '../crypto'
+import { SshClient } from '../ssh/client'
 
 export interface RemoteEngineConfig {
   host: string
   port: number
   username: string
-  passwordEncrypted?: string | null  // 加密后的密码
+  passwordEncrypted?: string | null // 加密后的密码
   privateKeyPath?: string | null
   nginxPath: string
   confPath: string
@@ -537,10 +555,12 @@ export class RemoteNginxEngine implements NginxEngine {
       const out = (r.stdout + r.stderr).trim()
       if (out.includes('active') || out.includes('running')) {
         this.cachedStatus = 'running'
-      } else {
+      }
+      else {
         this.cachedStatus = 'stopped'
       }
-    } catch {
+    }
+    catch {
       this.cachedStatus = 'unknown'
     }
     return this.cachedStatus
@@ -631,7 +651,8 @@ let current: NginxEngine | null = null
 export function setActiveEngine(eng: NginxEngine | null): void {
   // 切换 engine 时，关闭旧 engine 的资源（SSH 连接等）
   if (current?.close) {
-    try { current.close() } catch { /* 忽略关闭错误 */ }
+    try { current.close() }
+    catch { /* 忽略关闭错误 */ }
   }
   current = eng
 }
@@ -643,7 +664,8 @@ export function getActiveEngine(): NginxEngine | null {
 /** 刷新 active engine 的状态（remote 用 SSH 探测，local 是同步的 no-op） */
 export async function refreshActiveStatus(): Promise<void> {
   const eng = current
-  if (!eng) return
+  if (!eng)
+    return
   // RemoteNginxEngine 有 refreshStatus，LocalNginxEngine 没有
   const anyEng = eng as any
   if (typeof anyEng.refreshStatus === 'function') {
@@ -659,7 +681,8 @@ export async function refreshActiveStatus(): Promise<void> {
 ```typescript
 async function initEngineForDefaultHost() {
   const host = getDefaultHost()
-  if (!host) return
+  if (!host)
+    return
   const paths = resolvePaths()
 
   let engine
@@ -668,7 +691,10 @@ async function initEngineForDefaultHost() {
       || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
     const confPath = join(paths.nginxConfDir, 'nginx.conf')
     engine = new LocalNginxEngine({
-      nginxPath, confPath, logDir: paths.nginxLogDir, tempDir: paths.tempDir
+      nginxPath,
+      confPath,
+      logDir: paths.nginxLogDir,
+      tempDir: paths.tempDir
     })
     // local：生成初始 conf
     const mappings = listEnabledMappings(host.id)
@@ -677,7 +703,8 @@ async function initEngineForDefaultHost() {
       nginxTempDir: paths.tempDir
     })
     await engine.writeConf(conf)
-  } else if (host.type === 'remote' && host.remoteConfig) {
+  }
+  else if (host.type === 'remote' && host.remoteConfig) {
     // remote：不自动写 conf（远程 conf 由远程自己维护），只建连接
     engine = new RemoteNginxEngine({
       host: host.remoteConfig.host,
@@ -692,7 +719,8 @@ async function initEngineForDefaultHost() {
     })
     // 异步刷新状态（不 await，不阻塞启动）
     engine.refreshStatus?.().catch(() => {})
-  } else {
+  }
+  else {
     return
   }
   setActiveEngine(engine)
@@ -738,37 +766,38 @@ git commit -m "feat(engine): engineRegistry 切换时关闭旧 engine + initEngi
 
 import：
 ```typescript
-import { SshClient } from '../ssh/client'
 import { decryptPassword } from '../crypto'
 import { refreshActiveStatus } from '../nginx/engineRegistry'
+import { SshClient } from '../ssh/client'
 ```
 
 加 handler：
 
 ```typescript
-  // Host: 测试 SSH 连接（不创建持久 engine，只验证凭据）
-  ipcMain.handle(IPC.HOST_TEST_CONNECTION, async (_e, remoteConfig: any) => {
-    try {
-      const password = remoteConfig.passwordEncrypted ? decryptPassword(remoteConfig.passwordEncrypted) : undefined
-      const client = new SshClient({
-        host: remoteConfig.host,
-        port: remoteConfig.port,
-        username: remoteConfig.username,
-        password
-      })
-      const r = await client.exec('echo ok')
-      client.close()
-      return { ok: r.code === 0, output: r.stdout + r.stderr }
-    } catch (e: any) {
-      return { ok: false, output: e?.message ?? String(e) }
-    }
-  })
+// Host: 测试 SSH 连接（不创建持久 engine，只验证凭据）
+ipcMain.handle(IPC.HOST_TEST_CONNECTION, async (_e, remoteConfig: any) => {
+  try {
+    const password = remoteConfig.passwordEncrypted ? decryptPassword(remoteConfig.passwordEncrypted) : undefined
+    const client = new SshClient({
+      host: remoteConfig.host,
+      port: remoteConfig.port,
+      username: remoteConfig.username,
+      password
+    })
+    const r = await client.exec('echo ok')
+    client.close()
+    return { ok: r.code === 0, output: r.stdout + r.stderr }
+  }
+  catch (e: any) {
+    return { ok: false, output: e?.message ?? String(e) }
+  }
+})
 
-  // Engine: 刷新 active engine 状态（remote 用 SSH 探测）
-  ipcMain.handle(IPC.ENGINE_REFRESH_STATUS, async () => {
-    await refreshActiveStatus()
-    return getActiveEngine()?.status() ?? 'unknown'
-  })
+// Engine: 刷新 active engine 状态（remote 用 SSH 探测）
+ipcMain.handle(IPC.ENGINE_REFRESH_STATUS, async () => {
+  await refreshActiveStatus()
+  return getActiveEngine()?.status() ?? 'unknown'
+})
 ```
 
 - [ ] **Step 3: preload + renderer api 加桥接**
@@ -836,9 +865,9 @@ return { hosts, currentHostId, load, setCurrent, create, update, remove, testCon
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue'
+import { encryptPassword } from '@renderer/api/ipc' // 注意：加密在 main 侧，renderer 传明文密码，main 加密存储
 import { useHostsStore } from '@renderer/stores/hosts'
-import { encryptPassword } from '@renderer/api/ipc'  // 注意：加密在 main 侧，renderer 传明文密码，main 加密存储
+import { ref } from 'vue'
 
 const store = useHostsStore()
 const showForm = ref(false)
@@ -850,14 +879,14 @@ const form = ref({
   host: '',
   port: 22,
   username: 'root',
-  password: '',  // 明文，保存时 main 侧加密
+  password: '', // 明文，保存时 main 侧加密
   nginxPath: '/usr/sbin/nginx',
   confPath: '/etc/nginx/nginx.conf',
   reloadCmd: 'nginx -s reload',
   testCmd: 'nginx -t'
 })
 const testing = ref(false)
-const testResult = ref<{ ok: boolean; output: string } | null>(null)
+const testResult = ref<{ ok: boolean, output: string } | null>(null)
 const error = ref('')
 
 function openNew() {
@@ -875,7 +904,7 @@ function openEdit(h: any) {
     host: h.remoteConfig?.host ?? '',
     port: h.remoteConfig?.port ?? 22,
     username: h.remoteConfig?.username ?? 'root',
-    password: '',  // 不回显密码
+    password: '', // 不回显密码
     nginxPath: h.remoteConfig?.nginxPath ?? '/usr/sbin/nginx',
     confPath: h.remoteConfig?.confPath ?? '/etc/nginx/nginx.conf',
     reloadCmd: h.remoteConfig?.reloadCmd ?? 'nginx -s reload',
@@ -894,9 +923,10 @@ async function testConn() {
       host: form.value.host,
       port: form.value.port,
       username: form.value.username,
-      passwordEncrypted: form.value.password ? 'PLAIN:' + form.value.password : null  // 约定：PLAIN: 前缀表示明文，main 侧识别
+      passwordEncrypted: form.value.password ? `PLAIN:${form.value.password}` : null // 约定：PLAIN: 前缀表示明文，main 侧识别
     })
-  } finally {
+  }
+  finally {
     testing.value = false
   }
 }
@@ -914,30 +944,35 @@ async function save() {
     type: form.value.type,
     isDefault: store.hosts.length === 0 ? 1 : 0,
     localConfig: form.value.type === 'local' ? { nginxPath: '', confDir: '', logDir: '' } : null,
-    remoteConfig: form.value.type === 'remote' ? {
-      host: form.value.host,
-      port: form.value.port,
-      username: form.value.username,
-      authType: 'password' as const,
-      passwordEncrypted: form.value.password ? 'PLAIN:' + form.value.password : null,
-      keyPath: null,
-      nginxPath: form.value.nginxPath,
-      confPath: form.value.confPath,
-      reloadCmd: form.value.reloadCmd,
-      testCmd: form.value.testCmd
-    } : null
+    remoteConfig: form.value.type === 'remote'
+      ? {
+          host: form.value.host,
+          port: form.value.port,
+          username: form.value.username,
+          authType: 'password' as const,
+          passwordEncrypted: form.value.password ? `PLAIN:${form.value.password}` : null,
+          keyPath: null,
+          nginxPath: form.value.nginxPath,
+          confPath: form.value.confPath,
+          reloadCmd: form.value.reloadCmd,
+          testCmd: form.value.testCmd
+        }
+      : null
   }
   try {
-    if (editingId.value) await store.update(editingId.value, input)
+    if (editingId.value)
+      await store.update(editingId.value, input)
     else await store.create(input)
     showForm.value = false
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.message
   }
 }
 
 async function removeHost(id: string) {
-  if (!confirm('确定删除这个主机？')) return
+  if (!confirm('确定删除这个主机？'))
+    return
   await store.remove(id)
 }
 
@@ -955,19 +990,33 @@ async function setDefault(id: string) {
   <div class="host-manager">
     <div class="toolbar">
       <h3>主机管理</h3>
-      <button class="btn btn-primary" @click="openNew">+ 添加主机</button>
+      <button class="btn btn-primary" @click="openNew">
+        + 添加主机
+      </button>
     </div>
     <div class="host-list">
       <div v-for="h in store.hosts" :key="h.id" class="host-item glass-card">
         <div class="info">
-          <div class="name">{{ h.name }} <span class="badge">{{ h.type }}</span></div>
-          <div v-if="h.type === 'remote'" class="meta">{{ h.remoteConfig?.host }}:{{ h.remoteConfig?.port }} · {{ h.remoteConfig?.username }}</div>
-          <div v-else class="meta">本机 nginx</div>
+          <div class="name">
+            {{ h.name }} <span class="badge">{{ h.type }}</span>
+          </div>
+          <div v-if="h.type === 'remote'" class="meta">
+            {{ h.remoteConfig?.host }}:{{ h.remoteConfig?.port }} · {{ h.remoteConfig?.username }}
+          </div>
+          <div v-else class="meta">
+            本机 nginx
+          </div>
         </div>
         <div class="actions">
-          <button class="btn btn-ghost" @click="store.setCurrent(h.id)">切换</button>
-          <button class="btn btn-ghost" @click="openEdit(h)">编辑</button>
-          <button class="btn btn-ghost" @click="removeHost(h.id)">删除</button>
+          <button class="btn btn-ghost" @click="store.setCurrent(h.id)">
+            切换
+          </button>
+          <button class="btn btn-ghost" @click="openEdit(h)">
+            编辑
+          </button>
+          <button class="btn btn-ghost" @click="removeHost(h.id)">
+            删除
+          </button>
         </div>
       </div>
     </div>
@@ -975,7 +1024,7 @@ async function setDefault(id: string) {
     <div v-if="showForm" class="form-overlay" @click.self="showForm = false">
       <div class="form-card glass-card">
         <h3>{{ editingId ? '编辑主机' : '添加主机' }}</h3>
-        <label>名称<input v-model="form.name" class="glass-input" placeholder="如：生产网关" /></label>
+        <label>名称<input v-model="form.name" class="glass-input" placeholder="如：生产网关"></label>
         <label>类型
           <select v-model="form.type" class="glass-input">
             <option value="local">本机</option>
@@ -983,23 +1032,31 @@ async function setDefault(id: string) {
           </select>
         </label>
         <template v-if="form.type === 'remote'">
-          <label>主机地址<input v-model="form.host" class="glass-input" placeholder="192.168.1.100" /></label>
-          <label>SSH 端口<input v-model.number="form.port" type="number" class="glass-input" /></label>
-          <label>用户名<input v-model="form.username" class="glass-input" /></label>
-          <label>密码（留空则不修改）<input v-model="form.password" type="password" class="glass-input" placeholder="******" /></label>
-          <label>nginx 路径<input v-model="form.nginxPath" class="glass-input" /></label>
-          <label>conf 路径<input v-model="form.confPath" class="glass-input" /></label>
-          <label>reload 命令<input v-model="form.reloadCmd" class="glass-input" /></label>
-          <label>test 命令<input v-model="form.testCmd" class="glass-input" /></label>
-          <button class="btn btn-ghost" :disabled="testing" @click="testConn">{{ testing ? '测试中...' : '测试连接' }}</button>
+          <label>主机地址<input v-model="form.host" class="glass-input" placeholder="192.168.1.100"></label>
+          <label>SSH 端口<input v-model.number="form.port" type="number" class="glass-input"></label>
+          <label>用户名<input v-model="form.username" class="glass-input"></label>
+          <label>密码（留空则不修改）<input v-model="form.password" type="password" class="glass-input" placeholder="******"></label>
+          <label>nginx 路径<input v-model="form.nginxPath" class="glass-input"></label>
+          <label>conf 路径<input v-model="form.confPath" class="glass-input"></label>
+          <label>reload 命令<input v-model="form.reloadCmd" class="glass-input"></label>
+          <label>test 命令<input v-model="form.testCmd" class="glass-input"></label>
+          <button class="btn btn-ghost" :disabled="testing" @click="testConn">
+            {{ testing ? '测试中...' : '测试连接' }}
+          </button>
           <div v-if="testResult" class="test-result" :class="{ ok: testResult.ok }">
-            {{ testResult.ok ? '✓ 连接成功' : '✗ ' + testResult.output }}
+            {{ testResult.ok ? '✓ 连接成功' : `✗ ${testResult.output}` }}
           </div>
         </template>
-        <div v-if="error" class="error">{{ error }}</div>
+        <div v-if="error" class="error">
+          {{ error }}
+        </div>
         <div class="form-actions">
-          <button class="btn btn-ghost" @click="showForm = false">取消</button>
-          <button class="btn btn-primary" @click="save">保存</button>
+          <button class="btn btn-ghost" @click="showForm = false">
+            取消
+          </button>
+          <button class="btn btn-primary" @click="save">
+            保存
+          </button>
         </div>
       </div>
     </div>

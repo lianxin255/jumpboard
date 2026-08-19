@@ -127,12 +127,12 @@ git commit -m "feat(types): 加 LogEntry/ConfigSnapshot 类型 + 日志/快照/�
 - [ ] **Step 1: 写失败测试 `tests/main/db/logRepo.test.ts`**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
 import { addLog, listLogs, listLogsByLevel, trimLogs } from '@main/db/logRepo'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('logRepo', () => {
   let dbPath: string
@@ -145,7 +145,8 @@ describe('logRepo', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('addLog 写入并返回 LogEntry', () => {
@@ -161,11 +162,11 @@ describe('logRepo', () => {
     addLog({ hostId: 'h2', level: 'info', source: 'app', message: 'c' })
     const list = listLogs('h1', 100)
     expect(list).toHaveLength(2)
-    expect(list[0].message).toBe('b')  // 倒序，最新的在前
+    expect(list[0].message).toBe('b') // 倒序，最新的在前
   })
 
   it('listLogs limit 生效', () => {
-    for (let i = 0; i < 10; i++) addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm' + i })
+    for (let i = 0; i < 10; i++) addLog({ hostId: 'h1', level: 'info', source: 'app', message: `m${i}` })
     expect(listLogs('h1', 5)).toHaveLength(5)
   })
 
@@ -178,7 +179,7 @@ describe('logRepo', () => {
   })
 
   it('trimLogs 保留最近 N 条', () => {
-    for (let i = 0; i < 10; i++) addLog({ hostId: 'h1', level: 'info', source: 'app', message: 'm' + i })
+    for (let i = 0; i < 10; i++) addLog({ hostId: 'h1', level: 'info', source: 'app', message: `m${i}` })
     const removed = trimLogs(5)
     expect(removed).toBe(5)
     expect(listLogs('h1', 100)).toHaveLength(5)
@@ -200,9 +201,9 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/db/logRepo.ts`**
 
 ```typescript
-import { randomUUID } from 'crypto'
-import { getDb } from './connection'
 import type { LogEntry, LogLevel, LogSource } from '@shared/types'
+import { randomUUID } from 'node:crypto'
+import { getDb } from './connection'
 
 interface LogRow {
   id: string
@@ -224,12 +225,11 @@ function rowToLog(r: LogRow): LogEntry {
   }
 }
 
-export function addLog(input: { hostId: string | null; level: LogLevel; source: LogSource; message: string }): LogEntry {
+export function addLog(input: { hostId: string | null, level: LogLevel, source: LogSource, message: string }): LogEntry {
   const id = randomUUID()
   const timestamp = Date.now()
   getDb().prepare(`INSERT INTO app_logs (id, host_id, level, source, message, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(id, input.hostId, input.level, input.source, input.message, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)`).run(id, input.hostId, input.level, input.source, input.message, timestamp)
   return { id, ...input, timestamp }
 }
 
@@ -266,8 +266,8 @@ export function trimLogs(keepCount: number): number {
 - [ ] **Step 4: 实现 `src/main/services/logger.ts`（便捷封装）**
 
 ```typescript
-import { addLog, trimLogs } from '../db/logRepo'
 import type { LogLevel, LogSource } from '@shared/types'
+import { addLog, trimLogs } from '../db/logRepo'
 
 const MAX_LOGS = 10000
 
@@ -275,7 +275,8 @@ const MAX_LOGS = 10000
 export function log(hostId: string | null, level: LogLevel, source: LogSource, message: string): void {
   addLog({ hostId, level, source, message })
   // 简易裁剪：每次写都检查太频繁，改成概率性裁剪（每 100 条检查一次）
-  if (Math.random() < 0.01) trimLogs(MAX_LOGS)
+  if (Math.random() < 0.01)
+    trimLogs(MAX_LOGS)
 }
 
 export const logger = {
@@ -313,13 +314,13 @@ git commit -m "feat(log): logRepo CRUD + 裁剪 + logger 便捷封装"
 - [ ] **Step 1: 写失败测试 `tests/main/db/snapshotRepo.test.ts`**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
 import { createHost } from '@main/db/hostRepo'
-import { createSnapshot, listSnapshots, getSnapshot, trimSnapshots } from '@main/db/snapshotRepo'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { createSnapshot, getSnapshot, listSnapshots, trimSnapshots } from '@main/db/snapshotRepo'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('snapshotRepo', () => {
   let dbPath: string
@@ -334,7 +335,8 @@ describe('snapshotRepo', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('createSnapshot 写入并返回', () => {
@@ -349,7 +351,7 @@ describe('snapshotRepo', () => {
     createSnapshot({ hostId, content: 'v2', reason: 'r2' })
     const list = listSnapshots(hostId, 100)
     expect(list).toHaveLength(2)
-    expect(list[0].content).toBe('v2')  // 最新在前
+    expect(list[0].content).toBe('v2') // 最新在前
   })
 
   it('getSnapshot 按 id', () => {
@@ -358,7 +360,7 @@ describe('snapshotRepo', () => {
   })
 
   it('trimSnapshots 每 host 保留 N 条', () => {
-    for (let i = 0; i < 10; i++) createSnapshot({ hostId, content: 'v' + i, reason: 'r' })
+    for (let i = 0; i < 10; i++) createSnapshot({ hostId, content: `v${i}`, reason: 'r' })
     const removed = trimSnapshots(5)
     expect(removed).toBe(5)
     expect(listSnapshots(hostId, 100)).toHaveLength(5)
@@ -374,9 +376,9 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/db/snapshotRepo.ts`**
 
 ```typescript
-import { randomUUID } from 'crypto'
-import { getDb } from './connection'
 import type { ConfigSnapshot } from '@shared/types'
+import { randomUUID } from 'node:crypto'
+import { getDb } from './connection'
 
 interface SnapshotRow {
   id: string
@@ -396,18 +398,16 @@ function rowToSnapshot(r: SnapshotRow): ConfigSnapshot {
   }
 }
 
-export function createSnapshot(input: { hostId: string; content: string; reason: string }): ConfigSnapshot {
+export function createSnapshot(input: { hostId: string, content: string, reason: string }): ConfigSnapshot {
   const id = randomUUID()
   const createdAt = Date.now()
   getDb().prepare(`INSERT INTO config_snapshots (id, host_id, content, reason, created_at)
-    VALUES (?, ?, ?, ?, ?)`)
-    .run(id, input.hostId, input.content, input.reason, createdAt)
+    VALUES (?, ?, ?, ?, ?)`).run(id, input.hostId, input.content, input.reason, createdAt)
   return { id, ...input, createdAt }
 }
 
 export function listSnapshots(hostId: string, limit: number): ConfigSnapshot[] {
-  const rows = getDb().prepare(`SELECT * FROM config_snapshots WHERE host_id = ? ORDER BY created_at DESC LIMIT ?`)
-    .all(hostId, limit) as SnapshotRow[]
+  const rows = getDb().prepare(`SELECT * FROM config_snapshots WHERE host_id = ? ORDER BY created_at DESC LIMIT ?`).all(hostId, limit) as SnapshotRow[]
   return rows.map(rowToSnapshot)
 }
 
@@ -464,8 +464,7 @@ git commit -m "feat(snapshot): snapshotRepo CRUD + 每 host 保留策略裁剪�
 ```typescript
 /** 健康检查服务专用：只更新 healthStatus + lastCheckedAt，不动其他字段 */
 export function updateHealthStatus(id: string, healthStatus: HealthStatus, lastCheckedAt: number): void {
-  getDb().prepare(`UPDATE mappings SET health_status = ?, last_checked_at = ? WHERE id = ?`)
-    .run(healthStatus, lastCheckedAt, id)
+  getDb().prepare(`UPDATE mappings SET health_status = ?, last_checked_at = ? WHERE id = ?`).run(healthStatus, lastCheckedAt, id)
 }
 ```
 
@@ -478,11 +477,12 @@ export function updateHealthStatus(id: string, healthStatus: HealthStatus, lastC
 修改 `applyMappings` 签名，加可选的 `hostId` 参数（用于存快照）：
 
 ```typescript
-import type { Mapping, ConfigSnapshot } from '@shared/types'
+import type { ConfigSnapshot, Mapping } from '@shared/types'
+import type { ConfGenOptions } from './confGenerator';
 import type { NginxEngine } from './types'
-import { generateFullConf, type ConfGenOptions } from './confGenerator'
 import { createSnapshot, trimSnapshots } from '../db/snapshotRepo'
 import { logger } from '../services/logger'
+import { generateFullConf } from './confGenerator'
 
 export interface ApplyOptions extends ConfGenOptions {
   /** 当前 host id，用于存配置快照。不传则不存快照。 */
@@ -523,7 +523,8 @@ export async function applyMappings(
     }
     logger.info(opts.hostId ?? null, 'app', `配置应用成功，${mappings.length} 条映射`)
     return { ok: true, conf, output: testResult.output }
-  } catch (e: any) {
+  }
+  catch (e: any) {
     logger.error(opts.hostId ?? null, 'app', `reload 失败: ${e?.message ?? e}`)
     return { ok: false, conf, output: e?.message ?? String(e) }
   }
@@ -539,16 +540,16 @@ export async function applyMappings(
 在 describe 里加：
 
 ```typescript
-  it('成功时存配置快照（hostId 提供时）', async () => {
-    // 这个测试需要真实 db，用 vi.mock 或跳过 db 部分
-    // applyFlow 现在依赖 snapshotRepo + logger，单测里它们会真的写 db
-    // 简化：mock snapshotRepo
-    // ... 这个测试在 applyFlow.test.ts 里较难独立测，放到集成测试
-    // 这里只验证成功路径仍返回 ok:true
-    const eng = makeEngine()
-    const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
-    expect(result.ok).toBe(true)
-  })
+it('成功时存配置快照（hostId 提供时）', async () => {
+  // 这个测试需要真实 db，用 vi.mock 或跳过 db 部分
+  // applyFlow 现在依赖 snapshotRepo + logger，单测里它们会真的写 db
+  // 简化：mock snapshotRepo
+  // ... 这个测试在 applyFlow.test.ts 里较难独立测，放到集成测试
+  // 这里只验证成功路径仍返回 ok:true
+  const eng = makeEngine()
+  const result = await applyMappings(eng as any, [mapping()], { nginxLogDir: '/d/logs', nginxTempDir: '/d/temp', hostId: 'h1' })
+  expect(result.ok).toBe(true)
+})
 ```
 
 实际上 applyFlow.test.ts 的 mock engine 不涉及 db，但 applyFlow 现在调 createSnapshot/logger 会触真实 db。**需要 mock snapshotRepo 和 logger**。在 applyFlow.test.ts 顶部加：
@@ -596,11 +597,11 @@ Run: `npx vitest run`（全量绿）
 读 `src/main/ipc/handlers.ts`，找到 ENGINE_RELOAD handler 里调 `applyMappings(eng, mappings, { nginxLogDir, nginxTempDir })`，加 `hostId: host.id`：
 
 ```typescript
-    const result = await applyMappings(eng, mappings, {
-      nginxLogDir: paths.nginxLogDir,
-      nginxTempDir: paths.tempDir,
-      hostId: host.id
-    })
+const result = await applyMappings(eng, mappings, {
+  nginxLogDir: paths.nginxLogDir,
+  nginxTempDir: paths.tempDir,
+  hostId: host.id
+})
 ```
 
 - [ ] **Step 6: 提交**
@@ -621,9 +622,9 @@ git commit -m "feat(applyFlow): 成功后存配置快照 + 写日志 + mappingRe
 - [ ] **Step 1: 写失败测试 `tests/main/services/portCheck.test.ts`**
 
 ```typescript
-import { describe, it, expect } from 'vitest'
+import { createServer } from 'node:net'
 import { isPortAvailable } from '@main/services/portCheck'
-import { createServer } from 'net'
+import { describe, expect, it } from 'vitest'
 
 describe('portCheck', () => {
   it('空闲端口返回 true', async () => {
@@ -633,9 +634,9 @@ describe('portCheck', () => {
 
   it('被占端口返回 false', async () => {
     const server = createServer()
-    await new Promise<void>((resolve) => server.listen(39999, resolve))
+    await new Promise<void>(resolve => server.listen(39999, resolve))
     expect(await isPortAvailable(39999)).toBe(false)
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await new Promise<void>(resolve => server.close(() => resolve()))
   })
 
   it('null/undefined 端口返回 true（无需检测）', async () => {
@@ -653,7 +654,7 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/services/portCheck.ts`**
 
 ```typescript
-import { createServer } from 'net'
+import { createServer } from 'node:net'
 
 /**
  * 检测本机端口是否可用（未被占用）。
@@ -661,7 +662,8 @@ import { createServer } from 'net'
  * null/undefined 返回 true（无需检测，例如 HTTPS 不收集 listenPort）。
  */
 export function isPortAvailable(port: number | null | undefined): Promise<boolean> {
-  if (port == null) return Promise.resolve(true)
+  if (port == null)
+    return Promise.resolve(true)
   return new Promise((resolve) => {
     const server = createServer()
     server.once('error', () => resolve(false))
@@ -701,17 +703,17 @@ git commit -m "feat(portCheck): 端口占用检测（net.createServer listen 探
 - [ ] **Step 1: 写失败测试 `tests/main/services/healthCheck.test.ts`**
 
 ```typescript
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { checkTcp, checkHttp, startHealthCheckLoop, stopHealthCheckLoop } from '@main/services/healthCheck'
-import { createServer } from 'net'
-import http from 'http'
+import http from 'node:http'
+import { createServer } from 'node:net'
+import { checkHttp, checkTcp, startHealthCheckLoop, stopHealthCheckLoop } from '@main/services/healthCheck'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('checkTcp', () => {
   it('端口通返回 healthy', async () => {
     const server = createServer()
-    await new Promise<void>((r) => server.listen(39997, r))
+    await new Promise<void>(r => server.listen(39997, r))
     expect(await checkTcp('127.0.0.1', 39997)).toBe('healthy')
-    await new Promise<void>((r) => server.close(() => r()))
+    await new Promise<void>(r => server.close(() => r()))
   })
 
   it('端口不通返回 unhealthy', async () => {
@@ -722,16 +724,16 @@ describe('checkTcp', () => {
 describe('checkHttp', () => {
   it('返回 200 且期望 200 返回 healthy', async () => {
     const server = http.createServer((req, res) => { res.statusCode = 200; res.end('ok') })
-    await new Promise<void>((r) => server.listen(39995, r))
+    await new Promise<void>(r => server.listen(39995, r))
     expect(await checkHttp('127.0.0.1', 39995, '/', 200)).toBe('healthy')
-    await new Promise<void>((r) => server.close(() => r()))
+    await new Promise<void>(r => server.close(() => r()))
   })
 
   it('返回 500 期望 200 返回 unhealthy', async () => {
     const server = http.createServer((req, res) => { res.statusCode = 500; res.end('err') })
-    await new Promise<void>((r) => server.listen(39994, r))
+    await new Promise<void>(r => server.listen(39994, r))
     expect(await checkHttp('127.0.0.1', 39994, '/', 200)).toBe('unhealthy')
-    await new Promise<void>((r) => server.close(() => r()))
+    await new Promise<void>(r => server.close(() => r()))
   })
 })
 
@@ -754,12 +756,11 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/services/healthCheck.ts`**
 
 ```typescript
-import { createConnection } from 'net'
-import http from 'http'
-import type { Mapping, HealthStatus } from '@shared/types'
-import { listEnabledMappings } from '../db/mappingRepo'
-import { updateHealthStatus } from '../db/mappingRepo'
+import type { HealthStatus, Mapping } from '@shared/types'
+import http from 'node:http'
+import { createConnection } from 'node:net'
 import { getDefaultHost } from '../db/hostRepo'
+import { listEnabledMappings, updateHealthStatus } from '../db/mappingRepo'
 import { logger } from './logger'
 
 const CHECK_TIMEOUT_MS = 3000
@@ -810,21 +811,23 @@ export async function checkMapping(m: Mapping): Promise<HealthStatus> {
 /** 轮询所有 enabled + healthCheckEnabled 的映射 */
 async function runOnce(): Promise<void> {
   const host = getDefaultHost()
-  if (!host) return
+  if (!host)
+    return
   const mappings = listEnabledMappings(host.id).filter(m => m.healthCheckEnabled === 1)
   const now = Date.now()
   for (const m of mappings) {
     try {
       const status = await checkMapping(m)
       updateHealthStatus(m.id, status, now)
-    } catch (e: any) {
+    }
+    catch (e: any) {
       updateHealthStatus(m.id, 'unknown', now)
       logger.warn(host.id, 'app', `健康检查异常 ${m.name}: ${e?.message ?? e}`)
     }
   }
 }
 
-const LOOP_INTERVAL_MS = 30000  // 默认 30 秒一轮
+const LOOP_INTERVAL_MS = 30000 // 默认 30 秒一轮
 
 /** 启动定时轮询 */
 export function startHealthCheckLoop(intervalMs: number = LOOP_INTERVAL_MS): void {
@@ -874,58 +877,62 @@ git commit -m "feat(healthCheck): TCP/HTTP 探活 + 定时轮询服务（默认 
 import：
 ```typescript
 import { listLogs, listLogsByLevel } from '../db/logRepo'
-import { listSnapshots, getSnapshot } from '../db/snapshotRepo'
-import { isPortAvailable } from '../services/portCheck'
-import { checkMapping, startHealthCheckLoop, stopHealthCheckLoop } from '../services/healthCheck'
 import { getMapping } from '../db/mappingRepo'
+import { getSnapshot, listSnapshots } from '../db/snapshotRepo'
 import { applyMappings } from '../nginx/applyFlow'
-import { resolvePaths } from '../paths'
 import { getActiveEngine } from '../nginx/engineRegistry'
+import { resolvePaths } from '../paths'
+import { checkMapping, startHealthCheckLoop, stopHealthCheckLoop } from '../services/healthCheck'
+import { isPortAvailable } from '../services/portCheck'
 ```
 （合并到已有 import，不重复）
 
 在 `registerIpcHandlers()` 加：
 
 ```typescript
-  // Log
-  ipcMain.handle(IPC.LOG_LIST, (_e, hostId: string | null, limit: number) => listLogs(hostId, limit))
+// Log
+ipcMain.handle(IPC.LOG_LIST, (_e, hostId: string | null, limit: number) => listLogs(hostId, limit))
 
-  // Snapshot
-  ipcMain.handle(IPC.SNAPSHOT_LIST, (_e, hostId: string) => listSnapshots(hostId, 50))
-  ipcMain.handle(IPC.SNAPSHOT_GET, (_e, id: string) => getSnapshot(id))
-  ipcMain.handle(IPC.SNAPSHOT_ROLLBACK, async (_e, snapshotId: string) => {
-    // 回滚：用快照 content 覆盖 conf → nginx -t → reload
-    const snap = getSnapshot(snapshotId)
-    if (!snap) return { ok: false, output: 'snapshot not found' }
-    const eng = getActiveEngine()
-    if (!eng) return { ok: false, output: 'no active engine' }
-    const paths = resolvePaths()
-    // 用 applyMappings 的逻辑，但 conf 来自快照而非生成
-    // 简化：直接 writeConf + test + reload + 存新快照
-    const oldConf = await eng.readConf()
-    await eng.writeConf(snap.content)
-    const testResult = await eng.test()
-    if (!testResult.ok) {
-      await eng.writeConf(oldConf)
-      return { ok: false, output: testResult.output }
-    }
-    try {
-      await eng.reload()
-      return { ok: true, output: testResult.output }
-    } catch (e: any) {
-      return { ok: false, output: e?.message ?? String(e) }
-    }
-  })
+// Snapshot
+ipcMain.handle(IPC.SNAPSHOT_LIST, (_e, hostId: string) => listSnapshots(hostId, 50))
+ipcMain.handle(IPC.SNAPSHOT_GET, (_e, id: string) => getSnapshot(id))
+ipcMain.handle(IPC.SNAPSHOT_ROLLBACK, async (_e, snapshotId: string) => {
+  // 回滚：用快照 content 覆盖 conf → nginx -t → reload
+  const snap = getSnapshot(snapshotId)
+  if (!snap)
+    return { ok: false, output: 'snapshot not found' }
+  const eng = getActiveEngine()
+  if (!eng)
+    return { ok: false, output: 'no active engine' }
+  const paths = resolvePaths()
+  // 用 applyMappings 的逻辑，但 conf 来自快照而非生成
+  // 简化：直接 writeConf + test + reload + 存新快照
+  const oldConf = await eng.readConf()
+  await eng.writeConf(snap.content)
+  const testResult = await eng.test()
+  if (!testResult.ok) {
+    await eng.writeConf(oldConf)
+    return { ok: false, output: testResult.output }
+  }
+  try {
+    await eng.reload()
+    return { ok: true, output: testResult.output }
+  }
+  catch (e: any) {
+    return { ok: false, output: e?.message ?? String(e) }
+  }
+})
 
-  // Health check
-  ipcMain.handle(IPC.HEALTH_CHECK_NOW, async (_e, mappingId: string) => {
-    const m = getMapping(mappingId)
-    if (!m) return 'unknown'
-    return await checkMapping(m)
-  })
+// Health check
+ipcMain.handle(IPC.HEALTH_CHECK_NOW, async (_e, mappingId: string) => {
+  const m = getMapping(mappingId)
+  if (!m)
+    return 'unknown'
+  return await checkMapping(m)
+})
 
-  // Port check
-  ipcMain.handle(IPC.PORT_CHECK, (_e, port: number) => isPortAvailable(port))
+// Port check
+ipcMain.handle(IPC.PORT_CHECK, (_e, port: number) => isPortAvailable(port))
 ```
 
 - [ ] **Step 2: preload/index.ts 加桥接**
@@ -963,7 +970,7 @@ import { getActiveEngine } from '../nginx/engineRegistry'
 
 读 `src/main/index.ts`。在 `app.whenReady` 的 try 块里、`createWindow()` 之后加：
 ```typescript
-  startHealthCheckLoop()
+startHealthCheckLoop()
 ```
 （import `startHealthCheckLoop, stopHealthCheckLoop` from `./services/healthCheck`）
 
@@ -994,9 +1001,9 @@ git commit -m "feat(ipc): 日志/快照/健康检查/端口检测 IPC + 回滚�
 - [ ] **Step 1: 创建 `src/renderer/stores/logs.ts`**
 
 ```typescript
+import { api } from '@renderer/api/ipc'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@renderer/api/ipc'
 
 export interface LogEntry {
   id: string
@@ -1015,7 +1022,8 @@ export const useLogsStore = defineStore('logs', () => {
     loading.value = true
     try {
       list.value = await api.listLogs(hostId, limit)
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -1027,9 +1035,9 @@ export const useLogsStore = defineStore('logs', () => {
 - [ ] **Step 2: 创建 `src/renderer/stores/snapshots.ts`**
 
 ```typescript
+import { api } from '@renderer/api/ipc'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@renderer/api/ipc'
 
 export interface Snapshot {
   id: string
@@ -1046,7 +1054,7 @@ export const useSnapshotsStore = defineStore('snapshots', () => {
     list.value = await api.listSnapshots(hostId)
   }
 
-  async function rollback(snapshotId: string): Promise<{ ok: boolean; output: string }> {
+  async function rollback(snapshotId: string): Promise<{ ok: boolean, output: string }> {
     return await api.rollbackSnapshot(snapshotId)
   }
 
@@ -1059,9 +1067,9 @@ export const useSnapshotsStore = defineStore('snapshots', () => {
 ```vue
 <script setup lang="ts">
 import { useLogsStore } from '@renderer/stores/logs'
-const store = useLogsStore()
-const props = defineProps<{ hostId: string }>()
 
+const props = defineProps<{ hostId: string }>()
+const store = useLogsStore()
 async function refresh() {
   await store.load(props.hostId, 500)
 }
@@ -1079,7 +1087,9 @@ function formatTime(ts: number): string {
   <div class="log-viewer">
     <div class="toolbar">
       <h3>日志</h3>
-      <button @click="refresh">刷新</button>
+      <button @click="refresh">
+        刷新
+      </button>
     </div>
     <div class="log-list">
       <div v-for="log in store.list" :key="log.id" class="log-line">
@@ -1088,7 +1098,9 @@ function formatTime(ts: number): string {
         <span class="source">({{ log.source }})</span>
         <span class="msg">{{ log.message }}</span>
       </div>
-      <div v-if="store.list.length === 0" class="empty">暂无日志</div>
+      <div v-if="store.list.length === 0" class="empty">
+        暂无日志
+      </div>
     </div>
   </div>
 </template>
@@ -1112,11 +1124,12 @@ button { padding: 4px 12px; border: 1px solid #ddd; border-radius: 6px; backgrou
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useSnapshotsStore } from '@renderer/stores/snapshots'
-const store = useSnapshotsStore()
+import { ref } from 'vue'
+
 const props = defineProps<{ hostId: string }>()
 const emit = defineEmits<{ (e: 'rolled-back'): void }>()
+const store = useSnapshotsStore()
 const selectedId = ref<string | null>(null)
 const selectedContent = ref('')
 const rolling = ref(false)
@@ -1138,15 +1151,18 @@ async function api_getSnapshot(id: string) {
 }
 
 async function rollback() {
-  if (!selectedId.value) return
-  if (!confirm('确定回滚到选中的配置？当前配置将被覆盖。')) return
+  if (!selectedId.value)
+    return
+  if (!confirm('确定回滚到选中的配置？当前配置将被覆盖。'))
+    return
   rolling.value = true
   try {
     const result = await store.rollback(selectedId.value)
-    if (!result.ok) { alert('回滚失败:\n' + result.output); return }
+    if (!result.ok) { alert(`回滚失败:\n${result.output}`); return }
     emit('rolled-back')
     await refresh()
-  } finally {
+  }
+  finally {
     rolling.value = false
   }
 }
@@ -1160,22 +1176,36 @@ function formatTime(ts: number): string {
   <div class="history-panel">
     <div class="toolbar">
       <h3>配置历史</h3>
-      <button @click="refresh">刷新</button>
-      <button :disabled="!selectedId || rolling" @click="rollback">回滚到选中</button>
+      <button @click="refresh">
+        刷新
+      </button>
+      <button :disabled="!selectedId || rolling" @click="rollback">
+        回滚到选中
+      </button>
     </div>
     <div class="body">
       <div class="snap-list">
-        <div v-for="s in store.list" :key="s.id"
+        <div
+          v-for="s in store.list" :key="s.id"
           class="snap-item" :class="{ active: s.id === selectedId }"
-          @click="viewContent(s.id)">
-          <div class="snap-time">{{ formatTime(s.createdAt) }}</div>
-          <div class="snap-reason">{{ s.reason }}</div>
+          @click="viewContent(s.id)"
+        >
+          <div class="snap-time">
+            {{ formatTime(s.createdAt) }}
+          </div>
+          <div class="snap-reason">
+            {{ s.reason }}
+          </div>
         </div>
-        <div v-if="store.list.length === 0" class="empty">暂无历史（应用配置后自动生成）</div>
+        <div v-if="store.list.length === 0" class="empty">
+          暂无历史（应用配置后自动生成）
+        </div>
       </div>
       <div class="snap-content">
         <pre v-if="selectedContent">{{ selectedContent }}</pre>
-        <div v-else class="empty">选择左侧某条查看内容</div>
+        <div v-else class="empty">
+          选择左侧某条查看内容
+        </div>
       </div>
     </div>
   </div>
@@ -1206,8 +1236,9 @@ pre { margin: 0; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; whit
 
 script 加：
 ```typescript
-import LogViewer from '@renderer/components/LogViewer.vue'
 import HistoryPanel from '@renderer/components/HistoryPanel.vue'
+import LogViewer from '@renderer/components/LogViewer.vue'
+
 const currentView = ref<'mappings' | 'logs' | 'history'>('mappings')
 ```
 
@@ -1241,13 +1272,14 @@ style 加：
 读 `src/renderer/components/MappingForm.vue`。在 save() 校验里，对 listenPort 做 IPC 端口检测。改 save 函数，在现有校验之后、saving 之前加：
 
 ```typescript
-  // 端口占用检测（仅 stream/http 监听端口）
-  if ((isStream.value || isHttp.value) && form.value.listenPort) {
-    const available = await api.checkPort(form.value.listenPort)
-    if (!available) {
-      if (!confirm(`端口 ${form.value.listenPort} 已被占用，仍要保存吗？`)) return
-    }
+// 端口占用检测（仅 stream/http 监听端口）
+if ((isStream.value || isHttp.value) && form.value.listenPort) {
+  const available = await api.checkPort(form.value.listenPort)
+  if (!available) {
+    if (!confirm(`端口 ${form.value.listenPort} 已被占用，仍要保存吗？`))
+      return
   }
+}
 ```
 
 - [ ] **Step 7: 验证**

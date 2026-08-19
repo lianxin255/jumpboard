@@ -478,8 +478,8 @@ git commit -m "feat(ui): MappingList 卡片毛玻璃 + hover 微交互"
 读当前 MappingForm.vue。在 FormState interface 加：
 
 ```typescript
-  healthCheckEnabled: boolean
-  healthCheckIntervalSec: number
+healthCheckEnabled: boolean
+healthCheckIntervalSec: number
 ```
 
 - [ ] **Step 2: templateToForm 填充**

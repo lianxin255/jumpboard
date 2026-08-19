@@ -2,6 +2,7 @@ node_modules/
 out/
 release/
 dist/
+build/
 *.log
 .DS_Store
 data/
@@ -9,3 +10,6 @@ data/
 *.db-shm
 *.db-wal
 .verify-*.ts
+target/
+apps/desktop/gen/
+*.node

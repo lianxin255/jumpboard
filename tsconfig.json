@@ -8,13 +8,29 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@renderer/*": ["src/renderer/*"]
+      "@ngj/shared": ["packages/shared/src/index.ts"],
+      "@ngj/shared/types": ["packages/shared/src/types.ts"],
+      "@ngj/shared/paths": ["packages/shared/src/paths.ts"],
+      "@ngj/shared/validation": ["packages/shared/src/validation.ts"],
+      "@ngj/shared/*": ["packages/shared/src/*"],
+      "@ngj/server": ["packages/server/src/index.ts"],
+      "@ngj/server/*": ["packages/server/src/*"],
+      "@web/*": ["apps/web/src/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/preload/**/*"]
+  "include": [
+    "packages/shared/src/**/*.ts",
+    "packages/server/src/**/*.ts",
+    "apps/web/src/**/*.ts",
+    "apps/web/src/**/*.vue"
+  ],
+  "exclude": ["node_modules", "dist", "build", "target", "out", "release", "**/*.test.ts", "**/*.spec.ts"]
 }

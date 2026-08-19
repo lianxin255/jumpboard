@@ -92,14 +92,14 @@
 
 ```typescript
 interface NginxEngine {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  reload(): Promise<void>;        // 热重载
-  test(): Promise<{ok: boolean, output: string}>;  // nginx -t
-  status(): Promise<EngineStatus>;  // running/stopped/unknown
-  tailLogs(lines: number): Promise<LogEntry[]>;
-  writeConf(content: string): Promise<void>;
-  readConf(): Promise<string>;
+  start: () => Promise<void>
+  stop: () => Promise<void>
+  reload: () => Promise<void> // 热重载
+  test: () => Promise<{ ok: boolean, output: string }> // nginx -t
+  status: () => Promise<EngineStatus> // running/stopped/unknown
+  tailLogs: (lines: number) => Promise<LogEntry[]>
+  writeConf: (content: string) => Promise<void>
+  readConf: () => Promise<string>
 }
 ```
 

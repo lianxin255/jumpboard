@@ -1,24 +1,31 @@
-import { defineConfig } from 'vitest/config'
+import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
+
+const sharedDir = resolve(__dirname, 'packages/shared/src')
+const serverDir = resolve(__dirname, 'packages/server/src')
+const webDir = resolve(__dirname, 'apps/web/src')
 
 export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@shared': resolve(__dirname, 'src/shared'),
-      '@renderer': resolve(__dirname, 'src/renderer'),
-      '@main': resolve(__dirname, 'src/main')
-    }
+      '@ngj/shared/types': resolve(sharedDir, 'types.ts'),
+      '@ngj/shared/paths': resolve(sharedDir, 'paths.ts'),
+      '@ngj/shared/validation': resolve(sharedDir, 'validation.ts'),
+      '@ngj/shared': resolve(sharedDir, 'index.ts'),
+      '@ngj/server': resolve(serverDir, 'index.ts'),
+      '@web': webDir,
+    },
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: [
+      'packages/server/src/**/*.test.ts',
+      'packages/shared/src/**/*.test.ts',
+      'apps/web/src/**/*.test.ts',
+    ],
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true
-      }
-    }
-  }
+    poolOptions: { forks: { singleFork: true } },
+  },
 })

@@ -1,0 +1,28 @@
+{
+  "name": "@ngj/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@ngj/shared": "workspace:*",
+    "dayjs": "catalog:frontend",
+    "pinia": "catalog:frontend",
+    "vue": "catalog:frontend"
+  },
+  "devDependencies": {
+    "@ngj/shared": "workspace:*",
+    "@vitejs/plugin-vue": "catalog:dev",
+    "@vue/test-utils": "catalog:dev",
+    "jsdom": "catalog:dev",
+    "typescript": "catalog:dev",
+    "vite": "catalog:dev",
+    "vitest": "catalog:dev",
+    "vue-tsc": "catalog:dev"
+  }
+}

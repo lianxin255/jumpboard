@@ -83,7 +83,8 @@ extraResources:
 
 ```typescript
 function getAppRoot(): string {
-  if (appRootForTest) return appRootForTest
+  if (appRootForTest)
+    return appRootForTest
   // portable 模式：electron-builder 注入此环境变量，指向真正 exe 所在目录
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return process.env.PORTABLE_EXECUTABLE_DIR
@@ -102,14 +103,14 @@ function getAppRoot(): string {
 读 `tests/main/paths.test.ts`。加一个测试用例验证 `PORTABLE_EXECUTABLE_DIR` 优先级：
 
 ```typescript
-  it('PORTABLE_EXECUTABLE_DIR 环境变量优先于其他', () => {
-    process.env.PORTABLE_EXECUTABLE_DIR = '/fake/portable/dir'
-    __setAppRootForTest(null)  // 清除 test override
-    const p = resolvePaths()
-    expect(p.appRoot).toBe('/fake/portable/dir')
-    expect(p.dataDir).toBe('/fake/portable/dir/data')
-    delete process.env.PORTABLE_EXECUTABLE_DIR
-  })
+it('PORTABLE_EXECUTABLE_DIR 环境变量优先于其他', () => {
+  process.env.PORTABLE_EXECUTABLE_DIR = '/fake/portable/dir'
+  __setAppRootForTest(null) // 清除 test override
+  const p = resolvePaths()
+  expect(p.appRoot).toBe('/fake/portable/dir')
+  expect(p.dataDir).toBe('/fake/portable/dir/data')
+  delete process.env.PORTABLE_EXECUTABLE_DIR
+})
 ```
 
 （注意：这个测试要放在其他测试之后或用 afterEach 清理环境变量。如果 `__setAppRootForTest` 优先级高于环境变量，测试需要调整——当前实现 `appRootForTest` 最优先，所以测试里要 `__setAppRootForTest(null)` 清除。）
@@ -138,14 +139,14 @@ git commit -m "feat(build): electron-builder portable 配置 + paths 用 PORTABL
 - [ ] **Step 1: 写失败测试 `tests/main/services/dataTransfer.test.ts`**
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { openDb, closeDb, __setDbPathForTest } from '@main/db/connection'
+import { existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { __setDbPathForTest, closeDb, openDb } from '@main/db/connection'
 import { createHost } from '@main/db/hostRepo'
 import { createMapping } from '@main/db/mappingRepo'
 import { exportData, importData } from '@main/services/dataTransfer'
-import { existsSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('dataTransfer', () => {
   let dbPath: string
@@ -158,16 +159,30 @@ describe('dataTransfer', () => {
 
   afterEach(() => {
     closeDb()
-    if (existsSync(dbPath)) rmSync(dbPath)
+    if (existsSync(dbPath))
+      rmSync(dbPath)
   })
 
   it('exportData 返回含 version + hosts + mappings 的对象', () => {
     const h = createHost({ name: 'h', type: 'local', isDefault: 1, localConfig: null, remoteConfig: null })
     createMapping({
-      hostId: h.id, name: 'm', enabled: 1, protocol: 'tcp', listenPort: 9000,
-      serverNames: null, listenPath: null, upstreamHost: '1.1.1.1', upstreamPort: 80,
-      tlsCertPath: null, tlsKeyPath: null, redirectHttp: 0, extraDirectives: null,
-      healthCheckEnabled: 0, healthCheckIntervalSec: 30, healthCheckTargetPath: null, healthCheckExpectedStatus: null
+      hostId: h.id,
+      name: 'm',
+      enabled: 1,
+      protocol: 'tcp',
+      listenPort: 9000,
+      serverNames: null,
+      listenPath: null,
+      upstreamHost: '1.1.1.1',
+      upstreamPort: 80,
+      tlsCertPath: null,
+      tlsKeyPath: null,
+      redirectHttp: 0,
+      extraDirectives: null,
+      healthCheckEnabled: 0,
+      healthCheckIntervalSec: 30,
+      healthCheckTargetPath: null,
+      healthCheckExpectedStatus: null
     })
     const data = exportData()
     expect(data.version).toBe(1)
@@ -207,8 +222,8 @@ Expected: FAIL.
 - [ ] **Step 3: 实现 `src/main/services/dataTransfer.ts`**
 
 ```typescript
-import { getDb } from '../db/connection'
 import type { Host, Mapping } from '@shared/types'
+import { getDb } from '../db/connection'
 
 const EXPORT_VERSION = 1
 
@@ -240,9 +255,12 @@ export interface ImportResult {
 
 /** 校验 + 导入。覆盖式（先清空再导入），不支持合并（MVP）。 */
 export function importData(payload: Partial<ExportPayload>): ImportResult {
-  if (!payload || typeof payload !== 'object') throw new Error('导入格式错误：非对象')
-  if (payload.version !== EXPORT_VERSION) throw new Error(`导入版本不匹配：期望 ${EXPORT_VERSION}，得到 ${payload.version}`)
-  if (!Array.isArray(payload.hosts) || !Array.isArray(payload.mappings)) throw new Error('导入格式错误：缺少 hosts/mappings 数组')
+  if (!payload || typeof payload !== 'object')
+    throw new Error('导入格式错误：非对象')
+  if (payload.version !== EXPORT_VERSION)
+    throw new Error(`导入版本不匹配：期望 ${EXPORT_VERSION}，得到 ${payload.version}`)
+  if (!Array.isArray(payload.hosts) || !Array.isArray(payload.mappings))
+    throw new Error('导入格式错误：缺少 hosts/mappings 数组')
 
   const db = getDb()
   // 覆盖式：清空再导入（事务）
@@ -254,10 +272,7 @@ export function importData(payload: Partial<ExportPayload>): ImportResult {
     for (const h of payload.hosts!) {
       db.prepare(`INSERT INTO hosts (id, name, type, is_default, local_config, remote_config, status, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(h.id, h.name, h.type, h.isDefault ?? 0,
-          h.localConfig ? JSON.stringify(h.localConfig) : null,
-          h.remoteConfig ? JSON.stringify(h.remoteConfig) : null,
-          h.status ?? 'unknown', h.createdAt ?? Date.now())
+        .run(h.id, h.name, h.type, h.isDefault ?? 0, h.localConfig ? JSON.stringify(h.localConfig) : null, h.remoteConfig ? JSON.stringify(h.remoteConfig) : null, h.status ?? 'unknown', h.createdAt ?? Date.now())
       hostsImported++
     }
     for (const m of payload.mappings!) {
@@ -266,10 +281,7 @@ export function importData(payload: Partial<ExportPayload>): ImportResult {
         health_check_enabled, health_check_interval_sec, health_check_target_path, health_check_expected_status,
         health_status, last_checked_at, sort_order, created_at, updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(m.id, m.hostId, m.name, m.enabled ?? 1, m.protocol, m.listenPort, m.serverNames, m.listenPath,
-          m.upstreamHost, m.upstreamPort, m.tlsCertPath, m.tlsKeyPath, m.redirectHttp ?? 0, m.extraDirectives,
-          m.healthCheckEnabled ?? 0, m.healthCheckIntervalSec ?? 30, m.healthCheckTargetPath, m.healthCheckExpectedStatus,
-          m.healthStatus ?? 'unknown', m.lastCheckedAt, m.sortOrder ?? 0, m.createdAt ?? Date.now(), m.updatedAt ?? Date.now())
+        .run(m.id, m.hostId, m.name, m.enabled ?? 1, m.protocol, m.listenPort, m.serverNames, m.listenPath, m.upstreamHost, m.upstreamPort, m.tlsCertPath, m.tlsKeyPath, m.redirectHttp ?? 0, m.extraDirectives, m.healthCheckEnabled ?? 0, m.healthCheckIntervalSec ?? 30, m.healthCheckTargetPath, m.healthCheckExpectedStatus, m.healthStatus ?? 'unknown', m.lastCheckedAt, m.sortOrder ?? 0, m.createdAt ?? Date.now(), m.updatedAt ?? Date.now())
       mappingsImported++
     }
   })()
@@ -279,24 +291,42 @@ export function importData(payload: Partial<ExportPayload>): ImportResult {
 // 行转换（snake→camel，复用 hostRepo/mappingRepo 的逻辑但独立避免循环依赖）
 function rowToHost(r: any): Host {
   return {
-    id: r.id, name: r.name, type: r.type, isDefault: r.is_default,
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    isDefault: r.is_default,
     localConfig: r.local_config ? JSON.parse(r.local_config) : null,
     remoteConfig: r.remote_config ? JSON.parse(r.remote_config) : null,
-    status: r.status, createdAt: r.created_at
+    status: r.status,
+    createdAt: r.created_at
   }
 }
 
 function rowToMapping(r: any): Mapping {
   return {
-    id: r.id, hostId: r.host_id, name: r.name, enabled: r.enabled, protocol: r.protocol,
-    listenPort: r.listen_port, serverNames: r.server_names, listenPath: r.listen_path,
-    upstreamHost: r.upstream_host, upstreamPort: r.upstream_port,
-    tlsCertPath: r.tls_cert_path, tlsKeyPath: r.tls_key_path, redirectHttp: r.redirect_http,
+    id: r.id,
+    hostId: r.host_id,
+    name: r.name,
+    enabled: r.enabled,
+    protocol: r.protocol,
+    listenPort: r.listen_port,
+    serverNames: r.server_names,
+    listenPath: r.listen_path,
+    upstreamHost: r.upstream_host,
+    upstreamPort: r.upstream_port,
+    tlsCertPath: r.tls_cert_path,
+    tlsKeyPath: r.tls_key_path,
+    redirectHttp: r.redirect_http,
     extraDirectives: r.extra_directives,
-    healthCheckEnabled: r.health_check_enabled, healthCheckIntervalSec: r.health_check_interval_sec,
-    healthCheckTargetPath: r.health_check_target_path, healthCheckExpectedStatus: r.health_check_expected_status,
-    healthStatus: r.health_status, lastCheckedAt: r.last_checked_at,
-    sortOrder: r.sort_order, createdAt: r.created_at, updatedAt: r.updated_at
+    healthCheckEnabled: r.health_check_enabled,
+    healthCheckIntervalSec: r.health_check_interval_sec,
+    healthCheckTargetPath: r.health_check_target_path,
+    healthCheckExpectedStatus: r.health_check_expected_status,
+    healthStatus: r.health_status,
+    lastCheckedAt: r.last_checked_at,
+    sortOrder: r.sort_order,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
   }
 }
 ```
@@ -344,50 +374,52 @@ git commit -m "feat(data): exportData/importData 配置序列化（覆盖式导�
 
 import：
 ```typescript
-import { exportData, importData } from '../services/dataTransfer'
 import { closeDb } from '../db/connection'
 import { getActiveEngine } from '../nginx/engineRegistry'
+import { exportData, importData } from '../services/dataTransfer'
 ```
 
 加 handler：
 ```typescript
-  // 一键清除所有痕迹：停 nginx + 删 data 目录内容
-  ipcMain.handle(IPC.DATA_WIPE, async () => {
-    try {
-      const eng = getActiveEngine()
-      if (eng && eng.status() === 'running') {
-        await eng.stop()
-      }
-      // 删除 data 目录所有内容（db/conf/logs/snapshots/templates/custom）
-      const paths = resolvePaths()
-      closeDb()
-      const fs = require('fs')
-      for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates']) {
-        const p = joinPath(paths.dataDir, sub)
-        if (fs.existsSync(p)) {
-          fs.rmSync(p, { recursive: true, force: true })
-        }
-      }
-      return { ok: true }
-    } catch (e: any) {
-      return { ok: false, output: e?.message ?? String(e) }
+// 一键清除所有痕迹：停 nginx + 删 data 目录内容
+ipcMain.handle(IPC.DATA_WIPE, async () => {
+  try {
+    const eng = getActiveEngine()
+    if (eng && eng.status() === 'running') {
+      await eng.stop()
     }
-  })
-
-  // 导出
-  ipcMain.handle(IPC.DATA_EXPORT, () => {
-    return exportData()
-  })
-
-  // 导入
-  ipcMain.handle(IPC.DATA_IMPORT, (_e, payload: any) => {
-    try {
-      const result = importData(payload)
-      return { ok: true, ...result }
-    } catch (e: any) {
-      return { ok: false, output: e?.message ?? String(e) }
+    // 删除 data 目录所有内容（db/conf/logs/snapshots/templates/custom）
+    const paths = resolvePaths()
+    closeDb()
+    const fs = require('node:fs')
+    for (const sub of ['data.db', 'data.db-shm', 'data.db-wal', 'nginx-conf', 'logs', 'snapshots', 'temp', 'templates']) {
+      const p = joinPath(paths.dataDir, sub)
+      if (fs.existsSync(p)) {
+        fs.rmSync(p, { recursive: true, force: true })
+      }
     }
-  })
+    return { ok: true }
+  }
+  catch (e: any) {
+    return { ok: false, output: e?.message ?? String(e) }
+  }
+})
+
+// 导出
+ipcMain.handle(IPC.DATA_EXPORT, () => {
+  return exportData()
+})
+
+// 导入
+ipcMain.handle(IPC.DATA_IMPORT, (_e, payload: any) => {
+  try {
+    const result = importData(payload)
+    return { ok: true, ...result }
+  }
+  catch (e: any) {
+    return { ok: false, output: e?.message ?? String(e) }
+  }
+})
 ```
 
 （`joinPath` = `join` from 'path'，已 import 或加 import。`require('fs')` 用 dynamic 避免 ESM 问题——或顶部 import fs。优先顶部 import。）
@@ -429,10 +461,10 @@ git commit -m "feat(ipc): DATA_WIPE + DATA_EXPORT + DATA_IMPORT（清除/导出/
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue'
 import { api } from '@renderer/api/ipc'
 import { useHostsStore } from '@renderer/stores/hosts'
 import { useMappingsStore } from '@renderer/stores/mappings'
+import { ref } from 'vue'
 
 const hosts = useHostsStore()
 const mappings = useMappingsStore()
@@ -440,11 +472,13 @@ const message = ref('')
 const messageType = ref<'info' | 'error'>('info')
 
 async function wipeAll() {
-  if (!confirm('⚠️ 确定清除所有痕迹？\n\n这将删除所有主机、映射、日志、历史配置。\n程序将重启到空状态。\n\n此操作不可撤销！')) return
-  if (!confirm('再次确认：真的要删除所有数据吗？')) return
+  if (!confirm('⚠️ 确定清除所有痕迹？\n\n这将删除所有主机、映射、日志、历史配置。\n程序将重启到空状态。\n\n此操作不可撤销！'))
+    return
+  if (!confirm('再次确认：真的要删除所有数据吗？'))
+    return
   const r = await api.wipeAllData()
   if (!r.ok) {
-    message.value = '清除失败：' + (r.output ?? '未知错误')
+    message.value = `清除失败：${r.output ?? '未知错误'}`
     messageType.value = 'error'
     return
   }
@@ -469,23 +503,27 @@ async function doExport() {
 async function doImport(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file) return
+  if (!file)
+    return
   if (!confirm('导入会覆盖当前所有配置，确定继续？')) { input.value = ''; return }
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
     const r = await api.importData(payload)
     if (!r.ok) {
-      message.value = '导入失败：' + (r.output ?? '未知错误')
+      message.value = `导入失败：${r.output ?? '未知错误'}`
       messageType.value = 'error'
-    } else {
+    }
+    else {
       message.value = `已导入 ${r.hostsImported} 个主机、${r.mappingsImported} 条映射，请重启程序`
       messageType.value = 'info'
       await hosts.load()
-      if (hosts.currentHostId) await mappings.load(hosts.currentHostId)
+      if (hosts.currentHostId)
+        await mappings.load(hosts.currentHostId)
     }
-  } catch (e: any) {
-    message.value = '导入失败：' + e.message
+  }
+  catch (e: any) {
+    message.value = `导入失败：${e.message}`
     messageType.value = 'error'
   }
   input.value = ''
@@ -496,29 +534,43 @@ async function doImport(event: Event) {
   <div class="settings-panel">
     <div class="section glass-card">
       <h3>数据管理</h3>
-      <p class="desc">备份当前配置到文件，或从备份恢复。</p>
+      <p class="desc">
+        备份当前配置到文件，或从备份恢复。
+      </p>
       <div class="actions">
-        <button class="btn btn-primary" @click="doExport">导出配置</button>
+        <button class="btn btn-primary" @click="doExport">
+          导出配置
+        </button>
         <label class="btn btn-ghost">
           导入配置
-          <input type="file" accept=".json" @change="doImport" hidden />
+          <input type="file" accept=".json" hidden @change="doImport">
         </label>
       </div>
     </div>
 
     <div class="section glass-card danger-zone">
       <h3>⚠️ 危险区域</h3>
-      <p class="desc">一键清除所有数据（主机、映射、日志、历史）。用于彻底抹除痕迹。</p>
-      <button class="btn btn-danger" @click="wipeAll">清除所有痕迹</button>
+      <p class="desc">
+        一键清除所有数据（主机、映射、日志、历史）。用于彻底抹除痕迹。
+      </p>
+      <button class="btn btn-danger" @click="wipeAll">
+        清除所有痕迹
+      </button>
     </div>
 
     <div class="section glass-card">
       <h3>关于</h3>
-      <p class="desc">Nginx 跳板机管理软件 v0.1.0</p>
-      <p class="desc">绿色版 · 免安装 · 退出无痕</p>
+      <p class="desc">
+        Nginx 跳板机管理软件 v0.1.0
+      </p>
+      <p class="desc">
+        绿色版 · 免安装 · 退出无痕
+      </p>
     </div>
 
-    <div v-if="message" class="message" :class="messageType">{{ message }}</div>
+    <div v-if="message" class="message" :class="messageType">
+      {{ message }}
+    </div>
   </div>
 </template>
 

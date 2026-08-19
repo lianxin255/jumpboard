@@ -63,7 +63,7 @@ proxy_pass 自定义（高级，可选）
 ### renderers 逻辑
 ```ts
 const proxyPass = m.proxyPassUrl
-  ? sanitize(m.proxyPassUrl)                           // 用户自定义，原样用
+  ? sanitize(m.proxyPassUrl) // 用户自定义，原样用
   : `http://${upHost}:${m.upstreamPort}${trailingSlash}` // 默认拼接
 lines.push(`      proxy_pass ${proxyPass};`)
 ```
