@@ -13,3 +13,10 @@ data/
 target/
 apps/desktop/gen/
 *.node
+.eslintcache
+.cache
+.idea
+.env
+.temp
+coverage
+temp
