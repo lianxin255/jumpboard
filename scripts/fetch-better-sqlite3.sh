@@ -14,6 +14,13 @@ if [ -f "$DEST" ]; then
   exit 0
 fi
 
+# 离线模式：文件缺失时报错，不尝试联网下载
+if [ "${NGJ_OFFLINE:-0}" = "1" ]; then
+  echo "[fetch-sqlite] ✗ 离线模式：build/app/better_sqlite3.node 不存在" >&2
+  echo "[fetch-sqlite]   请在有网的机器上运行 pnpm app:build:resources 预下载" >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$DEST")"
 URL="https://github.com/WiseLibs/better-sqlite3/releases/download/${VERSION}/better-sqlite3-${VERSION}-node-${ABI}-${ARCH}.tar.gz"
 TMP="$ROOT/build/.sqlite-download"

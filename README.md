@@ -78,6 +78,27 @@ pnpm app:build
 - `NginxJump.exe` — Tauri 壳
 - 内嵌 Node 运行时 + nginx + better-sqlite3 原生模块 + 前端静态文件
 
+### 内网离线打包
+
+nginx.exe 已内置在 `resources/nginx/`（4.5MB，随仓库走）。Node 运行时和 better-sqlite3 原生模块需要在有网环境预下载一次，之后内网机器可离线打包：
+
+```bash
+# ① 有网的机器上预下载 Windows 依赖（不触发 tauri build）
+pnpm app:build:resources
+# 产出：
+#   build/node/node.exe           — Node.js win-x64 运行时（~77MB）
+#   build/app/better_sqlite3.node  — better-sqlite3 原生模块（~1.8MB）
+#   build/app/server.cjs           — esbuild 打包的后端（~430KB）
+#   build/app/templates/builtin/    — 内置模板
+
+# ② 把整个项目目录（含 build/）拷到内网 Windows 机器
+
+# ③ 内网机器上离线打包（跳过所有网络下载）
+pnpm app:build:offline
+```
+
+> `--offline` 模式下如果缺少预构建文件，会报清晰错误提示，不会尝试联网下载。
+
 ## 项目结构
 
 ```

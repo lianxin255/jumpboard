@@ -19,6 +19,7 @@
     "tauri": "tauri",
     "app:build": "node scripts/build-app.mjs",
     "app:build:resources": "node scripts/build-app.mjs --resources",
+    "app:build:offline": "node scripts/build-app.mjs --offline",
     "prepare": "npx simple-git-hooks"
   },
   "devDependencies": {

@@ -13,6 +13,13 @@ if [ -f "$DEST/node.exe" ]; then
   exit 0
 fi
 
+# 离线模式：文件缺失时报错，不尝试联网下载
+if [ "${NGJ_OFFLINE:-0}" = "1" ]; then
+  echo "[fetch-node] ✗ 离线模式：build/node/node.exe 不存在" >&2
+  echo "[fetch-node]   请在有网的机器上运行 pnpm app:build:resources 预下载" >&2
+  exit 1
+fi
+
 mkdir -p "$DEST"
 URL="https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.zip"
 TMP="$ROOT/build/.node-download"
