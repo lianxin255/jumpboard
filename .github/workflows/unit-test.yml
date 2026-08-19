@@ -1,0 +1,18 @@
+name: Unit Test
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions: {}
+
+jobs:
+  unit-test:
+    uses: sxzz/workflows/.github/workflows/unit-test.yml@main
+    with:
+      # 不跑 build：桌面应用的完整构建需要 nginx/Node 二进制下载，CI 跑不了
+      build: ''
+      # pnpm test 跑 vitest run；e2e 测试在无构建产物时自动 skip
+      test: pnpm run test

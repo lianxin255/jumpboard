@@ -18,7 +18,8 @@
     "typecheck": "pnpm -r typecheck",
     "tauri": "tauri",
     "app:build": "node scripts/build-app.mjs",
-    "app:build:resources": "node scripts/build-app.mjs --resources"
+    "app:build:resources": "node scripts/build-app.mjs --resources",
+    "prepare": "npx simple-git-hooks"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
@@ -30,5 +31,11 @@
     "@vitejs/plugin-vue": "catalog:dev",
     "@vue/test-utils": "catalog:dev",
     "vue": "catalog:frontend"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
   }
 }
