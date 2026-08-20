@@ -78,6 +78,24 @@ pnpm app:build
 - `NginxJump.exe` — Tauri 壳
 - 内嵌 Node 运行时 + nginx + better-sqlite3 原生模块 + 前端静态文件
 
+### macOS 交叉编译 Windows 绿色版
+
+macOS 上可以通过 `cargo-xwin` + `llvm` 交叉编译 Windows exe，无需 Windows 机器：
+
+```bash
+# ① 前置（一次性）
+brew install llvm
+cargo install cargo-xwin
+rustup target add x86_64-pc-windows-msvc
+
+# ② 预下载构建素材（Node + better-sqlite3）
+pnpm app:build:resources
+
+# ③ 交叉编译 + 打绿色版文件夹
+pnpm app:build:win
+# 产出 release/NginxJump/ 文件夹，直接拷到 Windows 双击运行
+```
+
 ### 内网离线打包
 
 nginx.exe 已内置在 `resources/nginx/`（4.5MB，随仓库走）。Node 运行时和 better-sqlite3 原生模块需要在有网环境预下载一次，之后内网机器可离线打包：

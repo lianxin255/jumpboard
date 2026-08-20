@@ -20,6 +20,7 @@
     "app:build": "node scripts/build-app.mjs",
     "app:build:resources": "node scripts/build-app.mjs --resources",
     "app:build:offline": "node scripts/build-app.mjs --offline",
+    "app:build:win": "bash scripts/cross-build-win.sh --bundle",
     "prepare": "npx simple-git-hooks"
   },
   "devDependencies": {
