@@ -24,10 +24,10 @@
     ],
     "resources": {
       "../../build/app/server.cjs": "server/server.cjs",
-      "../../build/node": "bin/node",
+      "../../build/node/node.exe": "bin/node.exe",
       "../../resources/nginx": "nginx/",
       "../../build/app/templates": "templates/",
-      "../../build/app/better_sqlite3.node": "server/better_sqlite3.node",
+      "../../build/app/better_sqlite3.win32.node": "server/better_sqlite3.node",
       "../../apps/web/dist": "web-dist/"
     },
     "category": "DeveloperTool",

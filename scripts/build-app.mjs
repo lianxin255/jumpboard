@@ -19,12 +19,12 @@ function run(cmd, args, opts = {}) {
 // 离线打包前置检查：确保已预下载的 Windows 二进制就位
 function checkOfflineDeps() {
   const nodeExe = join(ROOT, 'build/node/node.exe')
-  const sqliteNode = join(ROOT, 'build/app/better_sqlite3.node')
+  const sqliteNode = join(ROOT, 'build/app/better_sqlite3.win32.node')
   const missing = []
   if (!existsSync(nodeExe))
     missing.push(`  build/node/node.exe       — Node.js win-x64 运行时`)
   if (!existsSync(sqliteNode))
-    missing.push(`  build/app/better_sqlite3.node — better-sqlite3 原生模块`)
+    missing.push(`  build/app/better_sqlite3.win32.node — better-sqlite3 win32 原生模块`)
   if (missing.length > 0) {
     console.error('\n✗ 离线模式：缺少 Windows 预构建文件：\n')
     console.error(missing.join('\n'))
@@ -41,20 +41,19 @@ console.log('① web 构建')
 run('pnpm', ['-F', '@ngj/web', 'build'])
 
 console.log('② esbuild 单文件 server.cjs（自包含，app 内零 node_modules）')
-// 清理 build/app/ 但保留 better_sqlite3.node（离线打包时不能重新下载）
-// 先备份 .node 文件到 build/ 根目录，清理后恢复
-const SQLITE_NODE = join(ROOT, 'build/app/better_sqlite3.node')
-const SQLITE_BACKUP = join(ROOT, 'build/.better_sqlite3.node.bak')
-let hadSqlite = false
-if (existsSync(SQLITE_NODE)) {
-  cpSync(SQLITE_NODE, SQLITE_BACKUP)
-  hadSqlite = true
+// 清理 build/app/，但保留 win32 prebuilt（离线打包时不能重新下载）
+const SQLITE_WIN32 = join(ROOT, 'build/app/better_sqlite3.win32.node')
+const SQLITE_WIN32_BAK = join(ROOT, 'build/.better_sqlite3.win32.node.bak')
+if (existsSync(SQLITE_WIN32)) {
+  cpSync(SQLITE_WIN32, SQLITE_WIN32_BAK)
 }
 rmSync(join(ROOT, 'build/app'), { recursive: true, force: true })
 mkdirSync(join(ROOT, 'build/app'), { recursive: true })
 
-// better-sqlite3 + ssh2 + cpu-features 是 native 模块，不能 bundle，标记为 external
-// esbuild 会保留 require()，运行时从 sidecar 旁的 node_modules 或 .node 文件加载
+// better-sqlite3 只留原生 .node 为 external（运行时经 nativeBinding 显式加载），
+// 其 JS 部分与 ssh2 全部打进 bundle——ssh2 的 cpu-features 是 try-catch 可选依赖，
+// 缺失时静默走纯 JS crypto，无需 external。
+const BSQLITE = join(ROOT, 'node_modules/.pnpm/better-sqlite3@12.11.1/node_modules/better-sqlite3')
 await build({
   entryPoints: [join(ROOT, 'packages/server/src/index.ts')],
   bundle: true,
@@ -62,8 +61,12 @@ await build({
   format: 'cjs',
   target: 'node22',
   outfile: join(ROOT, 'build/app/server.cjs'),
-  external: ['better-sqlite3', 'ssh2', 'cpu-features'],
+  // cpu-features 是 ssh2 的可选依赖（try-catch 加载），external 后运行时
+  // require 失败被 ssh2 静默吞掉，走纯 JS crypto fallback
+  external: ['cpu-features'],
   alias: {
+    // 把 better-sqlite3 指到它的 JS 入口：bundle JS，.node 由 nativeBinding 加载
+    'better-sqlite3': join(BSQLITE, 'lib/index.js'),
     '@ngj/shared/types': join(ROOT, 'packages/shared/src/types.ts'),
     '@ngj/shared/paths': join(ROOT, 'packages/shared/src/paths.ts'),
     '@ngj/shared/validation': join(ROOT, 'packages/shared/src/validation.ts'),
@@ -71,10 +74,18 @@ await build({
   },
 })
 
-// 恢复 better_sqlite3.node（如果清理前存在）
-if (hadSqlite) {
-  cpSync(SQLITE_BACKUP, SQLITE_NODE)
-  rmSync(SQLITE_BACKUP)
+// 恢复 win32 prebuilt（本次备份的，或上次构建中断遗留的 .bak）
+if (existsSync(SQLITE_WIN32_BAK)) {
+  cpSync(SQLITE_WIN32_BAK, SQLITE_WIN32)
+  rmSync(SQLITE_WIN32_BAK)
+}
+
+// 复制当前平台的 better_sqlite3.node 到 build/app/（供本地 e2e 测试用）
+// win32 prebuilt 在 build/app/better_sqlite3.win32.node，两者互不干扰
+const SQLITE_NATIVE = join(BSQLITE, 'build/Release/better_sqlite3.node')
+if (existsSync(SQLITE_NATIVE)) {
+  cpSync(SQLITE_NATIVE, join(ROOT, 'build/app/better_sqlite3.node'))
+  console.log(`  复制当前平台 better_sqlite3.node (${process.platform}-${process.arch})`)
 }
 
 console.log('②b 复制内置模板到 build/app/templates/builtin')

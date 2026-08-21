@@ -257,11 +257,11 @@ async function onSaved() {
       <MappingList
         v-if="currentView === 'mappings'"
         :engine-status="engStatus" :engine-dirty="engDirty" :engine-pid="engPid"
-        @refreshEng="refreshEng"
+        @refresh-eng="refreshEng"
         @new="openNew" @edit="openEdit" @clone="cloneMap"
       />
       <LogViewer v-else-if="currentView === 'logs'" :host-id="hosts.currentHostId!" />
-      <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolledBack="reloadAll" />
+      <HistoryPanel v-else-if="currentView === 'history'" :host-id="hosts.currentHostId!" @rolled-back="reloadAll" />
       <HostManager v-else-if="currentView === 'hosts'" :engine-status="engStatus" />
       <SettingsPanel v-else-if="currentView === 'settings'" />
     </main>

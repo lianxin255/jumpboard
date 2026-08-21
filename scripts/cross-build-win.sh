@@ -34,8 +34,8 @@ if [ ! -f "$ROOT/build/node/node.exe" ]; then
   echo "✗ 未找到 build/node/node.exe，请先运行：pnpm app:build:resources"
   exit 1
 fi
-if [ ! -f "$ROOT/build/app/better_sqlite3.node" ]; then
-  echo "✗ 未找到 build/app/better_sqlite3.node，请先运行：pnpm app:build:resources"
+if [ ! -f "$ROOT/build/app/better_sqlite3.win32.node" ]; then
+  echo "✗ 未找到 build/app/better_sqlite3.win32.node，请先运行：pnpm app:build:resources"
   exit 1
 fi
 
