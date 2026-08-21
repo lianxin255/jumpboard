@@ -6,7 +6,7 @@ const sharedDir = resolve(__dirname, '../../packages/shared/src')
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@ngj/server', '@ngj/shared'] })],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts') },
@@ -18,13 +18,12 @@ export default defineConfig({
         '@ngj/shared/paths': resolve(sharedDir, 'paths.ts'),
         '@ngj/shared/validation': resolve(sharedDir, 'validation.ts'),
         '@ngj/shared': resolve(sharedDir, 'index.ts'),
-        '@ngj/server': resolve(__dirname, '../../packages/server/src/index.ts'),
-        '@ngj/server/*': resolve(__dirname, '../../packages/server/src/*'),
+        '@ngj/server': resolve(__dirname, '../../packages/server/src'),
       },
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@ngj/shared'] })],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
