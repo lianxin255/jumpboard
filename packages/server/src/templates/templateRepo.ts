@@ -15,26 +15,20 @@ function isValidTemplateId(id: string): boolean {
 
 /**
  * 内置模板目录定位。
- * - 生产环境：Tauri 把模板复制到 resources/templates，
- *   sidecar 通过 NGJ_RESOURCES_DIR 环境变量访问。
+ * - 生产环境：Electron extraResources 把模板复制到 resources/bundled/templates，
+ *   通过 resolvePaths().resourcesDir 访问。
  * - vitest（源文件）：__dirname 就是 packages/server/src/templates，内置模板在同级 builtin。
  */
 function getBuiltinDir(): string {
-  // 打包环境：模板在 resources/templates（与 nginx 一起在 resources/ 下）
-  const resourcesDir = process.env.NGJ_RESOURCES_DIR
-  if (resourcesDir) {
-    const packaged = join(resourcesDir, 'templates', 'builtin')
-    if (pathExistsSync(packaged))
-      return packaged
-  }
+  // 打包环境：模板在 resources/bundled/templates（extraResources 映射）
+  const paths = resolvePaths()
+  const packaged = join(paths.resourcesDir, 'bundled', 'templates')
+  if (pathExistsSync(packaged))
+    return packaged
   // vitest 运行源文件时 __dirname 是 packages/server/src/templates，内置模板就在 ./builtin
   const fromHere = join(__dirname, 'builtin')
   if (pathExistsSync(fromHere))
     return fromHere
-  // esbuild bundle 后 __dirname 是 build/app，模板复制到 build/app/templates/builtin
-  const fromBundle = join(__dirname, 'templates', 'builtin')
-  if (pathExistsSync(fromBundle))
-    return fromBundle
   // 回溯到源码
   return join(__dirname, '..', '..', '..', 'packages', 'server', 'src', 'templates', 'builtin')
 }

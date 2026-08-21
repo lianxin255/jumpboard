@@ -14,6 +14,7 @@ export default antfu({
     '**/node_modules/**',
     'build/**',
     'apps/desktop/gen/**',
+    'apps/desktop/.stage/**',
     'resources/**',
     'data/**',
     'release/**',

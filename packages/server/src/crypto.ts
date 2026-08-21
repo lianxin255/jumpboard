@@ -1,52 +1,61 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
 /**
  * 密码加密封装。
- *
- * Tauri sidecar 无 safeStorage（Electron 专有），改用 AES-256-GCM + 派生密钥。
- * 密钥从 NGJ_SECRET 环境变量派生（Tauri 壳启动时注入，每次启动随机生成）。
- * 无 NGJ_SECRET 时用进程级随机密钥（重启失效——仅开发/测试可用）。
+ * 生产环境（Electron）用 safeStorage（系统钥匙串）；
+ * 测试/开发环境（无 Electron）用 AES-256-GCM fallback。
+ * fallback 的 key 是进程级随机，重启失效——仅测试可用，真正安全靠生产 safeStorage。
  *
  * 格式：
- * - 'fb1:' + base64(iv[12] + tag[16] + ciphertext)  —— AES-256-GCM
- * - 'ss1:' 旧 safeStorage 格式保留兼容（解密时识别但不再产生）
+ * - 'ss1:' + base64(safeStorage.encryptString) — 生产
+ * - 'fb1:' + base64(iv[12] + tag[16] + ciphertext) — fallback
  */
-
-function deriveKey(): Buffer {
-  const secret = process.env.NGJ_SECRET
-  if (secret) {
-    return scryptSync(secret, 'nginx-jump-gui-salt', 32)
-  }
-  // 进程级随机密钥（重启失效，仅开发/测试）
-  return FALLBACK_KEY
-}
 
 const FALLBACK_KEY = randomBytes(32)
 
+function trySafeStorage(): any | null {
+  try {
+    const electron = require('electron')
+    if (electron?.safeStorage && electron.safeStorage.isEncryptionAvailable())
+      return electron.safeStorage
+  }
+  catch {
+    // 无 electron
+  }
+  return null
+}
+
 export function isEncryptionAvailable(): boolean {
-  return true
+  return trySafeStorage() !== null
 }
 
 export function encryptPassword(plain: string): string {
-  const key = deriveKey()
+  const safe = trySafeStorage()
+  if (safe) {
+    const buf = safe.encryptString(plain)
+    return `ss1:${buf.toString('base64')}`
+  }
   const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const cipher = createCipheriv('aes-256-gcm', FALLBACK_KEY, iv)
   const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
   return `fb1:${Buffer.concat([iv, tag, enc]).toString('base64')}`
 }
 
 export function decryptPassword(stored: string): string {
+  const safe = trySafeStorage()
   if (stored.startsWith('ss1:')) {
-    throw new Error('密码用 safeStorage 加密（Electron 旧格式），Tauri 环境不可用，请重新输入密码')
+    if (!safe)
+      throw new Error('密码用 safeStorage 加密，但当前环境不可用')
+    const buf = Buffer.from(stored.slice(4), 'base64')
+    return safe.decryptString(buf)
   }
   if (stored.startsWith('fb1:')) {
-    const key = deriveKey()
     const raw = Buffer.from(stored.slice(4), 'base64')
     const iv = raw.subarray(0, 12)
     const tag = raw.subarray(12, 28)
     const enc = raw.subarray(28)
-    const decipher = createDecipheriv('aes-256-gcm', key, iv)
+    const decipher = createDecipheriv('aes-256-gcm', FALLBACK_KEY, iv)
     decipher.setAuthTag(tag)
     return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8')
   }

@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { ensureDirSync } from 'fs-extra'
 
 let appRootForTest: string | null = null
@@ -8,28 +8,51 @@ export function __setAppRootForTest(root: string | null): void {
 }
 
 /**
+ * 安全获取 Electron app 实例。测试环境（vitest 无 electron）返回 null。
+ * 用动态 require 避免顶层 import 在非 electron 环境崩溃。
+ */
+function getElectronApp(): any | null {
+  try {
+    const electron = require('electron')
+    return electron?.app ?? null
+  }
+  catch {
+    return null
+  }
+}
+
+/**
  * data 目录根：用户数据跟 app 走（绿色版核心要求）。
  *
- * Tauri sidecar 启动时由 Rust 壳注入 NGJ_DATA_ROOT 环境变量（exe 旁 data/ 目录）。
- * 开发时 fallback 到 process.cwd()。
- * 测试时 appRootForTest 覆盖。
+ * - Windows portable：PORTABLE_EXECUTABLE_DIR（NSIS 注入，exe 旁目录）
+ * - macOS .app：.app 父目录
+ * - 开发：process.cwd()
+ * - 测试：appRootForTest 覆盖
  */
 function getDataRoot(): string {
   if (appRootForTest)
     return appRootForTest
-  if (process.env.NGJ_DATA_ROOT)
-    return process.env.NGJ_DATA_ROOT
+  const app = getElectronApp()
+  if (app?.isPackaged) {
+    if (process.platform === 'win32' && process.env.PORTABLE_EXECUTABLE_DIR)
+      return process.env.PORTABLE_EXECUTABLE_DIR
+    const exePath = app.getPath('exe')
+    if (process.platform === 'darwin')
+      return dirname(dirname(dirname(exePath)))
+    return dirname(exePath)
+  }
   return process.cwd()
 }
 
 /**
  * resources 目录：内置 nginx + 模板所在。
- * Tauri sidecar 启动时由 Rust 壳注入 NGJ_RESOURCES_DIR（resource_dir()）。
+ * 打包后在 process.resourcesPath（Electron 标准 API）。
  * 开发时在项目根的 resources/ 下。
  */
 function getResourcesDir(): string {
-  if (process.env.NGJ_RESOURCES_DIR)
-    return process.env.NGJ_RESOURCES_DIR
+  const app = getElectronApp()
+  if (app?.isPackaged && process.resourcesPath)
+    return process.resourcesPath
   return join(getDataRoot(), 'resources')
 }
 
@@ -62,7 +85,7 @@ export function resolvePaths(): AppPaths {
     snapshotDir: join(dataDir, 'snapshots'),
     tempDir: join(dataDir, 'temp'),
     resourcesDir,
-    bundledNginxDir: join(resourcesDir, 'nginx'),
+    bundledNginxDir: join(resourcesDir, 'bundled', 'nginx'),
     ensureDataDirs: () => {
       for (const d of [
         dataDir,

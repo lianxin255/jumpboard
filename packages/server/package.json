@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/ipc.ts",
     "./*": "./src/*"
   },
   "scripts": {
-    "dev": "node --watch src/index.ts",
-    "start": "node src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -18,6 +16,9 @@
     "fs-extra": "catalog:prod",
     "ssh2": "catalog:prod",
     "yaml": "catalog:prod"
+  },
+  "peerDependencies": {
+    "electron": "*"
   },
   "devDependencies": {
     "@ngj/shared": "workspace:*",

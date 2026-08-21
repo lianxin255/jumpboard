@@ -60,6 +60,6 @@ describe('paths', () => {
     __setAppRootForTest(testRoot)
     const p = resolvePaths()
     expect(p.resourcesDir).toBe(join(testRoot, 'resources'))
-    expect(p.bundledNginxDir).toBe(join(testRoot, 'resources', 'nginx'))
+    expect(p.bundledNginxDir).toBe(join(testRoot, 'resources', 'bundled', 'nginx'))
   })
 })

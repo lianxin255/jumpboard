@@ -23,14 +23,14 @@
       "@ngj/shared/*": ["packages/shared/src/*"],
       "@ngj/server": ["packages/server/src/index.ts"],
       "@ngj/server/*": ["packages/server/src/*"],
-      "@web/*": ["apps/web/src/*"]
+      "@renderer/*": ["apps/desktop/src/renderer/*"]
     }
   },
   "include": [
     "packages/shared/src/**/*.ts",
     "packages/server/src/**/*.ts",
-    "apps/web/src/**/*.ts",
-    "apps/web/src/**/*.vue"
+    "apps/desktop/src/renderer/**/*.ts",
+    "apps/desktop/src/renderer/**/*.vue"
   ],
   "exclude": ["node_modules", "dist", "build", "target", "out", "release", "**/*.test.ts", "**/*.spec.ts"]
 }

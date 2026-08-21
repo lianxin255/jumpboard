@@ -12,6 +12,7 @@ data/
 .verify-*.ts
 target/
 apps/desktop/gen/
+apps/desktop/.stage/
 *.node
 .eslintcache
 .cache

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 
 const sharedDir = resolve(__dirname, 'packages/shared/src')
 const serverDir = resolve(__dirname, 'packages/server/src')
-const webDir = resolve(__dirname, 'apps/web/src')
+const rendererDir = resolve(__dirname, 'apps/desktop/src/renderer')
 
 export default defineConfig({
   plugins: [vue()],
@@ -15,7 +15,7 @@ export default defineConfig({
       '@ngj/shared/validation': resolve(sharedDir, 'validation.ts'),
       '@ngj/shared': resolve(sharedDir, 'index.ts'),
       '@ngj/server': resolve(serverDir, 'index.ts'),
-      '@web': webDir,
+      '@renderer': rendererDir,
     },
   },
   test: {
@@ -23,7 +23,7 @@ export default defineConfig({
     include: [
       'packages/server/src/**/*.test.ts',
       'packages/shared/src/**/*.test.ts',
-      'apps/web/src/**/*.test.ts',
+      'apps/desktop/src/renderer/**/*.test.ts',
     ],
     pool: 'forks',
     poolOptions: { forks: { singleFork: true } },

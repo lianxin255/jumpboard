@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "内网跳板机 nginx 管理软件 · Tauri 桌面壳 + Node sidecar 后端",
+  "description": "内网跳板机 nginx 管理软件 · Electron 桌面壳 + Node 后端",
   "scripts": {
+    "dev": "pnpm -F @ngj/desktop dev",
     "dev:web": "pnpm -F @ngj/web dev",
     "dev:server": "pnpm -F @ngj/server dev",
     "server": "pnpm -F @ngj/server start",
@@ -16,17 +17,14 @@
     "lint": "eslint . --cache",
     "lint:fix": "eslint . --cache --fix",
     "typecheck": "pnpm -r typecheck",
-    "tauri": "tauri",
-    "app:build": "node scripts/build-app.mjs",
-    "app:build:resources": "node scripts/build-app.mjs --resources",
-    "app:build:offline": "node scripts/build-app.mjs --offline",
-    "app:build:win": "bash scripts/cross-build-win.sh --bundle",
-    "prepare": "npx simple-git-hooks"
+    "build:win:dir": "node scripts/build-desktop.mjs --win --dir",
+    "build:win": "node scripts/build-desktop.mjs --win portable",
+    "build:mac:dir": "node scripts/build-desktop.mjs --mac --dir",
+    "build:mac": "node scripts/build-desktop.mjs --mac dmg"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
-    "@tauri-apps/cli": "catalog:dev",
-    "esbuild": "catalog:dev",
+    "@electron/rebuild": "catalog:dev",
     "jsdom": "catalog:dev",
     "typescript": "catalog:dev",
     "vitest": "catalog:dev",

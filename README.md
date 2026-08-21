@@ -1,8 +1,8 @@
 # NginxJump
 
-> 内网跳板机 nginx 管理软件 · Tauri 桌面壳 + Node sidecar 后端
+> 内网跳板机 nginx 管理软件 · Electron 桌面壳 + IPC 架构
 
-[![Test](https://img.shields.io/badge/tests-187%20passed-brightgreen)](#测试)
+[![Test](https://img.shields.io/badge/tests-176%20passed-brightgreen)](#测试)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-brightgreen)](#测试)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
@@ -24,20 +24,21 @@ NginxJump 是一个面向 Windows 的 **nginx 跳板机管理工具**。在内�
 ## 架构
 
 ```
-apps/desktop (Tauri 2 Rust 壳)
-  ├─ spawn Node sidecar + 托盘 + 单实例锁
-  └─ WebviewWindow 指向 127.0.0.1:PORT
-packages/server (Node 后端)
-  ├─ HTTP server (node:http) + 静态文件托管
+apps/desktop (Electron 33 壳)
+  ├─ main 进程：窗口 + 生命周期 + IPC handler 注册 + nginx 进程管理
+  ├─ preload：contextBridge 暴露类型安全的 invoke/on
+  └─ renderer：Vue 3 前端（从 apps/web 合并）
+packages/server (业务逻辑层)
+  ├─ ipc.ts：registerIpcHandlers(ipcMain) — 45 个 IPC handler
+  ├─ paths.ts：Electron app API + PORTABLE_EXECUTABLE_DIR 路径解析
+  ├─ crypto.ts：safeStorage (OS keychain) + AES-256-GCM fallback
   ├─ nginx 进程管理 + 配置生成 + 快照
-  └─ esbuild 打成单文件 server.cjs（零 node_modules）
+  └─ db / ssh / services / templates / utils
 packages/shared (类型 + 纯函数)
-  └─ 类型定义 + 校验 + 路径工具
-apps/web (Vue 3 前端)
-  └─ Pinia stores + 组件 + HTTP API 客户端
+  └─ 类型定义 + 校验 + API 路径常量
 ```
 
-**工作原理**：Tauri Rust 壳启动时 spawn 一个 Node 子进程（打包后的 `server.cjs`），通过环境变量注入数据目录、资源目录、端口等。Node sidecar 提供 HTTP API + 静态文件托管，前端通过 `fetch` 调用 `127.0.0.1:PORT` 上的 API。退出时 Rust 壳杀掉 sidecar，sidecar 收到 SIGTERM 后优雅停止 nginx。
+**工作原理**：Electron main 进程启动时初始化数据目录、打开 SQLite 数据库、注册 IPC handler、切换 nginx 引擎到默认 host、创建窗口。前端通过 `window.electronAPI.invoke(API.XXX, ...args)` 调用 main 进程的 handler，handler 内部调用 `@ngj/server` 的业务逻辑。退出时 main 进程先停止 nginx 引擎再关闭数据库连接。
 
 ## 快速开始
 
@@ -45,114 +46,78 @@ apps/web (Vue 3 前端)
 
 - Node.js >= 22
 - pnpm >= 9
-- Rust（可选，仅打包桌面应用需要）
 
 ### 开发
 
 ```bash
 pnpm install
 
-# 本地开发：web + server 分别启动
-pnpm dev:web    # Vite dev server (http://localhost:5173)
-pnpm dev:server # Node sidecar (http://127.0.0.1:47831)
+# 本地开发：electron-vite dev（HMR + 热重载）
+pnpm dev
 
 # 测试
-pnpm test           # 全部（单元 + e2e）
-pnpm test:server    # 仅后端
-pnpm test:web       # 仅前端
+pnpm test
 
 # 代码检查
 pnpm lint
 pnpm typecheck
 ```
 
-> e2e 测试需要先构建 sidecar bundle：`pnpm app:build:resources`
-
-### 打包（Windows 绿色版）
+### 打包
 
 ```bash
-pnpm app:build
+# Windows 绿色版（macOS 交叉编译，零 Wine）
+pnpm build:win:dir
+# 产出 release/win-unpacked/，zip 后直接给用户
+
+# Windows portable exe（需 Docker Wine）
+pnpm build:win
+
+# macOS dmg
+pnpm build:mac
 ```
 
-产出在 `release/` 目录，包含：
-- `NginxJump.exe` — Tauri 壳
-- 内嵌 Node 运行时 + nginx + better-sqlite3 原生模块 + 前端静态文件
-
-### macOS 交叉编译 Windows 绿色版
-
-macOS 上可以通过 `cargo-xwin` + `llvm` 交叉编译 Windows exe，无需 Windows 机器：
-
-```bash
-# ① 前置（一次性）
-brew install llvm
-cargo install cargo-xwin
-rustup target add x86_64-pc-windows-msvc
-
-# ② 预下载构建素材（Node + better-sqlite3）
-pnpm app:build:resources
-
-# ③ 交叉编译 + 打绿色版文件夹
-pnpm app:build:win
-# 产出 release/NginxJump/ 文件夹，直接拷到 Windows 双击运行
-```
-
-### 内网离线打包
-
-nginx.exe 已内置在 `resources/nginx/`（4.5MB，随仓库走）。Node 运行时和 better-sqlite3 原生模块需要在有网环境预下载一次，之后内网机器可离线打包：
-
-```bash
-# ① 有网的机器上预下载 Windows 依赖（不触发 tauri build）
-pnpm app:build:resources
-# 产出：
-#   build/node/node.exe           — Node.js win-x64 运行时（~77MB）
-#   build/app/better_sqlite3.node  — better-sqlite3 原生模块（~1.8MB）
-#   build/app/server.cjs           — esbuild 打包的后端（~430KB）
-#   build/app/templates/builtin/    — 内置模板
-
-# ② 把整个项目目录（含 build/）拷到内网 Windows 机器
-
-# ③ 内网机器上离线打包（跳过所有网络下载）
-pnpm app:build:offline
-```
-
-> `--offline` 模式下如果缺少预构建文件，会报清晰错误提示，不会尝试联网下载。
+**跨平台原生模块**：使用 `prebuild-install` 从 GitHub Releases 下载目标平台（win32-x64 / darwin-arm64）的 Electron ABI 预编译二进制，无需本地编译，不会污染 pnpm store。
 
 ## 项目结构
 
 ```
 nginx-jump-gui/
 ├── packages/
-│   ├── shared/          # @ngj/shared — 类型 + 校验 + 路径
-│   └── server/          # @ngj/server — HTTP API + nginx 管理 + DB
+│   ├── shared/          # @ngj/shared — 类型 + 校验 + API 路径常量
+│   └── server/          # @ngj/server — IPC handler + nginx 管理 + DB
 ├── apps/
-│   ├── web/             # @ngj/web — Vue 3 前端
-│   └── desktop/         # Tauri 2 Rust 壳
+│   └── desktop/         # @ngj/desktop — Electron 应用壳
+│       ├── src/
+│       │   ├── main/       # main 进程
+│       │   ├── preload/    # contextBridge + IPC 类型
+│       │   └── renderer/  # Vue 3 前端（Pinia + 组件 + IPC API 客户端）
+│       ├── electron.vite.config.ts
+│       └── electron-builder.config.cjs
 ├── resources/
 │   └── nginx/           # 内置 nginx 二进制 + mime.types
-├── scripts/
-│   ├── build-app.mjs    # esbuild + web build + tauri build
-│   ├── fetch-node.sh    # 下载 win32 Node 运行时
-│   └── fetch-better-sqlite3.sh
-└── docs/                # 设计文档 + 开发计划
+└── scripts/
+    └── build-desktop.mjs  # 打包编排脚本
 ```
 
 ## 测试
 
-- **187 个测试全部通过**（176 单元 + 11 端到端）
-- e2e 测试启动真实的 esbuild bundle `server.cjs`，通过 HTTP 验证完整 nginx 生命周期：
-  host seed → mapping CRUD → engine test/start/reload/status → snapshot rollback → whitelist → data export → SIGTERM 退出无残留
+- **176 个测试全部通过**
 - 测试框架：vitest（antfu 同目录测试约定）
 - Lint：`@antfu/eslint-config`
-- 类型检查：tsc + vue-tsc
+- 类型检查：tsc + vue-tsc（main / preload / renderer 三处）
 
 ## 技术栈
 
 | 层 | 技术 |
 |----|------|
-| 桌面壳 | Tauri 2 (Rust) |
-| 后端 | Node.js 22 + node:http + better-sqlite3 + ssh2 |
-| 前端 | Vue 3 + Pinia + Vite |
-| 构建 | esbuild (server) + Vite (web) + Tauri CLI (desktop) |
+| 桌面壳 | Electron 33 |
+| 构建工具 | electron-vite（三进程统一 Vite 配置） |
+| IPC | @electron-toolkit/typed-ipc + contextBridge |
+| 后端 | Node.js + better-sqlite3 + ssh2 |
+| 前端 | Vue 3 + Pinia |
+| 原生模块 | prebuild-install（跨平台预编译二进制下载） |
+| 打包 | electron-builder（portable + dmg + --dir） |
 | 测试 | vitest |
 | 规范 | @antfu/eslint-config |
 
