@@ -10,9 +10,10 @@ import { listEnabledMappings } from '../db/mappingRepo'
 import { getEnabledWhitelistIps, isWhitelistEnabled } from '../db/whitelistRepo'
 import { resolvePaths } from '../paths'
 import { generateFullConf } from './confGenerator'
-import { setActiveEngine } from './engineRegistry'
+import { getActiveEngine, setActiveEngine } from './engineRegistry'
 import { LocalNginxEngine } from './localEngine'
 import { RemoteNginxEngine } from './remoteEngine'
+import { stopStaleNginx } from './staleNginx'
 
 export async function switchEngineToHost(hostId: string): Promise<{ ok: boolean, error?: string }> {
   const host = getHost(hostId)
@@ -30,10 +31,18 @@ export async function switchEngineToHost(hostId: string): Promise<{ ok: boolean,
 
   let engine: LocalNginxEngine | RemoteNginxEngine
   if (host.type === 'local') {
+    // 旧引擎是本地且在运行 → 先停，否则旧 nginx 变孤儿占端口，新引擎 start 时 bind 失败
+    const prev = getActiveEngine()
+    if (prev?.engineKind === 'local' && prev.status() === 'running') {
+      try { await prev.stop() }
+      catch { /* 停不掉也要继续切换，错误由后续 start 暴露 */ }
+    }
     const nginxPath = host.localConfig?.nginxPath
       || join(paths.bundledNginxDir, process.platform === 'win32' ? 'nginx.exe' : 'nginx')
     // nginx -p prefix：用 data/nginx-home（跟 exe 走、可写、持久）。
     const prefixDir = join(paths.dataDir, 'nginx-home')
+    // 上次应用崩溃/强杀遗留的孤儿 nginx（不在引擎注册表里）按 pid 文件清理
+    await stopStaleNginx(prefixDir)
     ensureDirSync(prefixDir)
     // conf 放在 prefix/conf/nginx.conf，nginx 用 -c conf/nginx.conf 相对路径读取。
     // 相对路径解析最可靠，彻底避开绝对路径的反斜杠转义/中文路径问题。

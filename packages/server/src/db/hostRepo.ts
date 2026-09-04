@@ -78,3 +78,18 @@ export function getDefaultHost(): Host | undefined {
   const row = getDb().prepare('SELECT * FROM hosts WHERE is_default = 1 ORDER BY created_at LIMIT 1').get() as HostRow | undefined
   return row ? rowToHost(row) : undefined
 }
+
+/** 无任何主机时补一个默认本地主机（应用首次启动 / DATA_WIPE 自愈共用） */
+export function ensureDefaultHost(): Host | null {
+  if (listHosts().length > 0)
+    return null
+  const h = createHost({
+    name: '本机网关',
+    type: 'local',
+    isDefault: 1,
+    localConfig: { nginxPath: '', confDir: '', logDir: '' },
+    remoteConfig: null,
+  })
+  setDefaultHost(h.id)
+  return h
+}

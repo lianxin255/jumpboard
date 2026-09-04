@@ -79,7 +79,9 @@ async function wipeAll() {
     return
   const r = await api.wipeAllData('CONFIRM_WIPE')
   if (!r.ok) { toast(`清除失败：${r.output ?? '未知错误'}`, 'err'); return }
-  toast('所有数据已清空，请重启程序', 'ok')
+  toast('所有数据已清空，已重置为初始状态', 'ok')
+  // 后端已自愈（重开 DB + 重建默认主机/引擎），稍后刷新前端状态即可继续使用
+  setTimeout(() => window.location.reload(), 1500)
 }
 
 async function doExport() {

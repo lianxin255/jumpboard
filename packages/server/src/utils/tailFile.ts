@@ -37,8 +37,10 @@ export function tailFile(filePath: string, maxLines: number): string[] {
     }
 
     const content = Buffer.concat(blocks).toString('utf-8')
-    // split + filter 空行，取最后 maxLines 行
-    const lines = content.split('\n').filter(l => l.length > 0)
+    // split + 剥离行尾 \r（Windows 日志为 \r\n）+ filter 空行，取最后 maxLines 行
+    const lines = content.split('\n')
+      .map(l => (l.endsWith('\r') ? l.slice(0, -1) : l))
+      .filter(l => l.length > 0)
     return lines.slice(-maxLines)
   }
   catch {

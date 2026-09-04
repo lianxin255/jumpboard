@@ -9,6 +9,8 @@ import { safeApplyConf } from './safeApply'
 export interface ApplyOptions extends ConfGenOptions {
   /** 当前 host id，用于存配置快照。不传则不存快照。 */
   hostId?: string
+  /** 引擎停止态应用：只写入+校验，不 reload（conf 在下次 start 时生效） */
+  skipReload?: boolean
 }
 
 export interface ApplyResult {
@@ -33,7 +35,7 @@ export async function applyMappings(
 ): Promise<ApplyResult> {
   const conf = generateFullConf(mappings, opts)
 
-  const result = await safeApplyConf(engine, conf)
+  const result = await safeApplyConf(engine, conf, { skipReload: opts.skipReload })
 
   if (result.ok) {
     // 成功：存快照 + 日志

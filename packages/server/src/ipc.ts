@@ -12,10 +12,11 @@ import {
 } from '@ngj/shared/validation'
 import { pathExistsSync, removeSync, unlinkSync } from 'fs-extra'
 import { decryptPassword, encryptPassword } from './crypto'
-import { closeDb, getDb } from './db/connection'
+import { closeDb, getDb, openDb } from './db/connection'
 import {
   createHost,
   deleteHost,
+  ensureDefaultHost,
   getDefaultHost,
   listHosts,
   setDefaultHost,
@@ -240,10 +241,16 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     if (wlEnabled && (!wlIps || wlIps.length === 0))
       return { ok: false, output: '白名单已开启但未配置任何 IP。请先添加 IP 或关闭白名单后再应用。' }
     try {
-      const result = await applyMappings(eng, mappings, { hostId, whitelistIps: wlIps })
+      // 本地引擎停止态：conf 写入 + nginx -t 校验即可（启动时加载磁盘 conf），
+      // 走 reload 必然失败并回滚，用户永远无法在停止态应用配置
+      const skipReload = eng.supportsProcessControl && eng.status() !== 'running'
+      const result = await applyMappings(eng, mappings, { hostId, whitelistIps: wlIps, skipReload })
       if (result.ok)
         setEngineDirty(false)
-      return { ok: result.ok, output: result.output }
+      const output = result.ok && skipReload
+        ? `${result.output}\n引擎未运行：配置已写入并通过校验，启动 nginx 后生效。`
+        : result.output
+      return { ok: result.ok, output }
     }
     catch (e: any) {
       return { ok: false, output: e?.message ?? String(e) }
@@ -252,7 +259,15 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle(API.ENGINE_TEST, async () => {
     const eng = getActiveEngine()
-    return eng ? eng.test() : { ok: false, output: 'no engine' }
+    if (!eng)
+      return { ok: false, output: 'no engine' }
+    // 远程主机 SSH 失败时 engine.test() 会 reject，兜底成结果对象与其它 handler 一致
+    try {
+      return await eng.test()
+    }
+    catch (e: any) {
+      return { ok: false, output: e?.message ?? String(e) }
+    }
   })
 
   ipcMain.handle(API.ENGINE_STATUS, () => getActiveEngine()?.status() ?? 'unknown')
@@ -354,7 +369,9 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const eng = getActiveEngine()
     if (!eng)
       return { ok: false, output: 'no active engine' }
-    const result = await safeApplyConf(eng, snap.content)
+    // 停止态与 ENGINE_RELOAD 一致：只写入+校验，启动时生效
+    const skipReload = eng.supportsProcessControl && eng.status() !== 'running'
+    const result = await safeApplyConf(eng, snap.content, { skipReload })
     if (result.ok) {
       setEngineDirty(true)
       logger.info(snap.hostId, 'app', `手动回滚到快照 ${snap.id} · DB 与 conf 已偏离，点应用会覆盖`)
@@ -412,6 +429,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         if (pathExistsSync(p))
           removeSync(p)
       }
+      // 自愈：重开 DB（schema 由 migrations 重建）+ 补默认主机 + 重建引擎，
+      // 应用无需重启即可继续使用（healthCheckLoop 也不再对着关闭的 DB 空转）
+      openDb()
+      const def = ensureDefaultHost() ?? getDefaultHost()
+      setActiveEngine(null)
+      setEngineDirty(false)
+      if (def)
+        await switchEngineToHost(def.id)
       logger.warn(null, 'app', '清空所有数据 · 数据库已重置')
       return { ok: true }
     }

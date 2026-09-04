@@ -13,16 +13,10 @@ describe('localNginxEngine 进程管理', () => {
   beforeEach(() => {
     workDir = join(tmpdir(), `nginx-engine-${Date.now()}`)
     mkdirSync(workDir, { recursive: true })
-    // 写一个假 nginx 脚本：保持运行直到收到信号
-    if (process.platform === 'win32') {
-      fakeNginx = join(workDir, 'fake-nginx.bat')
-      writeFileSync(fakeNginx, '@echo off\n:loop\ntimeout /t 1 >nul\ngoto loop\n')
-    }
-    else {
-      fakeNginx = join(workDir, 'fake-nginx.sh')
-      writeFileSync(fakeNginx, '#!/bin/bash\nwhile true; do sleep 1; done\n')
-      require('node:fs').chmodSync(fakeNginx, 0o755)
-    }
+    // 假 nginx：保持运行直到收到信号。只在非 win32 被 spawn（win32 用例 skip，见下）
+    fakeNginx = join(workDir, 'fake-nginx.sh')
+    writeFileSync(fakeNginx, '#!/bin/bash\nwhile true; do sleep 1; done\n')
+    require('node:fs').chmodSync(fakeNginx, 0o755)
   })
 
   afterEach(() => {
@@ -34,7 +28,10 @@ describe('localNginxEngine 进程管理', () => {
     expect(eng.status()).toBe('stopped')
   })
 
-  it('start 后变 running，stop 后变 stopped', async () => {
+  // 依赖真实 spawn 的用例在 win32 上跳过：现代 Node（CVE-2024-27980 修复）spawn .bat
+  // 不带 shell:true 抛 EINVAL，bash 脚本又无法在 Windows 执行。
+  // win32 分支（taskkill / nginx -s reload）的逻辑覆盖见 localEngine.win32.test.ts（mock，跨平台可跑）。
+  it('start 后变 running，stop 后变 stopped', { skip: process.platform === 'win32' }, async () => {
     const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     expect(eng.status()).toBe('running')
@@ -42,7 +39,7 @@ describe('localNginxEngine 进程管理', () => {
     expect(eng.status()).toBe('stopped')
   })
 
-  it('重复 start 抛错', async () => {
+  it('重复 start 抛错', { skip: process.platform === 'win32' }, async () => {
     const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     await expect(eng.start()).rejects.toThrow()
@@ -66,7 +63,7 @@ describe('localNginxEngine 进程管理', () => {
     expect(eng.status()).toBe('stopped')
   })
 
-  it('start→stop→start→stop 循环不会让旧进程的 exit 误清新进程引用', async () => {
+  it('start→stop→start→stop 循环不会让旧进程的 exit 误清新进程引用', { skip: process.platform === 'win32' }, async () => {
     const eng = new LocalNginxEngine({ nginxPath: fakeNginx, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await eng.start()
     expect(eng.status()).toBe('running')
@@ -82,10 +79,16 @@ describe('localNginxEngine 进程管理', () => {
   })
 
   it('nginx 启动后立即退出时 start() reject', async () => {
-    // 写一个立即退出的假 nginx
-    const exitFast = join(workDir, 'exit-fast.sh')
-    writeFileSync(exitFast, '#!/bin/bash\nexit 1\n')
-    require('node:fs').chmodSync(exitFast, 0o755)
+    let exitFast: string
+    if (process.platform === 'win32') {
+      // Windows：用 node 自身当立即退出的假 nginx（-p 后的路径被当作 JS 表达式求值后快速退出）
+      exitFast = process.execPath
+    }
+    else {
+      exitFast = join(workDir, 'exit-fast.sh')
+      writeFileSync(exitFast, '#!/bin/bash\nexit 1\n')
+      require('node:fs').chmodSync(exitFast, 0o755)
+    }
     const eng = new LocalNginxEngine({ nginxPath: exitFast, confPath: join(workDir, 'nginx.conf'), logDir: workDir, tempDir: workDir, prefixDir: workDir })
     await expect(eng.start()).rejects.toThrow()
     expect(eng.status()).toBe('stopped')

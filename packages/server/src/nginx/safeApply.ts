@@ -19,6 +19,10 @@ export interface SafeApplyResult {
 /**
  * 安全应用 conf：备份旧 conf → 写新 conf → nginx -t → reload，任一步失败都回滚到旧 conf。
  *
+ * skipReload: 引擎未运行时跳过 reload（nginx 启动时会加载磁盘 conf），
+ * 只做 备份→写入→校验。local 引擎停止态应用配置走这条路径，
+ * 否则 reload 必然失败并把刚写好的 conf 回滚掉，用户永远无法在停止态应用配置。
+ *
  * 统一了原先 applyFlow 和 SNAPSHOT_ROLLBACK 两条重复流水线，并修复了它们共同的问题：
  * **reload 失败时不回滚磁盘 conf**。reload 失败时旧 worker 仍跑旧 conf（转发暂不受影响），
  * 但磁盘 conf 已是新版本，下次 nginx 重启会加载坏 conf 导致全挂。回滚磁盘 conf 保证重启安全。
@@ -28,6 +32,7 @@ export interface SafeApplyResult {
 export async function safeApplyConf(
   engine: NginxEngine,
   newConf: string,
+  opts: { skipReload?: boolean } = {},
 ): Promise<SafeApplyResult> {
   // 把本次调用串到链尾，拿到自己的"执行槽"
   let release!: () => void
@@ -57,7 +62,11 @@ export async function safeApplyConf(
       return { ok: false, output: testResult.output, failStage: 'test' }
     }
 
-    // 4. 校验通过，reload 让新 conf 生效
+    // 4. 校验通过；引擎停止态跳过 reload（conf 已落盘，启动时生效）
+    if (opts.skipReload)
+      return { ok: true, output: testResult.output }
+
+    // 5. reload 让新 conf 生效
     try {
       await engine.reload()
       return { ok: true, output: testResult.output }

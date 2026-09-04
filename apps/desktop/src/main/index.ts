@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { closeDb, openDb } from '@ngj/server/db/connection'
-import { createHost, getDefaultHost, listHosts, setDefaultHost } from '@ngj/server/db/hostRepo'
+import { ensureDefaultHost, getDefaultHost } from '@ngj/server/db/hostRepo'
 import { registerIpcHandlers } from '@ngj/server/ipc'
 import { getActiveEngine } from '@ngj/server/nginx/engineRegistry'
 import { switchEngineToHost } from '@ngj/server/nginx/hostEngineSwitch'
@@ -68,17 +68,7 @@ app.whenReady().then(async () => {
     const paths = resolvePaths()
     paths.ensureDataDirs()
     openDb()
-
-    if (listHosts().length === 0) {
-      const h = createHost({
-        name: '本机网关',
-        type: 'local',
-        isDefault: 1,
-        localConfig: { nginxPath: '', confDir: '', logDir: '' },
-        remoteConfig: null,
-      })
-      setDefaultHost(h.id)
-    }
+    ensureDefaultHost()
 
     registerIpcHandlers(ipcMain)
     const def = getDefaultHost()
