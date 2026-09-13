@@ -12,6 +12,8 @@
     "build": "pnpm run -r build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "node scripts/build-desktop.mjs --current --dir && vitest run --config vitest.e2e.config.ts",
+    "build:desktop:dir": "node scripts/build-desktop.mjs --current --dir",
     "test:server": "vitest run --project server",
     "test:web": "vitest run --project web",
     "lint": "eslint . --cache",
@@ -25,11 +27,12 @@
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
     "@electron/rebuild": "catalog:dev",
-    "jsdom": "catalog:dev",
-    "typescript": "catalog:dev",
-    "vitest": "catalog:dev",
     "@vitejs/plugin-vue": "catalog:dev",
     "@vue/test-utils": "catalog:dev",
+    "jsdom": "catalog:dev",
+    "playwright-core": "^1.63.0",
+    "typescript": "catalog:dev",
+    "vitest": "catalog:dev",
     "vue": "catalog:frontend"
   },
   "simple-git-hooks": {
