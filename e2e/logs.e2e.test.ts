@@ -1,5 +1,6 @@
 import type http from 'node:http'
 import type { ElectronApplication, Page } from 'playwright-core'
+import { rmSync } from 'node:fs'
 import { afterAll, beforeAll, describe, it } from 'vitest'
 import {
   clickButton,
