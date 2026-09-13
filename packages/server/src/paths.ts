@@ -37,8 +37,12 @@ function getDataRoot(): string {
     if (process.platform === 'win32' && process.env.PORTABLE_EXECUTABLE_DIR)
       return process.env.PORTABLE_EXECUTABLE_DIR
     const exePath = app.getPath('exe')
-    if (process.platform === 'darwin')
-      return dirname(dirname(dirname(exePath)))
+    if (process.platform === 'darwin') {
+      // exe: Foo.app/Contents/MacOS/Foo → 4 层 dirname 到 Foo.app 的父目录。
+      // 数据必须放 .app 旁边而不是包内：写入 .app 内部会破坏代码签名，
+      // 且应用升级覆盖 .app 时会丢用户数据（e2e 实测踩中）。
+      return dirname(dirname(dirname(dirname(exePath))))
+    }
     return dirname(exePath)
   }
   return process.cwd()

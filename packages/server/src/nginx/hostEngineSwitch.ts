@@ -4,7 +4,7 @@
  * 启动初始化（默认主机）和运行时切换主机（HOST_SWITCH）复用同一逻辑。
  */
 import { join } from 'node:path'
-import { copySync, ensureDirSync, pathExistsSync } from 'fs-extra'
+import { copySync, ensureDirSync, outputFileSync, pathExistsSync } from 'fs-extra'
 import { getHost } from '../db/hostRepo'
 import { listEnabledMappings } from '../db/mappingRepo'
 import { getEnabledWhitelistIps, isWhitelistEnabled } from '../db/whitelistRepo'
@@ -12,6 +12,7 @@ import { resolvePaths } from '../paths'
 import { generateFullConf } from './confGenerator'
 import { getActiveEngine, setActiveEngine } from './engineRegistry'
 import { LocalNginxEngine } from './localEngine'
+import { MINIMAL_MIME_TYPES } from './mimeTypes'
 import { RemoteNginxEngine } from './remoteEngine'
 import { stopStaleNginx } from './staleNginx'
 
@@ -56,11 +57,16 @@ export async function switchEngineToHost(hostId: string): Promise<{ ok: boolean,
       tempDir: paths.tempDir,
       prefixDir,
     })
-    // mime.types 复制到 prefix/conf（nginx include mime.types 相对 conf 目录解析）
+    // mime.types 复制到 prefix/conf（nginx include mime.types 相对 conf 目录解析）。
+    // bundled 缺失（用户自备 nginx / dev）时写内置兜底文件，否则 nginx -t 必失败。
     const bundledMime = join(paths.bundledNginxDir, 'mime.types')
+    const confMime = join(confDir, 'mime.types')
     if (pathExistsSync(bundledMime)) {
-      try { copySync(bundledMime, join(confDir, 'mime.types')) }
+      try { copySync(bundledMime, confMime) }
       catch { /* 忽略 */ }
+    }
+    else if (!pathExistsSync(confMime)) {
+      outputFileSync(confMime, MINIMAL_MIME_TYPES)
     }
     // local：生成初始 conf（即使没 mapping，也要有最小 conf）。
     // 此处不走 safeApplyConf（不 test/reload），且在 setActiveEngine 之前执行，

@@ -5,10 +5,14 @@ import ModalShell from '@renderer/components/ModalShell.vue'
 import { confirmBox, toast } from '@renderer/feedback'
 import { useTemplatesStore } from '@renderer/stores/templates'
 import { protocolIconPaths as iconPaths } from '@renderer/utils/icons'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 const emit = defineEmits<{ (e: 'pick', tpl: Template | null): void, (e: 'cancel'): void }>()
 const store = useTemplatesStore()
+// 每次打开选择器都刷新列表：保存自定义模板后立即可见（否则要重启应用）
+onMounted(() => {
+  void store.load()
+})
 // 按 category 分组（保持设计稿顺序）
 const categoryOrder = ['网络层', 'Web', '数据库', '远程访问', '消息', 'API']
 const grouped = computed(() => {

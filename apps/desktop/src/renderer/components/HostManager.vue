@@ -105,7 +105,11 @@ async function save() {
   const input: any = {
     name: form.value.name,
     type: form.value.type,
-    isDefault: store.hosts.length === 0 ? 1 : 0,
+    // 编辑已有主机时必须保留其默认标志：传入固定值会把默认主机的 is_default 清成 0，
+    // 导致重启后没有默认主机、引擎不创建（e2e 实测踩中）
+    isDefault: editingId.value
+      ? (store.hosts.find(h => h.id === editingId.value)?.isDefault ?? 0)
+      : (store.hosts.length === 0 ? 1 : 0),
     localConfig: form.value.type === 'local' ? { nginxPath: form.value.localNginxPath, confDir: form.value.confDir, logDir: form.value.logDir } : null,
     remoteConfig: form.value.type === 'remote'
       ? {
