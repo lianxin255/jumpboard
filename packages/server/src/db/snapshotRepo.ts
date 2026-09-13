@@ -29,12 +29,12 @@ export function createSnapshot(input: { hostId: string, content: string, reason:
 }
 
 export function listSnapshots(hostId: string, limit: number): ConfigSnapshot[] {
-  const rows = getDb().prepare(`SELECT * FROM config_snapshots WHERE host_id = ? ORDER BY created_at DESC LIMIT ?`).all(hostId, limit) as SnapshotRow[]
+  const rows = getDb().prepare(`SELECT * FROM config_snapshots WHERE host_id = ? ORDER BY created_at DESC LIMIT ?`).all(hostId, limit) as unknown as SnapshotRow[]
   return rows.map(rowToSnapshot)
 }
 
 export function getSnapshot(id: string): ConfigSnapshot | undefined {
-  const row = getDb().prepare(`SELECT * FROM config_snapshots WHERE id = ?`).get(id) as SnapshotRow | undefined
+  const row = getDb().prepare(`SELECT * FROM config_snapshots WHERE id = ?`).get(id) as unknown as SnapshotRow | undefined
   return row ? rowToSnapshot(row) : undefined
 }
 
@@ -48,5 +48,5 @@ export function trimSnapshots(keepPerHost: number): number {
       FROM config_snapshots
     ) WHERE rn <= ?
   )`).run(keepPerHost)
-  return result.changes
+  return Number(result.changes)
 }

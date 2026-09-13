@@ -5,14 +5,10 @@
  * 流程：
  * 1. electron-vite build 构建 main/preload/renderer
  * 2. pnpm deploy --legacy 创建扁平化 staging 目录（无符号链接，workspace 依赖被复制为真实文件）
- * 3. prebuild-install 下载目标平台（win32/darwin）的 Electron ABI 预编译原生模块
- * 4. electron-builder 从 staging 目录打包
+ * 3. electron-builder 从 staging 目录打包
  *
- * prebuild-install 替代 electron-rebuild 的原因：
- * electron-rebuild 从 cwd 向上搜索 lockfile 定位 projectRoot，会找到 monorepo 根的
- * pnpm-lock.yaml，进而扫描根 node_modules 里的 better-sqlite3（pnpm 符号链接指向 store），
- * 重建时直接覆盖 store 里的 .node 文件，污染 monorepo（macOS 测试 dlopen Windows PE 失败）。
- * prebuild-install 直接在 staging 内下载预编译二进制，完全隔离，不触及 store。
+ * SQLite 已迁移到 Electron 内置的 node:sqlite（38+），无原生模块，
+ * 早期为 better-sqlite3 服务的 prebuild-install/electron-rebuild 步骤已移除。
  *
  * 用法：
  *   node scripts/build-desktop.mjs --mac --dir      # macOS 绿色文件夹
@@ -28,10 +24,12 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DESKTOP = join(ROOT, 'apps/desktop')
 const STAGE = join(DESKTOP, '.stage')
-const ELECTRON_VERSION = '33.4.11'
 
 // 解析命令行参数
 const args = process.argv.slice(2)
+// --current：按当前平台打包（本机验证 / e2e 用），等价于 --mac 或 --win
+if (args.includes('--current'))
+  args.push(process.platform === 'win32' ? '--win' : '--mac')
 const isMac = args.includes('--mac')
 const isWin = args.includes('--win')
 const isDir = args.includes('--dir')
@@ -75,28 +73,10 @@ if (!existsSync(stageOut)) {
   cpSync(join(DESKTOP, 'out'), stageOut, { recursive: true })
 }
 
-console.log(`④ prebuild-install 原生模块（目标：${isWin ? 'win32-x64' : 'darwin-arm64'} Electron ${ELECTRON_VERSION}）`)
-const targetPlatform = isWin ? 'win32' : 'darwin'
-const targetArch = isWin ? 'x64' : 'arm64'
-const sqliteDir = join(STAGE, 'node_modules', 'better-sqlite3')
-run('npx', [
-  'prebuild-install',
-  '-r',
-  'electron',
-  '-t',
-  ELECTRON_VERSION,
-  '--platform',
-  targetPlatform,
-  '--arch',
-  targetArch,
-  '--tag-prefix',
-  'v',
-  '--force',
-  '-p',
-  sqliteDir,
-], sqliteDir)
+// node:sqlite（Electron 35+ 内置）替代了原生模块 better-sqlite3，
+// 不再需要 prebuild-install 下载平台原生二进制，也没有 store 污染问题。
 
-console.log(`⑤ electron-builder ${platformFlag} ${targetFlag}`)
+console.log(`④ electron-builder ${platformFlag} ${targetFlag}`)
 const ebArgs = ['electron-builder', platformFlag, targetFlag]
 // Windows 交叉编译时明确指定 x64（不跟随 macOS arm64 主机架构）
 if (isWin)

@@ -308,7 +308,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   // ── Nginx Log ──
   ipcMain.handle(API.NGINX_LOG_TAIL, (_e, lines: number) => {
     const safeLines = clampInt(lines, 1, 10000)
-    const readRow = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as { value: string } | undefined
+    const readRow = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as unknown as { value: string } | undefined
     if (readRow?.value === '0')
       return { access: [], error: [] }
 
@@ -349,7 +349,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   })
 
   ipcMain.handle(API.NGINX_LOG_READ_ENABLED_GET, () => {
-    const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as { value: string } | undefined
+    const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('nginx_log_read_enabled') as unknown as { value: string } | undefined
     return row?.value !== '0'
   })
 

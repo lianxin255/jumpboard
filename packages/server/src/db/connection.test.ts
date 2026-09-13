@@ -40,7 +40,7 @@ describe('db connection', () => {
 
   it('删除 host 时级联删除关联 mappings（FK CASCADE 生效）', () => {
     const db = openDb()
-    expect(db.pragma('foreign_keys', { simple: true })).toBe(1)
+    expect((db.prepare('PRAGMA foreign_keys').get() as unknown as { foreign_keys: number }).foreign_keys).toBe(1)
     // 先建一个 host
     db.prepare(`INSERT INTO hosts (id, name, type, is_default, status, created_at)
                 VALUES ('h1', 'test', 'local', 0, 'unknown', 0)`).run()

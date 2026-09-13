@@ -17,7 +17,6 @@ module.exports = {
     output: path.resolve(root, 'release'),
   },
   asarUnpack: [
-    '**/node_modules/better-sqlite3/**',
     '**/node_modules/ssh2/**',
   ],
   files: [

@@ -1,6 +1,6 @@
 import type { Host, HostType, LocalHostConfig, RemoteHostConfig } from '@ngj/shared/types'
 import { randomUUID } from 'node:crypto'
-import { getDb } from './connection'
+import { getDb, withTransaction } from './connection'
 
 interface HostRow {
   id: string
@@ -45,12 +45,12 @@ export function createHost(input: CreateHostInput): Host {
 }
 
 export function listHosts(): Host[] {
-  const rows = getDb().prepare('SELECT * FROM hosts ORDER BY created_at').all() as HostRow[]
+  const rows = getDb().prepare('SELECT * FROM hosts ORDER BY created_at').all() as unknown as HostRow[]
   return rows.map(rowToHost)
 }
 
 export function getHost(id: string): Host | undefined {
-  const row = getDb().prepare('SELECT * FROM hosts WHERE id = ?').get(id) as HostRow | undefined
+  const row = getDb().prepare('SELECT * FROM hosts WHERE id = ?').get(id) as unknown as HostRow | undefined
   return row ? rowToHost(row) : undefined
 }
 
@@ -63,19 +63,27 @@ export function updateHost(id: string, patch: Partial<CreateHostInput>): void {
 }
 
 export function deleteHost(id: string): void {
+  const host = getHost(id)
   getDb().prepare('DELETE FROM hosts WHERE id = ?').run(id)
+  // 删除的是默认主机 → 默认转移给剩余最早创建的主机。
+  // 否则系统处于无默认主机状态：重启后引擎不创建（e2e 实测踩中）。
+  if (host?.isDefault === 1) {
+    const next = listHosts().sort((a, b) => a.createdAt - b.createdAt)[0]
+    if (next)
+      setDefaultHost(next.id)
+  }
 }
 
 export function setDefaultHost(id: string): void {
   const db = getDb()
-  db.transaction(() => {
+  withTransaction(db, () => {
     db.prepare('UPDATE hosts SET is_default = 0').run()
     db.prepare('UPDATE hosts SET is_default = 1 WHERE id = ?').run(id)
-  })()
+  })
 }
 
 export function getDefaultHost(): Host | undefined {
-  const row = getDb().prepare('SELECT * FROM hosts WHERE is_default = 1 ORDER BY created_at LIMIT 1').get() as HostRow | undefined
+  const row = getDb().prepare('SELECT * FROM hosts WHERE is_default = 1 ORDER BY created_at LIMIT 1').get() as unknown as HostRow | undefined
   return row ? rowToHost(row) : undefined
 }
 

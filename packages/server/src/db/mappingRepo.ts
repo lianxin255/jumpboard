@@ -80,17 +80,17 @@ export function createMapping(input: MappingInput): Mapping {
 }
 
 export function listMappings(hostId: string): Mapping[] {
-  const rows = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE host_id = ? ORDER BY sort_order`).all(hostId) as MappingRow[]
+  const rows = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE host_id = ? ORDER BY sort_order`).all(hostId) as unknown as unknown as MappingRow[]
   return rows.map(rowToMapping)
 }
 
 export function listEnabledMappings(hostId: string): Mapping[] {
-  const rows = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE host_id = ? AND enabled = 1 ORDER BY sort_order`).all(hostId) as MappingRow[]
+  const rows = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE host_id = ? AND enabled = 1 ORDER BY sort_order`).all(hostId) as unknown as unknown as MappingRow[]
   return rows.map(rowToMapping)
 }
 
 export function getMapping(id: string): Mapping | undefined {
-  const row = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE id = ?`).get(id) as MappingRow | undefined
+  const row = getDb().prepare(`SELECT ${COLUMNS} FROM mappings WHERE id = ?`).get(id) as unknown as unknown as MappingRow | undefined
   return row ? rowToMapping(row) : undefined
 }
 

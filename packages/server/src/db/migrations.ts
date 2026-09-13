@@ -1,8 +1,9 @@
-import type { Database } from 'better-sqlite3'
+import type { SqliteDb } from './connection'
 
-export function runMigrations(db: Database): void {
-  db.pragma('foreign_keys = ON')
-  db.pragma('journal_mode = WAL')
+export function runMigrations(db: SqliteDb): void {
+  // node:sqlite 无 .pragma() helper，PRAGMA 走 exec
+  db.exec('PRAGMA foreign_keys = ON')
+  db.exec('PRAGMA journal_mode = WAL')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS hosts (
@@ -83,7 +84,7 @@ export function runMigrations(db: Database): void {
 
   // 增量迁移：给 mappings 表加 proxy_mode 和 proxy_headers 字段
   // SQLite 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，需检查列是否存在
-  const cols = db.prepare("PRAGMA table_info(mappings)").all() as { name: string }[]
+  const cols = db.prepare("PRAGMA table_info(mappings)").all() as unknown as { name: string }[]
   const colNames = cols.map(c => c.name)
   if (!colNames.includes('proxy_mode')) {
     db.exec("ALTER TABLE mappings ADD COLUMN proxy_mode TEXT NOT NULL DEFAULT 'standard'")
