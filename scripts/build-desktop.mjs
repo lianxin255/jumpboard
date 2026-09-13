@@ -45,7 +45,8 @@ const targetFlag = isDir ? '--dir' : target || (isMac ? 'dmg' : 'portable')
 
 function run(cmd, cmdArgs, cwd = ROOT) {
   console.log(`\n$ ${cmd} ${cmdArgs.join(' ')}`)
-  const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', cwd })
+  // Windows 上 npx 等工具是 .cmd 脚本，spawnSync 必须经 shell 才能找到
+  const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', cwd, shell: process.platform === 'win32' })
   if (r.status !== 0) {
     console.error(`✗ ${cmd} 退出码 ${r.status}`)
     process.exit(1)
