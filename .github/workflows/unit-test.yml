@@ -20,9 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
+      - uses: pnpm/action-setup@v4  # 版本取自 package.json 的 packageManager 字段
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,9 +41,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
+      - uses: pnpm/action-setup@v4  # 版本取自 package.json 的 packageManager 字段
       - uses: actions/setup-node@v4
         with:
           node-version: 22
