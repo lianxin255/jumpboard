@@ -2,6 +2,7 @@
   "name": "nginx-jump-gui",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.7.0",
   "type": "module",
   "description": "内网跳板机 nginx 管理软件 · Electron 桌面壳 + Node 后端",
   "scripts": {
