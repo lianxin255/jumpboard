@@ -234,8 +234,9 @@ nginx-jump-gui/
 > 每批结束跑：`go build ./... && GOOS=windows GOARCH=amd64 go build ./... && go vet ./... && go test ./...`，再做一次 code review、更新本文进度。
 
 ### B0 骨架（0.5 天）
-`go.mod`、`mygo.json`、`main.go`（单实例、数据目录、窗口 1200×760、菜单、启动错误框）、`resources` 平台目录、`go:embed` 模板。
-**验收**：`go tool mygo build -platform darwin/arm64,windows/amd64` 双产物，窗口能开，双平台 `go build` 绿。
+`go.mod`、`mygo.json`、`main.go`（单实例、数据目录探测、`SetLanguages` 中文、窗口 1200×760、菜单、启动错误框）、`resources` 平台目录、`go:embed` 模板。
+`resources/darwin/nginx/nginx` 通用二进制**已入库**（本次完成），Windows 复用现有 `resources/nginx/nginx.exe`。
+**验收**：`go tool mygo build -platform darwin/universal,windows/amd64` 双产物；universal `.app` 内 nginx 为双架构且 deep-verify 通过；双平台 `go build` + `go vet` 全绿；`ui.NewTester` 能跑一个空视图。
 
 ### B1 存储层（1 天）
 schema + 6 repo + settings。
@@ -258,8 +259,15 @@ schema + 6 repo + settings。
 **验收**：`ui.Render` 逐页出图（亮 + 暗各一套）人工过一遍；`ui.NewTester` 覆盖关键交互（新建映射、启停、切换主题、应用配置）。
 
 ### B6 打包与发布（1 天）
-mac `.app` + `dmg`、Windows 绿色 zip（exe + resources）、数据目录守卫、中文路径守卫、启动时数据目录迁移提示。
-**验收**：mac 双击可用；Windows 解压双击可用；退出后无 nginx 残留。
+- mac：`darwin/universal` → `.app` + `.dmg`，Intel 与 Apple silicon 同一份安装包。
+- Windows：绿色 zip（`NginxJump.exe` + `nginx/` 目录 + `mime.types`），首次运行在 exe 旁建 `data/`。
+- 可选：`brew install makensis` 后出 NSIS 安装包（`mygo build` 自动带上）。
+- 守卫：数据目录可写性探测（不可写回落 `~/Library/Application Support/NginxJump` 并在设置页显示实际路径）、Windows 中文路径检测、启动失败原生错误框。
+**验收**：
+- mac 在 arm64 与 Intel（Rosetta 或真机）各双击一次，nginx 都起得来；
+- Windows 解压即用，`nginx -t` 通过；
+- 退出后 `pgrep nginx` / `tasklist` 无残留；
+- `codesign --verify --deep --strict` 通过（macOS）。
 
 ### B7 清理与回归（1 天）
 删旧目录、CI 改 Go、README/CHANGELOG、跨批全面 review。
