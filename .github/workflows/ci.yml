@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main, refactor/mygo-go]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet every platform
+        run: |
+          go vet ./...
+      - name: Unit and end-to-end tests
+        run: go test ./... -race -count=1
+      # The Windows job has no bundled nginx in the repository: the binary
+      # is added on release. The tests that need it skip themselves.
+      - name: Build the app
+        run: |
+          go build ./...

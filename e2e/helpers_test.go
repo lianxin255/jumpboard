@@ -41,6 +41,8 @@ func testApp(t *testing.T) *appt.App {
 		t.Fatalf("building the app: %v", err)
 	}
 	a.Tpl = services.NewTemplates(builtinTemplates(t), filepath.Join(p.DataDir, "templates", "custom"))
+	// Close stops nginx and the checker. It runs even when the test fails,
+	// which is what keeps a run from leaving ports taken.
 	t.Cleanup(a.Close)
 	return a
 }
