@@ -34,15 +34,23 @@
 - **Windows 官方 nginx.exe 依赖审计**：仅 `KERNEL32/USER32/ADVAPI32/WS2_32/CRYPT32`，无 VCRUNTIME。
 - **mygo 目标架构实测**：`windows/amd64` ✅、`darwin/amd64` ✅、`darwin/universal` ✅（产 24 MB app）、`windows/386` ❌（mygo 不支持）。
 
-界面预览（同一份 Go 代码渲染，暗/亮两套 token）：
+界面预览（同一份 Go 代码 + `ui.Tester` 无窗口渲染，亮/暗两套 token）：
 
-| 映射列表（暗） | 新建映射（暗） |
+| 映射列表（暗） | 映射列表（亮） |
 |---|---|
-| ![](assets/2026-10-20-native-mapping-dark.png) | ![](assets/2026-10-20-native-form-dark.png) |
+| ![](assets/2026-10-20-ui-mappings-dark.png) | ![](assets/2026-10-20-ui-mappings-light.png) |
 
-| 设置（亮） | 设置（暗） |
+| 新建映射（暗） | 新建映射（亮） |
 |---|---|
-| ![](assets/2026-10-20-native-settings-light.png) | ![](assets/2026-10-20-native-settings-dark.png) |
+| ![](assets/2026-10-20-ui-form-dark.png) | ![](assets/2026-10-20-ui-form-light.png) |
+
+| 日志（暗） | 设置（亮） |
+|---|---|
+| ![](assets/2026-10-20-ui-logs-dark.png) | ![](assets/2026-10-20-ui-settings-light.png) |
+
+| 设置（暗） | 历史（亮） |
+|---|---|
+| ![](assets/2026-10-20-ui-settings-dark.png) | ![](assets/2026-10-20-ui-history-light.png) |
 
 ---
 
