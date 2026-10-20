@@ -19,8 +19,9 @@ import (
 type View struct {
 	App *appt.App
 
-	query string
-	table ui.ListState
+	query  string
+	filter int
+	table  ui.ListState
 
 	// The forms' own state, which the app's state does not need to know
 	// about until it is saved.
@@ -244,7 +245,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	mappings, _, _, _, _, _, busy, _ := a.Snapshot()
 
-	filtered := filterMappings(mappings, v.query)
+	filtered := filterMappings(mappings, v.query, v.filter)
 
 	ui.Column(c).Fill().Padding(20, 28).Gap(14).Children(func() {
 		v.actionRow(c, t)
@@ -262,20 +263,23 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					FontSize(12).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
-			search := ui.SearchField(c, &v.query).Label("搜索规则").Width(240).
-				Tooltip("按名称、域名、端口搜索（⌘F）")
-			if v.focusSearch {
-				search.AutoFocus()
-				v.focusSearch = false
-			}
-			v.aiEntry(c, t)
-			if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
-				a.SetTemplatePicker(true)
-			}
-			if ui.PrimaryButton(c, "新建映射").Disabled(busy).
-				Tooltip("新建一条映射（⌘N）").Clicked() {
-				a.OpenForm(nil)
-			}
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
+				search := ui.SearchField(c, &v.query).Label("搜索规则").Width(200).
+					Tooltip("按名称、域名、端口搜索（⌘F）")
+				if v.focusSearch {
+					search.AutoFocus()
+					v.focusSearch = false
+				}
+				v.aiEntry(c, t)
+				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
+					a.SetTemplatePicker(true)
+				}
+				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+					Tooltip("新建一条映射（⌘N）").Clicked() {
+					a.OpenForm(nil)
+				}
+			})
 		})
 
 		if len(mappings) == 0 {
@@ -318,7 +322,13 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				}
 			}).Grow(1).Children(func() {
 				if len(filtered) == 0 {
-					ui.Text(c, "没有匹配的规则").FontSize(12).TextColor(t.Muted).Padding(14)
+					hint := "没有匹配的规则"
+					if len(mappings) == 0 {
+						hint = ""
+					}
+					if hint != "" {
+						ui.Text(c, hint).FontSize(12).TextColor(t.Muted).Padding(14)
+					}
 				}
 			})
 		})
@@ -348,21 +358,27 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 				// The dot says whether the rule is listening right now. It
 				// is only drawn once the engine has been applied to: before
 				// that, "not listening" is the expected state, not news.
+				dot := t.Muted
+				hint := ""
 				if v.App.EngineApplied() {
-					dot := t.Muted
-					hint := "未在监听"
-					if !m.Enabled {
+					switch {
+					case !m.Enabled:
 						hint = "已停用"
-					} else if listening {
+					case listening:
 						dot, hint = t.Success, "监听中"
-					} else if problem == "" || problem == "未应用" {
-						dot, hint = t.Muted, "未应用"
-					} else {
+					case problem == "" || problem == "未应用":
+						hint = "改动还没应用"
+					default:
 						dot, hint = t.Danger, problem
 					}
 					ui.Box(c).Size(5, 5).Radius(3).Background(dot).Tooltip(hint)
 				}
 				ui.Text(c, sub).FontSize(11).TextColor(t.Muted).SingleLine()
+				// A rule that cannot listen says why in the row itself:
+				// a tooltip is no help when the port is already taken.
+				if v.App.EngineApplied() && m.Enabled && !listening && problem != "" && problem != "未应用" {
+					ui.Text(c, problem).FontSize(10).TextColor(t.Danger).SingleLine()
+				}
 			})
 		})
 	})
@@ -479,20 +495,29 @@ func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	})
 }
 
-// filterMappings keeps the rules whose name, host or port matches the
-// query.
-func filterMappings(all []model.Mapping, query string) []model.Mapping {
+// filterMappings keeps the rules the search and the filter let through.
+func filterMappings(all []model.Mapping, query string, filter int) []model.Mapping {
 	q := strings.ToLower(strings.TrimSpace(query))
-	if q == "" {
-		return all
-	}
 	out := make([]model.Mapping, 0, len(all))
 	for _, m := range all {
-		hay := strings.ToLower(fmt.Sprintf("%s %s %s %d %d %s",
-			m.Name, m.ServerNames, m.UpstreamHost, m.ListenPort, m.UpstreamPort, m.Protocol))
-		if strings.Contains(hay, q) {
-			out = append(out, m)
+		switch filter {
+		case 1:
+			if !m.Enabled {
+				continue
+			}
+		case 2:
+			if m.Enabled {
+				continue
+			}
 		}
+		if q != "" {
+			hay := strings.ToLower(fmt.Sprintf("%s %s %s %d %d %s",
+				m.Name, m.ServerNames, m.UpstreamHost, m.ListenPort, m.UpstreamPort, m.Protocol))
+			if !strings.Contains(hay, q) {
+				continue
+			}
+		}
+		out = append(out, m)
 	}
 	return out
 }

@@ -320,6 +320,42 @@ func (a *App) CopyAddress(m model.Mapping) error {
 	return nil
 }
 
+// SetMappingsEnabled turns several mappings on or off.
+func (a *App) SetMappingsEnabled(ids []string, on bool) error {
+	var firstErr error
+	done := 0
+	for _, id := range ids {
+		if err := a.SetMappingEnabled(id, on); err != nil && firstErr == nil {
+			firstErr = err
+			continue
+		}
+		done++
+	}
+	a.Log.Info("批量%s %d 条映射", map[bool]string{true: "启用", false: "停用"}[on], done)
+	if firstErr != nil {
+		return fmt.Errorf("%d 条中有 %d 条失败：%v", len(ids), len(ids)-done, firstErr)
+	}
+	return nil
+}
+
+// DeleteMappings removes several mappings.
+func (a *App) DeleteMappings(ids []string) error {
+	var firstErr error
+	done := 0
+	for _, id := range ids {
+		if err := a.DeleteMapping(id); err != nil && firstErr == nil {
+			firstErr = err
+			continue
+		}
+		done++
+	}
+	a.Log.Info("批量删除 %d 条映射", done)
+	if firstErr != nil {
+		return fmt.Errorf("%d 条中有 %d 条失败：%v", len(ids), len(ids)-done, firstErr)
+	}
+	return nil
+}
+
 // CloneMapping copies a mapping under a new name.
 func (a *App) CloneMapping(id string) error {
 	m, err := a.Store.GetMapping(id)
