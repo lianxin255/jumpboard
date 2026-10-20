@@ -25,6 +25,8 @@ func testApp(t *testing.T) *appt.App {
 	root := t.TempDir()
 	t.Setenv("NGJ_DATA_ROOT", root)
 	t.Setenv("NGJ_RESOURCES", filepath.Join("..", "resources"))
+	// The system keychain needs a running app; a test reads no key.
+	t.Setenv("NGJ_NO_KEYCHAIN", "1")
 
 	p, err := paths.Resolve()
 	if err != nil {

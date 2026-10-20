@@ -24,19 +24,40 @@ func (a *App) SetPage(p Page) {
 
 // OpenForm opens the mapping form, empty or filled from m.
 func (a *App) OpenForm(m *model.Mapping) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.formEdit = m
 	if m != nil {
 		a.form = FormFromMapping(*m)
 	} else {
 		a.form = NewForm()
 	}
+	a.formErrs = nil
+	a.formOpen = true
+}
+
+// OpenNewFormFrom opens an empty form prefilled from an existing value.
+//
+// The draft from a model is untrusted and has no ID: it starts a new
+// mapping, going through the same validation a typed one does. Opening it
+// as an edit would try to update a row that does not exist.
+func (a *App) OpenNewFormFrom(m model.Mapping) {
+	m.ID = ""
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.formEdit = nil
+	a.form = FormFromMapping(m)
+	a.formErrs = nil
 	a.formOpen = true
 }
 
 // OpenFormFromTemplate opens the form prefilled by a template.
 func (a *App) OpenFormFromTemplate(t model.Template) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.formEdit = nil
 	a.form = FormFromTemplate(t)
+	a.formErrs = nil
 	a.formOpen = true
 }
 
@@ -48,10 +69,22 @@ func (a *App) FormState() (open bool, editing *model.Mapping, f FormValues, errs
 }
 
 // SetForm stores the values the inputs edited.
-func (a *App) SetForm(f FormValues) { a.form = f }
+//
+// The frame writes the form it just bound the inputs to, so that the next
+// frame builds from what the user typed. Saving reads it from another
+// goroutine, hence the lock.
+func (a *App) SetForm(f FormValues) {
+	a.mu.Lock()
+	a.form = f
+	a.mu.Unlock()
+}
 
 // CloseForm hides the form.
-func (a *App) CloseForm() { a.formOpen = false; a.formEdit = nil }
+func (a *App) CloseForm() {
+	a.mu.Lock()
+	a.formOpen, a.formEdit = false, nil
+	a.mu.Unlock()
+}
 
 // TemplatePickerOpen reports whether the template picker is up.
 func (a *App) TemplatePickerOpen() bool { return a.templateOpen }
@@ -158,7 +191,17 @@ func (a *App) ClearStatus() {
 
 // SaveForm validates the form and stores the mapping.
 func (a *App) SaveForm() error {
-	m, errs, ok := a.form.Validate()
+	// Work on a copy: the frame replaces the form on every keystroke.
+	a.mu.Lock()
+	f := a.form
+	edit := a.formEdit
+	wasOpen := a.formOpen
+	a.mu.Unlock()
+	if !wasOpen {
+		return nil
+	}
+
+	m, errs, ok := f.Validate()
 	a.mu.Lock()
 	a.formErrs = errs
 	a.mu.Unlock()
@@ -166,11 +209,11 @@ func (a *App) SaveForm() error {
 		a.notify()
 		return fmt.Errorf("表单有 %d 处需要修正", len(errs))
 	}
-	if a.formEdit != nil {
-		m.ID = a.formEdit.ID
-		m.HealthStatus = a.formEdit.HealthStatus
-		m.CreatedAt = a.formEdit.CreatedAt
-		m.SortOrder = a.formEdit.SortOrder
+	if edit != nil {
+		m.ID = edit.ID
+		m.HealthStatus = edit.HealthStatus
+		m.CreatedAt = edit.CreatedAt
+		m.SortOrder = edit.SortOrder
 		if err := a.Store.UpdateMapping(m); err != nil {
 			return err
 		}

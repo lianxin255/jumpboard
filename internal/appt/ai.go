@@ -3,6 +3,7 @@ package appt
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -44,30 +45,69 @@ func (a *App) AIReady() bool {
 
 // HasAIKey reports whether a key is stored.
 func (a *App) HasAIKey() bool {
-	b, err := mygo.Secrets.Get(aiSecretKey)
-	return err == nil && len(b) > 0
+	v, err := readSecret(aiSecretKey)
+	return err == nil && v != ""
 }
 
 // SetAIKey stores the API key in the system credential store.
+//
+// The store is written from its own goroutine with a deadline, like the
+// read: a locked keychain would otherwise freeze the window.
 func (a *App) SetAIKey(key string) error {
-	if strings.TrimSpace(key) == "" {
-		_ = mygo.Secrets.Delete(aiSecretKey)
+	if os.Getenv("NGJ_NO_KEYCHAIN") == "1" {
+		return fmt.Errorf("当前环境没有系统凭据库，无法保存 API Key")
+	}
+	ch := make(chan error, 1)
+	key = strings.TrimSpace(key)
+	go func() {
+		if key == "" {
+			ch <- mygo.Secrets.Delete(aiSecretKey)
+			return
+		}
+		ch <- mygo.Secrets.Set(aiSecretKey, []byte(key))
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			return fmt.Errorf("保存 API Key 失败：%w", err)
+		}
 		a.notify()
 		return nil
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("保存 API Key 超时，请检查系统凭据库是否已解锁")
 	}
-	if err := mygo.Secrets.Set(aiSecretKey, []byte(key)); err != nil {
-		return fmt.Errorf("保存 API Key 失败：%w", err)
+}
+
+// readSecret returns a secret, giving up after a moment.
+//
+// The system's credential store can block while it asks the user to unlock
+// it, and on a machine without a session it never answers at all. A request
+// is not worth a frozen window, so the key is read with a deadline and the
+// request goes out without one if it does not come back.
+func readSecret(key string) (string, error) {
+	if os.Getenv("NGJ_NO_KEYCHAIN") == "1" {
+		return "", nil
 	}
-	a.notify()
-	return nil
+	type result struct {
+		v   []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		v, err := mygo.Secrets.Get(key)
+		ch <- result{v, err}
+	}()
+	select {
+	case r := <-ch:
+		return string(r.v), r.err
+	case <-time.After(3 * time.Second):
+		return "", fmt.Errorf("读取凭据超时")
+	}
 }
 
 // aiClient builds a client from the stored settings.
 func (a *App) aiClient() *ai.Client {
-	key := ""
-	if b, err := mygo.Secrets.Get(aiSecretKey); err == nil {
-		key = string(b)
-	}
+	key, _ := readSecret(aiSecretKey)
 	return ai.New(ai.Settings{
 		BaseURL: a.AIBaseURL(),
 		Model:   a.AIModel(),

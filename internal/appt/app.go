@@ -96,6 +96,10 @@ type App struct {
 	whitelistOn  bool
 	nginxLogRead bool
 	aiOpen       bool
+
+	// The last draft the model proposed, kept for the AI panel.
+	lastAIDraft       *model.Mapping
+	lastAIExplanation string
 }
 
 // Confirm is a question the user must answer before an action runs.

@@ -228,12 +228,15 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 							ui.Text(c, tpl.Name).FontSize(13).Bold().TextColor(t.FG).Width(160)
 							ui.Text(c, tpl.Category).FontSize(11).TextColor(t.Muted).Width(70)
 							ui.Text(c, tpl.Description).FontSize(11).TextColor(t.FG2).Grow(1).SingleLine()
-							if ui.Button(c, "使用").FontSize(11).Clicked() {
+							// Each row's buttons name their template: a list of
+							// identical "使用" buttons is ambiguous to a
+							// screen reader, and to the tests.
+							if ui.Button(c, "使用 "+tpl.Name).FontSize(11).Label("使用 " + tpl.Name).Clicked() {
 								a.SetTemplatePicker(false)
 								a.OpenFormFromTemplate(tpl)
 							}
 							if !tpl.Builtin {
-								if ui.Button(c, "删除").FontSize(11).Clicked() {
+								if ui.Button(c, "删除 "+tpl.Name).FontSize(11).Label("删除模板 " + tpl.Name).Clicked() {
 									if err := a.Tpl.Delete(tpl.ID); err != nil {
 										a.Fail("%v", err)
 									} else {

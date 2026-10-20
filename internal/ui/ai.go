@@ -84,15 +84,10 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 					v.ai.open = false
 				}
 				if v.ai.draft != nil {
-					if ui.Button(c, "在表单里改").Clicked() {
+					if ui.Button(c, "在表单里改").Clicked() || ui.PrimaryButton(c, "采用草稿").Clicked() {
 						m := *v.ai.draft
 						v.ai.open = false
-						a.OpenForm(&m)
-					}
-					if ui.PrimaryButton(c, "采用草稿").Clicked() {
-						m := *v.ai.draft
-						v.ai.open = false
-						a.OpenForm(&m)
+						a.OpenNewFormFrom(m)
 						a.Info("草稿已填入表单，确认后保存")
 					}
 				}

@@ -61,11 +61,26 @@ func Resolve() (Paths, error) {
 	if runtime.GOOS == "windows" {
 		bin = "nginx.exe"
 	}
+	// The binary sits under nginx/ in the platform folder mygo merges
+	// into the app's resources, and a project's resources/ before a build.
+	binary := filepath.Join(resourceDir, "nginx", bin)
+	if _, err := os.Stat(binary); err != nil {
+		for _, candidate := range []string{
+			filepath.Join(resourceDir, runtime.GOOS+"-"+runtime.GOARCH, "nginx", bin),
+			filepath.Join(resourceDir, "darwin", "nginx", bin),
+			filepath.Join(resourceDir, "windows-amd64", "nginx", bin),
+		} {
+			if _, err := os.Stat(candidate); err == nil {
+				binary = candidate
+				break
+			}
+		}
+	}
 	p := Paths{
 		DataDir:      filepath.Join(root, "data"),
 		PrefixDir:    filepath.Join(root, "data", "nginx-home"),
 		ResourcesDir: resourceDir,
-		NginxBinary:  filepath.Join(resourceDir, "nginx", bin),
+		NginxBinary:  binary,
 		Fallback:     fallback,
 	}
 	for _, d := range []string{

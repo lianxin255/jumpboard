@@ -332,16 +332,25 @@ func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 		ui.Text(c, "○ 未启用").FontSize(12).TextColor(t.Muted)
 		return
 	}
+	// The label carries the mapping's name: several rows can show the same
+	// status, and a control has to say which one it acts on.
+	label := "检查-" + m.Name
 	switch m.HealthStatus {
 	case model.HealthHealthy:
-		ui.Text(c, "● 健康").FontSize(12).TextColor(t.Success)
+		if ui.Text(c, "● 健康").FontSize(12).TextColor(t.Success).Label(label).
+			Tooltip("点一下重新检查").Clicked() {
+			mm := m
+			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
+		}
 	case model.HealthUnhealthy:
-		if ui.Text(c, "● 不可达").FontSize(12).TextColor(t.Danger).Tooltip("点一下重新检查").Clicked() {
+		if ui.Text(c, "● 不可达").FontSize(12).TextColor(t.Danger).Label(label).
+			Tooltip("点一下重新检查").Clicked() {
 			mm := m
 			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
 		}
 	default:
-		if ui.Text(c, "○ 未检查").FontSize(12).TextColor(t.Muted).Clicked() {
+		if ui.Text(c, "○ 未检查").FontSize(12).TextColor(t.Muted).Label(label).
+			Tooltip("点一下检查").Clicked() {
 			mm := m
 			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
 		}
