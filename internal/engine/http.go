@@ -503,6 +503,19 @@ func openAccessLog(path string) (*accessLog, error) {
 	return &accessLog{file: f, path: path}, nil
 }
 
+// writeStream logs a forwarded connection, in the shape nginx's stream log
+// has: the client, when it came in, and how long it lasted.
+func (l *accessLog) writeStream(client, upstream string, d time.Duration) {
+	if l == nil || l.file == nil {
+		return
+	}
+	line := fmt.Sprintf("%s [%s] -> %s %s\n", client,
+		time.Now().Format("02/Jan/2006:15:04:05 -0700"), upstream, d.Round(time.Millisecond))
+	l.mu.Lock()
+	_, _ = l.file.WriteString(line)
+	l.mu.Unlock()
+}
+
 func (l *accessLog) write(port int, r *http.Request, status int, bytes int64) {
 	if l == nil || l.file == nil {
 		return

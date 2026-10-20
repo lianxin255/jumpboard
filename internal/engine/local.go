@@ -160,7 +160,7 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		if m.Protocol == model.UDP {
 			f, err = newUDPForwarder(listenAddr(m.ListenPort), upstream, idle)
 		} else {
-			f, err = newTCPForwarder(listenAddr(m.ListenPort), upstream, idle)
+			f, err = newTCPForwarder(listenAddr(m.ListenPort), upstream, idle, l.access)
 		}
 		if err != nil {
 			closeAll(opened)

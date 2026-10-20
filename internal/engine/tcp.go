@@ -40,14 +40,16 @@ type tcpForwarder struct {
 	active   atomic.Int32
 	closing  atomic.Bool
 	wg       sync.WaitGroup
+	// access logs each connection, as nginx's stream access_log does.
+	access *accessLog
 }
 
-func newTCPForwarder(listenAddr, upstream string, idle time.Duration) (*tcpForwarder, error) {
+func newTCPForwarder(listenAddr, upstream string, idle time.Duration, access *accessLog) (*tcpForwarder, error) {
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return nil, err
 	}
-	f := &tcpForwarder{ln: ln, upstream: upstream, idle: idle}
+	f := &tcpForwarder{ln: ln, upstream: upstream, idle: idle, access: access}
 	f.wg.Add(1)
 	go f.serve()
 	return f, nil
@@ -84,7 +86,11 @@ func (f *tcpForwarder) serve() {
 		f.active.Add(1)
 		go func() {
 			defer f.active.Add(-1)
+			start := time.Now()
 			pipeTCP(client, f.upstream, f.idle)
+			if f.access != nil {
+				f.access.writeStream(client.RemoteAddr().String(), f.upstream, time.Since(start))
+			}
 		}()
 	}
 }
