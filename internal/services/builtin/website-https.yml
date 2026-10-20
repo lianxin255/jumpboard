@@ -1,0 +1,15 @@
+id: website-https
+name: HTTPS 网站
+icon: lock
+category: Web
+description: HTTPS 反向代理，带 TLS 证书和 HTTP→HTTPS 跳转
+mapping:
+  protocol: https
+  listenPort: null
+  serverNames: null
+  listenPath: /
+  upstreamHost: null
+  upstreamPort: null
+  tlsCertPath: null
+  tlsKeyPath: null
+  redirectHttp: 1
