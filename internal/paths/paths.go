@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/egoist/mygo"
 )
@@ -102,11 +103,14 @@ func dataRoot() (root string, fallback bool, err error) {
 
 // inGoBuildDir reports whether exe is a `go run`/`go test` temporary
 // binary, whose folder says nothing about the project.
+//
+// go run puts it in <work>/b001/exe/<name> and go test in
+// <work>/b001/<pkg>.test, so the go-build directory is two or three levels
+// up.
 func inGoBuildDir(exe string) bool {
 	dir := filepath.Dir(exe)
-	for i := 0; i < 3; i++ {
-		base := filepath.Base(dir)
-		if len(base) >= 9 && base[:9] == "go-build" {
+	for i := 0; i < 4; i++ {
+		if strings.HasPrefix(filepath.Base(dir), "go-build") {
 			return true
 		}
 		dir = filepath.Dir(dir)

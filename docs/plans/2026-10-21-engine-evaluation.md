@@ -53,7 +53,14 @@
 | 没有 nginx 那些成熟模块（gzip、limit_req、sub_filter…） | 本应用是端口转发工具，这些不在此列；需要的人可以用「导出 nginx 配置」把它搬到真 nginx 上继续加 |
 | UDP 会话管理要自己写 | 已实现：每客户端地址一个上游 socket，按 `proxy_timeout` 或默认 5 分钟回收，空闲扫描 |
 
-## 五、结论
+## 五、剩余限制（明确写下来，免得踩）
+
+- **UDP 的 `proxy_timeout` 只保证会话回收**，不像 nginx 那样精确到单个报文方向的超时；对本场景（DNS、游戏、IoT）足够。
+- **没有 gzip、限流、URL 重写**。需要这些的用户走「导出 nginx 配置」。
+- **HTTPS 上游**：`proxy_pass http://…` 默认用明文连上游；要连 HTTPS 上游得在 `自定义 proxy_pass` 里写 `https://…`（引擎会照做，且不校验上游证书，因为内网多为自签）。
+- **HTTP/2 到客户端**：引擎用标准库的 HTTP/1.1 服务端；HTTP/2 上游可以（Transport 自动协商），客户端侧不支持。
+
+## 六、结论
 
 - **端口转发与反代这一层：不需要 nginx**，已用 Go 替换，测试覆盖 TCP/UDP/HTTP/HTTPS/白名单/事务性。
 - **nginx 配置这件事仍然保留**：作为导出格式、快照载体、以及「想搬到真 nginx」的出口。

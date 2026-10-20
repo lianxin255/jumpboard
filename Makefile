@@ -19,13 +19,15 @@ test-race:
 	$(GO) test ./... -race -count=1
 
 test-ui:
-	$(GO) test ./e2e/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLogs|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI' -count=1 -v
+	$(GO) test ./e2e/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLogs|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestKeyboard|TestToast|TestCopyAddress' -count=1 -v
 
 test-engine:
-	$(GO) test ./e2e/ -run 'TestApply|TestBadConfig|TestSnapshot|TestQuit' -count=1 -v
+	$(GO) test ./internal/engine/ ./e2e/ -run 'TestTCP|TestUDP|TestHTTP|TestTLS|TestWhitelist|TestApply|TestCheck|TestSnapshot|TestQuit|TestProxy|TestMinimal|TestCustom|TestStop|TestRuleState' -count=1 -v
 
+# The end-to-end tests exercise most of the app, so the coverage counts
+# every internal package, whichever test touched it.
 cover:
-	$(GO) test ./... -coverprofile=coverage.out -count=1
+	$(GO) test ./... -coverpkg=./internal/... -coverprofile=coverage.out -count=1
 	$(GO) tool cover -func=coverage.out | tail -1
 
 ## Builds

@@ -21,3 +21,4 @@ apps/desktop/.stage/
 .temp
 coverage
 temp
+coverage.out

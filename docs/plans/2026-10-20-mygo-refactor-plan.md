@@ -470,47 +470,44 @@ TestUIAppliesToRealEngine 界面状态随引擎状态变化 → PASS
 - **每个页面必须至少有一条 L2 用例**（用 `go test -run` 过滤验证）
 - 每个 `internal/` 包必须有测试文件（脚本检查）
 
-### 实际达成的覆盖率（2026-10-21）
+### 实际达成的覆盖率（2026-10-21，引擎换为 Go 自研后）
 
 | 包 | 覆盖率 |
 |---|---|
-| `internal/ai` | 80.2% |
-| `internal/model` | 77.2% |
-| `internal/nginx` | 77.2% |
-| `internal/services` | 72.4% |
-| `internal/store` | 62.9% |
-| **e2e（跨包统计）** | **63.2%** |
+| `internal/nginx`（生成/解析） | 83.5% |
+| `internal/services` | 80.1% |
+| `internal/ai` | 78.9% |
+| `internal/store` | 77.5% |
+| `internal/model` | 76.9% |
+| `internal/engine`（转发内核） | 73.6% |
+| `internal/paths` | 72.1% |
+| `internal/appt` | 69.4% |
+| `internal/ui` | 49.8%（绘制代码，靠 `ui.Tester` 与截图验证） |
+| **合计** | **72.0%** |
 
-e2e 已有的 24 个用例：
+`go test ./... -race` 全绿，共 **46 个测试函数 / 106 个用例**。
 
 | 用例 | 覆盖的功能 |
 |---|---|
 | `TestMappingLifecycle` | 新建 / 编辑 / 删除 + 取消确认 + 脏标记 |
 | `TestValidationBlocksBadInput` | 非法端口被拒、不落库、错误提示 |
-| `TestThemeSwitch` | 跟随系统 / 亮 / 暗 三档切换并持久化 |
-| `TestFollowSystemShowsTheDesktopAppearance` | 跟随系统真的跟随桌面外观（像素级） |
-| `TestForcedThemeIgnoresTheDesktop` | 强制亮/暗不被桌面覆盖 |
-| `TestForceDarkFromTheDesktop` | 桌面外观变化时重绘 |
-| `TestWhitelistRefusesEmpty` | 白名单开着但为空时拒绝应用；添加后可正常 |
-| `TestApplyStartsNginxAndForwards` | **真 nginx**：应用 → 启动 → 真实 HTTP 流量 → 停止释放端口 |
-| `TestBadConfigRollsBack` | `nginx -t` 失败回滚，旧配置继续服务 |
-| `TestSnapshotRollback` | 快照回滚 + 脏标记 |
-| `TestLogsAndHistoryPages` | 日志页 / nginx 日志切换 / 历史页 / 快照查看 |
-| `TestQuitStopsNginx` | 退出时 nginx 被停止、端口释放 |
-| `TestTemplatePickerFillsTheForm` | 模板选择 → 表单预填 |
-| `TestCustomTemplateRoundTrip` | 自定义模板保存 / 出现在列表 / 删除 |
-| `TestExportImportThroughFiles` | 导出到文件 → 导入 → 数据一致 |
-| `TestImportHostileBackupThroughApp` | 恶意备份被清洗（注入字符 / 非法协议 / 非法 proxy_pass） |
-| `TestWipeRebuilds` | 清空数据后应用仍可用 |
-| `TestAIEntryHiddenWithoutConfig` | 未配置时 AI 入口隐藏 |
-| `TestAIDraftFillsTheForm` | 假 LLM → 草稿 → 填表 → 保存 |
-| `TestAIBadJSONDegrades` | 模型返回垃圾 → 报错不崩、不写库 |
-| `TestAIPortConflictIsVisible` | AI 建议的端口被占用时能识别 |
-| `TestCloneMapping` | 克隆：副本停用、不继承监听端口、保留上游 |
-| `TestToggleMapping` | 表格里的启停开关 + 脏标记 |
-| `TestHealthCheckNow` | 点健康状态单元格立即检查 |
-
-全部在 `-race` 下通过；`go test ./...` 总耗时约 22 s。
+| `TestThemeSwitch` / `TestFollowSystem…` / `TestForcedTheme…` / `TestForceDark…` | 三档主题、跟随系统、像素级验证、桌面外观变化重绘 |
+| `TestWhitelistRefusesEmpty` | 白名单为空时拒绝应用 |
+| `TestApplyForwardsTraffic` | **真流量**：应用 → 监听 → 请求转发 → 停止释放端口 |
+| `TestPortConflictLeavesRulesRunning` | 端口被占时整次失败，旧规则继续服务 |
+| `TestCheckConfigReportsProblems` | 预检：重复端口、端口占用、上游不可解析 |
+| `TestSnapshotRollback` | 快照回滚（解析 conf → 恢复映射 → 重新应用） |
+| `TestQuitStopsEverything` | 退出时监听全部关闭 |
+| `TestLogsAndHistoryPages` | 日志页 / 访问日志 / 历史页 / 快照查看 |
+| `TestTemplatePickerFillsTheForm` / `TestCustomTemplateRoundTrip` | 模板预填、自定义模板增删 |
+| `TestExportImportThroughFiles` / `TestImportHostileBackupThroughApp` / `TestWipeRebuilds` | 导出导入、恶意备份清洗、清空后自愈 |
+| `TestAIEntryHiddenWithoutConfig` / `TestAIDraftFillsTheForm` / `TestAIBadJSONDegrades` / `TestAIPortConflictIsVisible` | AI 入口、草稿入表、垃圾响应降级、端口冲突可见 |
+| `TestCloneMapping` / `TestToggleMapping` / `TestHealthCheckNow` / `TestCopyAddress` | 克隆、启停、立即健康检查、复制地址 |
+| `TestKeyboardShortcuts` / `TestToastShowsOnce` | ⌘N / Esc、toast 只出现一次 |
+| `TestProxyHeadersAndStreaming` / `TestMinimalModeAddsNoHeaders` | 代理头、SSE 流式、精简模式不加头 |
+| `TestExportWritesAnNginxConfig` / `TestRuleStateIsVisible` | 导出 nginx.conf、每行监听状态 |
+| `internal/engine` 的 18 个用例 | TCP/UDP 转发、HTTP 路由、TLS/SNI、白名单、事务性应用、超时解析、不支持指令告警 |
+| `internal/nginx` 的 7 个用例 | 11 份 golden conf、注入防护、白名单自锁防护、conf 解析往返 |
 
 ## 七、风险
 

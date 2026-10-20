@@ -354,6 +354,9 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, err
 
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
+			// The client's Host is what nginx's $host means, so it is read
+			// before the request is retargeted at the upstream.
+			clientHost := req.Host
 			// proxy_pass without a path sends the request path unchanged,
 			// which is what nginx does when the URL has no URI part.
 			// A path in proxy_pass replaces the location prefix, as nginx's
@@ -364,7 +367,7 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, err
 				req.URL.Path = singleJoin(u.Path, req.URL.Path)
 			}
 			req.Host = req.URL.Host
-			applyHeaders(req, m)
+			applyHeaders(req, m, clientHost)
 		},
 		Transport:     transport,
 		FlushInterval: -1, // write through, as proxy_buffering off
@@ -378,20 +381,26 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, err
 }
 
 // applyHeaders sets the headers a mapping asks for.
-func applyHeaders(req *http.Request, m model.Mapping) {
+//
+// clientHost is the Host the client sent, which is what nginx's $host
+// expands to: by this point the request itself carries the upstream's.
+func applyHeaders(req *http.Request, m model.Mapping, clientHost string) {
 	switch m.ProxyMode {
 	case model.ProxyMinimal:
 		// Nothing added: the upstream sees what the client sent, with the
-		// Host rewritten to the upstream above.
+		// Host rewritten to the upstream above. The reverse proxy appends
+		// X-Forwarded-For on its own, and the minimal mode is what a
+		// backend that rejects extra headers (GitLab signing a webhook)
+		// asks for, so that one is removed too.
+		req.Header["X-Forwarded-For"] = nil
 	case model.ProxyCustom:
 		// The custom lines are nginx directives; the ones that map onto a
 		// request header are honored, the rest is reported when applied.
-		for name, value := range customHeaders(m.ProxyHeaders, req) {
+		for name, value := range customHeaders(m.ProxyHeaders, req, clientHost) {
 			req.Header.Set(name, value)
 		}
 	default:
-		host := req.Host
-		req.Header.Set("Host", host)
+		req.Header.Set("Host", clientHost)
 		req.Header.Set("X-Real-IP", clientIP(req.RemoteAddr))
 		req.Header.Set("X-Forwarded-For", appendForwarded(req))
 		proto := "http"
@@ -405,7 +414,7 @@ func applyHeaders(req *http.Request, m model.Mapping) {
 }
 
 // customHeaders reads the proxy_set_header lines of a custom mode.
-func customHeaders(raw string, req *http.Request) map[string]string {
+func customHeaders(raw string, req *http.Request, clientHost string) map[string]string {
 	out := map[string]string{}
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -420,7 +429,7 @@ func customHeaders(raw string, req *http.Request) map[string]string {
 		name, value := fields[0], strings.TrimSpace(fields[1])
 		value = strings.Trim(value, `"`)
 		// The variables nginx would expand are the ones a mapping uses.
-		value = strings.ReplaceAll(value, "$host", req.Host)
+		value = strings.ReplaceAll(value, "$host", clientHost)
 		value = strings.ReplaceAll(value, "$remote_addr", clientIP(req.RemoteAddr))
 		value = strings.ReplaceAll(value, "$http_upgrade", req.Header.Get("Upgrade"))
 		value = strings.ReplaceAll(value, "$connection_upgrade", connectionUpgrade(req))

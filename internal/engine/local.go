@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -400,7 +401,13 @@ func (l *Local) Check(spec Spec) error {
 		if net.ParseIP(m.UpstreamHost) != nil {
 			continue
 		}
-		if _, err := net.LookupHost(m.UpstreamHost); err != nil {
+		// A resolver that answers nothing is no proof the name exists, and
+		// a lookup that hangs would freeze the preflight: a short deadline
+		// and the error both count as unresolved.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, err := net.DefaultResolver.LookupHost(ctx, m.UpstreamHost)
+		cancel()
+		if err != nil {
 			return fmt.Errorf("「%s」的上游 %s 无法解析", m.Name, m.UpstreamHost)
 		}
 	}
