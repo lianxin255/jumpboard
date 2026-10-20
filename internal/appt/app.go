@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lianxin255/nginx-jump-gui/internal/engine"
 	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/nginx"
 	"github.com/lianxin255/nginx-jump-gui/internal/paths"
 	"github.com/lianxin255/nginx-jump-gui/internal/services"
 	"github.com/lianxin255/nginx-jump-gui/internal/store"
@@ -59,13 +59,17 @@ const (
 type App struct {
 	Paths paths.Paths
 	Store *store.Store
-	Eng   *nginx.Engine
+	Eng   *engine.Local
 	Tpl   *services.Templates
 	Log   *services.Logger
 	Check *services.Checker
 
 	// OnChange asks the window for a frame. Set by the UI.
 	OnChange func()
+	// Clipboard puts text on the system clipboard. main.go points it at
+	// mygo's clipboard, which needs the running app; a test leaves it nil
+	// and reads Copied instead.
+	Clipboard func(string)
 
 	mu sync.Mutex
 	// data below is read by the frame and written from goroutines.
@@ -77,8 +81,17 @@ type App struct {
 	engine    string
 	dirty     bool
 	busy      bool
-	// checkErr is why the last apply failed, shown next to the button.
+	// applyErr is why the last apply failed, shown next to the button.
 	applyErr string
+	// applyWarn is what the engine could not honor, shown once.
+	applyWarn string
+	// ruleStatus is what each rule is doing, refreshed with the data.
+	ruleStatus []engine.RuleStatus
+	// copied is the last text CopyAddress put on the clipboard.
+	copied string
+	// applied is set once a rule set has been started, so that the table
+	// can tell "not started yet" from "started and not listening".
+	applied bool
 
 	// UI state: main thread only.
 	page     Page
@@ -123,15 +136,10 @@ func New(p paths.Paths) (*App, error) {
 		return nil, fmt.Errorf("初始化本机主机: %w", err)
 	}
 
-	// A crash leaves nginx running with the ports taken; clear it before
-	// building the engine. It is safe to do from here: no window exists
-	// yet, so nothing can be applying a configuration.
-	nginx.StopStale(p.PrefixDir)
-
 	a := &App{
 		Paths: p,
 		Store: st,
-		Eng:   nginx.NewEngine(p.NginxBinary, p.PrefixDir),
+		Eng:   engine.NewLocal(),
 		Log:   services.NewLogger(st),
 		Check: services.NewChecker(st),
 	}
@@ -145,21 +153,19 @@ func New(p paths.Paths) (*App, error) {
 	if err := a.Reload(); err != nil {
 		return nil, err
 	}
-	// Bring nginx up with the configuration on disk, so that the mappings
-	// the user had running are running again.
-	a.writeConfFromStore()
-	if ok, _ := a.Eng.Test(); ok {
-		if a.Eng.Status() != "running" {
-			if err := a.Eng.Start(); err == nil {
-				a.Log.Info("启动时已按现有配置启动 nginx")
-			} else {
-				a.Log.Warn("启动 nginx 失败: %v", err)
-			}
-		}
-	} else {
-		a.Log.Warn("现有的 nginx 配置校验失败，请检查后重新应用")
+	// Bring the rules up, so that the mappings the user had are forwarding
+	// again. A port that cannot be bound is reported rather than fatal: the
+	// window still opens, and the rule shows its error.
+	spec, err := a.spec()
+	if err != nil {
+		return nil, err
 	}
-	a.engine = a.Eng.Status()
+	if _, err := a.Eng.Apply(spec); err != nil {
+		a.Log.Warn("启动时应用规则失败: %v", err)
+	}
+	a.mu.Lock()
+	a.engine = string(a.Eng.Status())
+	a.mu.Unlock()
 
 	a.Check.OnResult = func(changed []model.Mapping) {
 		_ = a.Reload()
@@ -177,15 +183,63 @@ func (a *App) Close() {
 	}
 }
 
-// Stopped reports whether nginx is running, for the frame.
-func (a *App) Stopped() bool {
-	return a.engStatus() != "running"
-}
+// Stopped reports whether no rule is running, for the frame.
+func (a *App) Stopped() bool { return a.engStatus() != "running" }
 
 func (a *App) engStatus() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.engine
+}
+
+// refreshEngine copies the engine's state into what the frame reads.
+func (a *App) refreshEngine() {
+	status := string(a.Eng.Status())
+	rules := a.Eng.Rules()
+	a.mu.Lock()
+	a.engine = status
+	a.ruleStatus = rules
+	a.mu.Unlock()
+}
+
+// EngineApplied reports whether the rules have been started at least once,
+// so that a row's "not listening" state means something.
+func (a *App) EngineApplied() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.applied
+}
+
+// Copied returns the text of the last successful copy, for the tests.
+func (a *App) Copied() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.copied
+}
+
+// RuleState reports whether a mapping is listening, for its row.
+func (a *App) RuleState(mappingID string) (bool, string) {
+	return a.Eng.RuleState(mappingID)
+}
+
+// RuleInfo returns the counters of a mapping's rule, for its row.
+func (a *App) RuleInfo(mappingID string) engine.RuleStatus {
+	a.mu.Lock()
+	rules := a.ruleStatus
+	a.mu.Unlock()
+	for _, r := range rules {
+		if r.MappingID == mappingID {
+			return r
+		}
+	}
+	return engine.RuleStatus{}
+}
+
+// RuleStatus returns what each rule is doing, for the table.
+func (a *App) RuleStatus() []engine.RuleStatus {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]engine.RuleStatus(nil), a.ruleStatus...)
 }
 
 // notify asks for a frame after the state changed.
@@ -228,10 +282,48 @@ func (a *App) Reload() error {
 	}
 	a.mu.Lock()
 	a.mappings, a.logs, a.snapshots, a.whitelist = mappings, logs, snaps, wl
-	a.engine = a.Eng.Status()
 	a.mu.Unlock()
+	a.refreshEngine()
 	a.notify()
 	return nil
+}
+
+// Spec exposes the rule set the engine would run, for the export.
+func (a *App) Spec() (engine.Spec, error) { return a.spec() }
+
+// spec builds the engine's rule set from the database.
+//
+// A whitelist that is on with no addresses is refused: it would block
+// every client, including the administrator.
+func (a *App) spec() (engine.Spec, error) {
+	var wl []string
+	if a.Store.WhitelistOn() {
+		ips, err := a.Store.EnabledWhitelistIPs()
+		if err != nil {
+			return engine.Spec{}, err
+		}
+		if len(ips) == 0 {
+			return engine.Spec{}, fmt.Errorf("白名单已开启但没有任何 IP，请先添加或在设置里关闭白名单")
+		}
+		wl = ips
+	}
+	mappings, err := a.Store.ListEnabledMappings()
+	if err != nil {
+		return engine.Spec{}, err
+	}
+	// Rules without a port cannot listen; the table shows why.
+	runnable := make([]model.Mapping, 0, len(mappings))
+	for _, m := range mappings {
+		if m.ListenPort == 0 {
+			continue
+		}
+		runnable = append(runnable, m)
+	}
+	return engine.Spec{
+		Mappings:     runnable,
+		WhitelistIPs: wl,
+		LogDir:       a.Paths.LogsDir,
+	}, nil
 }
 
 // Snapshot returns what the frame draws, copied so that the frame can walk
@@ -272,22 +364,6 @@ func (a *App) RunBackground(fn func() error) {
 		}
 		_ = a.Reload()
 	}()
-}
-
-// writeConfFromStore regenerates nginx.conf from the database, without
-// applying it: a stopped engine just gets the file, a running one is left
-// alone until the user applies.
-func (a *App) writeConfFromStore() {
-	mappings, err := a.Store.ListEnabledMappings()
-	if err != nil {
-		return
-	}
-	var wl []string
-	if a.Store.WhitelistOn() {
-		wl, _ = a.Store.EnabledWhitelistIPs()
-	}
-	conf := nginx.Generate(mappings, nginx.GenOptions{WhitelistIPs: wl})
-	_ = a.Eng.WriteConf(conf)
 }
 
 // ErrNoMappings is what an apply with nothing enabled reports.

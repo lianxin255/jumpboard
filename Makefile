@@ -1,7 +1,7 @@
 # NginxJump: build, test and package with mygo.
 #
 # `make test` runs everything: the unit tests, the UI end-to-end tests
-# (which need no window) and the real nginx forwarding tests.
+# (which need no window) and the real forwarding tests.
 
 MYGO ?= go tool mygo
 GO   ?= go

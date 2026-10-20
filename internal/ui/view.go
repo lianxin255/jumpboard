@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -37,6 +38,12 @@ type View struct {
 	ai aiState
 	md markdownState
 
+	// Last status shown as a toast, so that it is not added every frame.
+	shownStatusAt   time.Time
+	shownStatusText string
+	// focusSearch asks the next frame to put the caret in the search box.
+	focusSearch bool
+
 	// AI settings, loaded once from the store.
 	aiSettingsLoaded bool
 	aiBaseURL        string
@@ -66,6 +73,27 @@ func (v *View) draw(c *ui.Context) {
 	})
 	v.dialogs(c, t)
 	v.toast(c, t)
+	v.shortcuts(c)
+}
+
+// shortcuts wires the keys a desktop app is expected to answer.
+func (v *View) shortcuts(c *ui.Context) {
+	a := v.App
+	c.OnShortcut(ui.Cmd, ui.KeyN, func() {
+		if a.Page() == appt.PageMappings && !a.FormOpen() {
+			a.OpenForm(nil)
+		}
+	})
+	c.OnShortcut(ui.Cmd, ui.KeyF, func() {
+		if a.Page() == appt.PageMappings {
+			v.focusSearch = true
+		}
+	})
+	c.OnShortcut(ui.Cmd, ui.KeyR, func() {
+		if a.Page() == appt.PageMappings {
+			a.RunBackground(a.Apply)
+		}
+	})
 }
 
 // topbar draws the header: the app's name, the pages, the engine state and
@@ -145,7 +173,14 @@ func (v *View) body(c *ui.Context, t Tokens) {
 func (v *View) actionRow(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, _, _, engine, dirty, busy, _ := a.Snapshot()
-	pid := a.Eng.PID()
+	rules := a.RuleStatus()
+	listening, conns := 0, int64(0)
+	for _, r := range rules {
+		if r.Listening {
+			listening++
+			conns += r.Connections
+		}
+	}
 
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(3).
@@ -155,12 +190,13 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 				dot = t.Muted
 			}
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
-			ui.Text(c, "nginx").FontSize(12).TextColor(t.FG2)
+			ui.Text(c, a.Eng.Mode()).FontSize(12).TextColor(t.FG2)
 			ui.Text(c, engineLabel(engine)).FontSize(12).TextColor(dot)
 		})
-		if pid > 0 {
+		if len(rules) > 0 {
 			ui.Row(c).Padding(5, 10).Radius(3).Background(t.Surface3).Border(1, t.Border).Children(func() {
-				ui.Textf(c, "PID %d", pid).FontSize(12).TextColor(t.FG2)
+				ui.Textf(c, "监听 %d/%d 条 · 累计 %d 连接", listening, len(rules), conns).
+					FontSize(12).TextColor(t.FG2)
 			})
 		}
 		ui.Spacer(c)
@@ -170,17 +206,28 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 		if dirty {
 			ui.Text(c, "配置已改动").FontSize(11).TextColor(t.Warning)
 		}
-		if ui.Button(c, "校验配置").Disabled(busy).Clicked() {
+		// The check binds each port for a moment and resolves the
+		// upstreams: it answers "would applying work", without touching
+		// what is running.
+		if ui.Button(c, "预检").Disabled(busy).
+			Tooltip("检查端口是否被占用、上游地址能否解析，不会改动正在跑的规则").Clicked() {
 			a.RunBackground(a.TestConfig)
 		}
-		if ui.PrimaryButton(c, "应用配置").Disabled(busy).Clicked() {
+		if ui.PrimaryButton(c, "应用配置").Disabled(busy).
+			Tooltip("让改动生效（⌘R）").Clicked() {
 			a.RunBackground(a.Apply)
 		}
 	})
 	if msg := a.ApplyError(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
 			Background(ui.RGBA(181, 51, 51, 0.12)).Children(func() {
-			ui.Text(c, msg).FontSize(11).TextColor(t.Danger)
+			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
+		})
+	}
+	if msg := a.ApplyWarning(); msg != "" {
+		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
+			Background(ui.RGBA(201, 162, 58, 0.12)).Children(func() {
+			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
 		})
 	}
 }
@@ -215,18 +262,25 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					FontSize(12).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
-			ui.SearchField(c, &v.query).Label("搜索规则").Width(240)
+			search := ui.SearchField(c, &v.query).Label("搜索规则").Width(240).
+				Tooltip("按名称、域名、端口搜索（⌘F）")
+			if v.focusSearch {
+				search.AutoFocus()
+				v.focusSearch = false
+			}
 			v.aiEntry(c, t)
 			if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 				a.SetTemplatePicker(true)
 			}
-			if ui.PrimaryButton(c, "新建映射").Disabled(busy).Clicked() {
+			if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+				Tooltip("新建一条映射（⌘N）").Clicked() {
 				a.OpenForm(nil)
 			}
 		})
 
 		if len(mappings) == 0 {
-			v.emptyState(c, t, "还没有映射", "点“新建映射”手动添加，或从模板开始。")
+			v.emptyState(c, t, "还没有映射",
+				"按 ⌘N 新建，或者从模板开始：数据库、Redis、Web 站点的常用端口都填好了。")
 			return
 		}
 
@@ -282,6 +336,7 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 	case model.HTTPS:
 		color = t.HTTPS
 	}
+	listening, problem := v.App.RuleState(m.ID)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Padding(2, 7).Radius(2).Border(1, color).Children(func() {
 			ui.Text(c, m.Protocol.Label()).FontSize(10).Bold().TextColor(color)
@@ -289,7 +344,26 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 		ui.Column(c).Gap(1).Children(func() {
 			ui.Text(c, m.Name).FontSize(13).TextColor(t.FG).SingleLine()
 			sub := strings.ToUpper(string(m.Protocol)) + " · " + displayHost(m)
-			ui.Text(c, sub).FontSize(11).TextColor(t.Muted).SingleLine()
+			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+				// The dot says whether the rule is listening right now. It
+				// is only drawn once the engine has been applied to: before
+				// that, "not listening" is the expected state, not news.
+				if v.App.EngineApplied() {
+					dot := t.Muted
+					hint := "未在监听"
+					if !m.Enabled {
+						hint = "已停用"
+					} else if listening {
+						dot, hint = t.Success, "监听中"
+					} else if problem == "" || problem == "未应用" {
+						dot, hint = t.Muted, "未应用"
+					} else {
+						dot, hint = t.Danger, problem
+					}
+					ui.Box(c).Size(5, 5).Radius(3).Background(dot).Tooltip(hint)
+				}
+				ui.Text(c, sub).FontSize(11).TextColor(t.Muted).SingleLine()
+			})
 		})
 	})
 }
@@ -304,6 +378,8 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 			port = 80
 		}
 	}
+	info := v.App.RuleInfo(m.ID)
+	a := v.App
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		if m.ServerNames != "" {
 			ui.Text(c, m.ServerNames).FontSize(11).TextColor(t.FG2).
@@ -312,9 +388,22 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 			ui.Text(c, "外部").FontSize(11).TextColor(t.Muted).
 				Padding(2, 6).Radius(2).Background(t.Surface3)
 		}
-		ui.Textf(c, ":%d", port).FontSize(12).TextColor(t.Accent)
+		// The address is what someone shares, so a click puts it on the
+		// clipboard rather than making them select the text by hand.
+		if ui.Textf(c, ":%d", port).FontSize(12).TextColor(t.Accent).
+			Label("复制地址-" + m.Name).Tooltip("点一下复制这个地址").Clicked() {
+			mm := m
+			a.RunBackground(func() error { return a.CopyAddress(mm) })
+		}
 		ui.Text(c, "→").FontSize(12).TextColor(t.Muted)
 		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).FontSize(12).TextColor(t.FG2)
+		if info.Connections > 0 {
+			ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Muted).
+				Tooltip("这条规则累计转发的连接数")
+		}
+		if info.Active > 0 {
+			ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success)
+		}
 	})
 }
 

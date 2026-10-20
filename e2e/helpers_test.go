@@ -7,7 +7,6 @@ package e2e
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/lianxin255/nginx-jump-gui/internal/appt"
@@ -24,16 +23,12 @@ func testApp(t *testing.T) *appt.App {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("NGJ_DATA_ROOT", root)
-	t.Setenv("NGJ_RESOURCES", filepath.Join("..", "resources"))
 	// The system keychain needs a running app; a test reads no key.
 	t.Setenv("NGJ_NO_KEYCHAIN", "1")
 
 	p, err := paths.Resolve()
 	if err != nil {
 		t.Fatalf("resolving paths: %v", err)
-	}
-	if _, err := os.Stat(p.NginxBinary); err != nil {
-		t.Skipf("no bundled nginx at %s", p.NginxBinary)
 	}
 
 	a, err := appt.New(p)
@@ -69,18 +64,4 @@ func builtinTemplates(t *testing.T) map[string]model.Template {
 		t.Fatalf("parsing the built-in templates: %v", err)
 	}
 	return tpls
-}
-
-// nginxPath is the bundled binary for this platform.
-func nginxPath(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs(filepath.Join(".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	name := "nginx"
-	if runtime.GOOS == "windows" {
-		name = "nginx.exe"
-	}
-	return filepath.Join(root, "resources", "darwin", "nginx", name)
 }

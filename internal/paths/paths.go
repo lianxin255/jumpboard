@@ -14,15 +14,13 @@ import (
 
 // Paths are the directories the app uses.
 type Paths struct {
-	// DataDir holds the database, generated configs, logs and snapshots.
+	// DataDir holds the database, logs, snapshots and templates.
 	DataDir string
-	// PrefixDir is nginx's -p directory: conf/, logs/ and temp/ under it.
-	PrefixDir string
-	// ResourcesDir is where the app's shipped files are (the bundled
-	// nginx and the built-in templates).
-	ResourcesDir string
-	// NginxBinary is the bundled nginx for this platform.
-	NginxBinary string
+	// LogsDir is where the engine writes its access log.
+	LogsDir string
+	// ExportDir is where a generated nginx.conf goes, for a user who wants
+	// to take the configuration to a real nginx.
+	ExportDir string
 	// Fallback is set when DataDir is not next to the executable,
 	// because that place is not writable.
 	Fallback bool
@@ -41,119 +39,24 @@ func Resolve() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
-	// NGJ_RESOURCES names the folder holding nginx/, for the tests and for
-	// running from a directory the toolkit cannot infer.
-	// The nginx path must be absolute: the engine runs nginx with its
-	// prefix as the working directory, so a relative path would resolve
-	// against that, not against where the app was started.
-	resourceDir, err := filepath.Abs(firstNonEmpty(os.Getenv("NGJ_RESOURCES"), ""))
-	if err == nil && os.Getenv("NGJ_RESOURCES") == "" {
-		dir, pathErr := mygo.App.Path(mygo.PathResources)
-		if pathErr != nil {
-			return Paths{}, pathErr
-		}
-		resourceDir, err = filepath.Abs(dir)
-	}
-	if err != nil {
-		return Paths{}, err
-	}
-	bin := "nginx"
-	if runtime.GOOS == "windows" {
-		bin = "nginx.exe"
-	}
-	// The binary sits under nginx/ in the platform folder mygo merges
-	// into the app's resources, and a project's resources/ before a build.
-	binary := filepath.Join(resourceDir, "nginx", bin)
-	if _, err := os.Stat(binary); err != nil {
-		for _, candidate := range []string{
-			filepath.Join(resourceDir, runtime.GOOS+"-"+runtime.GOARCH, "nginx", bin),
-			filepath.Join(resourceDir, "darwin", "nginx", bin),
-			filepath.Join(resourceDir, "windows-amd64", "nginx", bin),
-		} {
-			if _, err := os.Stat(candidate); err == nil {
-				binary = candidate
-				break
-			}
-		}
-	}
 	p := Paths{
-		DataDir:      filepath.Join(root, "data"),
-		PrefixDir:    filepath.Join(root, "data", "nginx-home"),
-		ResourcesDir: resourceDir,
-		NginxBinary:  binary,
-		Fallback:     fallback,
+		DataDir:   filepath.Join(root, "data"),
+		LogsDir:   filepath.Join(root, "data", "logs"),
+		ExportDir: filepath.Join(root, "data", "nginx-conf"),
+		Fallback:  fallback,
 	}
 	for _, d := range []string{
 		p.DataDir,
-		p.PrefixDir,
-		filepath.Join(p.PrefixDir, "conf"),
-		filepath.Join(p.PrefixDir, "logs"),
-		filepath.Join(p.PrefixDir, "temp"),
+		p.LogsDir,
+		p.ExportDir,
 		filepath.Join(p.DataDir, "templates", "custom"),
 	} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return Paths{}, fmt.Errorf("creating %s: %w", d, err)
 		}
 	}
-	if err := p.ensureMimeTypes(); err != nil {
-		return Paths{}, err
-	}
 	return p, nil
 }
-
-// firstNonEmpty returns the first non-empty string.
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// ensureMimeTypes puts nginx's mime.types beside the configuration it
-// includes.
-//
-// nginx resolves an include relative to its prefix, and a configuration
-// that includes a missing file fails to load, which would make every apply
-// fail with no explanation. The copy comes from the bundled nginx; when
-// there is none (a user-provided nginx, or a test), the built-in list
-// covers the types a reverse proxy serves.
-func (p Paths) ensureMimeTypes() error {
-	dst := filepath.Join(p.PrefixDir, "conf", "mime.types")
-	if _, err := os.Stat(dst); err == nil {
-		return nil
-	}
-	src := filepath.Join(filepath.Dir(p.NginxBinary), "mime.types")
-	if data, err := os.ReadFile(src); err == nil {
-		return os.WriteFile(dst, data, 0o644)
-	}
-	return os.WriteFile(dst, []byte(minimalMimeTypes), 0o644)
-}
-
-// minimalMimeTypes is a short list for the types a proxy serves; nginx
-// needs at least a valid types block.
-const minimalMimeTypes = `types {
-    text/html                     html htm shtml;
-    text/css                      css;
-    text/xml                      xml;
-    text/plain                    txt md;
-    application/javascript        js mjs;
-    application/json              json map;
-    application/wasm              wasm;
-    application/pdf               pdf;
-    application/zip               zip;
-    application/octet-stream      bin exe dll iso dmg;
-    image/gif                     gif;
-    image/jpeg                    jpeg jpg;
-    image/png                     png;
-    image/svg+xml                 svg svgz;
-    image/webp                    webp;
-    font/woff                     woff;
-    font/woff2                    woff2;
-    video/mp4                     mp4;
-}
-`
 
 // dataRoot returns the folder that holds data/.
 func dataRoot() (root string, fallback bool, err error) {

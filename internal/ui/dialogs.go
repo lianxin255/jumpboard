@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/lianxin255/nginx-jump-gui/internal/appt"
@@ -145,7 +147,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 
 								fld("额外指令", "", func() {
 									ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
-										Placeholder("直接写进 server / location 块的 nginx 指令")
+										Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
 								})
 							})
 						})
@@ -320,10 +322,24 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 }
 
 // toast draws the last action's outcome.
+//
+// It is shown once per status: the toolkit re-shows a toast added with an
+// existing ID, so calling it every frame would restart the countdown and
+// the message would never leave.
 func (v *View) toast(c *ui.Context, t Tokens) {
-	if st, ok := v.App.Status(); ok && st.Text != "" {
-		c.Toast(st.Text)
+	st, ok := v.App.Status()
+	if !ok || st.Text == "" {
+		return
 	}
+	if st.At.Equal(v.shownStatusAt) && st.Text == v.shownStatusText {
+		return
+	}
+	v.shownStatusAt, v.shownStatusText = st.At, st.Text
+	c.Toast(st.Text)
+	// The status is dropped after its time, so that the next frame does
+	// not add it again.
+	c.After(5 * time.Second)
+	v.App.ClearStatusSoon(st.At)
 }
 
 // formatTime renders a millisecond timestamp as a short local time.

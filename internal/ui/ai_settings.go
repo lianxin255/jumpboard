@@ -41,10 +41,10 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 				a.RunBackground(a.ProbeAI)
 			}
 		})
-		ui.Text(c, "Key 保存在系统凭据库（macOS 钥匙串 / Windows 凭据管理器），不会写进数据库或导出文件。").
-			FontSize(11).TextColor(t.Muted)
-		ui.Text(c, "使用 AI 时，你输入的那句话会发送到上面的地址；当前映射列表不会被发送。").
-			FontSize(11).TextColor(t.Muted)
+		ui.Text(c, "Key 存在系统凭据库，不写进数据库或导出文件。").
+			FontSize(11).TextColor(t.Muted).Wrap()
+		ui.Text(c, "使用 AI 时只发送你输入的那句话，不上传映射列表。").
+			FontSize(11).TextColor(t.Muted).Wrap()
 		if !a.AIReady() {
 			ui.Text(c, "填好地址和模型后，映射页才会出现 AI 入口。").
 				FontSize(11).TextColor(t.Warning)

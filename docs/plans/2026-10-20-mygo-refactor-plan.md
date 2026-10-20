@@ -54,6 +54,17 @@
 
 ---
 
+## 一·四、后续变更：转发引擎换成 Go 自研（2026-10-21）
+
+原方案把 nginx 当转发内核，每个平台带一份二进制。评估后改为**在本进程里用 Go 实现**，理由与验证见
+[2026-10-21-engine-evaluation.md](2026-10-21-engine-evaluation.md)。
+
+- TCP/UDP 转发、HTTP/HTTPS 反代、server_name/location 路由、IP 白名单、访问日志全部由 `internal/engine` 承担。
+- 应用变成事务性：先开新端口，全部成功才关旧的；端口被占则整次失败，正在跑的规则不动。
+- 不再需要 nginx 二进制、`nginx -t`、prefix、mime.types、进程树清理；mac 产物 42.5 MB → **34.3 MB**。
+- nginx 只剩两个角色：**导出格式**（`data/nginx-conf/nginx.conf`、设置页可导出）与**快照载体**（`nginx.Parse` 读回映射）。
+- 代价：裸 nginx 指令不再全部生效，引擎认识的那几类会生效，其余在应用时**明确列成警告**。
+
 ## 一·五、平台与架构矩阵（关键结论）
 
 ### 你的机器

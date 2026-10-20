@@ -32,6 +32,12 @@ func main() {
 	// alone is not enough.
 	mygo.App.SetLanguages("zh-Hans", "en")
 
+	// A second copy would try to bind the same ports, and the first one
+	// already owns them: bring the running window forward instead.
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
+
 	p, err := paths.Resolve()
 	if err != nil {
 		fail("无法准备数据目录", err)
@@ -42,6 +48,9 @@ func main() {
 		fail("启动失败", err)
 	}
 	app.Tpl = services.NewTemplates(mustBuiltinTemplates(), p.DataDir+"/templates/custom")
+	// The clipboard needs the running app, so it is wired here rather than
+	// inside the app's own code.
+	app.Clipboard = mygo.Clipboard.WriteText
 
 	// The engine is started here, before the window appears, so that a
 	// failure is known when the first frame draws.

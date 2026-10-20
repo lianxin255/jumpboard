@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/egoist/mygo"
+	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/lianxin255/nginx-jump-gui/internal/appt"
@@ -17,6 +19,10 @@ import (
 
 // 出图脚本：真数据 + 真视图 + Tester，不依赖窗口。
 func main() {
+	// The app declares Chinese before its first window; the shots do too, so
+	// that the toolkit's own strings (Search, Clear…) match what ships.
+	mygo.App.SetLanguages("zh-Hans", "en")
+	mygo.App.SetLocale("zh-Hans")
 	os.Setenv("NGJ_DATA_ROOT", "/tmp/shots-data")
 	os.Setenv("NGJ_RESOURCES", "../resources")
 	os.RemoveAll("/tmp/shots-data")
@@ -71,6 +77,9 @@ func main() {
 		}
 		tt := ui.NewTester(njui.NewView(a), 1280, 800)
 		tt.SetDark(dark)
+		// A Tester takes its language from the app's, which the shots set
+		// above; without this the toolkit's own strings stay English.
+		tt.SetLocale("zh-Hans")
 		img := tt.Image()
 		f, err := os.Create("/tmp/ui-shots/" + name + ".png")
 		if err != nil {

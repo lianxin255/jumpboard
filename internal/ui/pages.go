@@ -15,7 +15,7 @@ import (
 // time import of their own.
 func timeAt(ms int64) time.Time { return time.UnixMilli(ms) }
 
-// logsPage shows the operation log and nginx's own logs.
+// logsPage shows the operation log and the engine's access log.
 func (v *View) logsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, logs, _, _, _, _, busy, _ := a.Snapshot()
@@ -26,10 +26,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
 				ui.Text(c, "日志").FontSize(26).Bold().TextColor(t.FG)
-				ui.Text(c, "操作记录与 nginx 自己的访问、错误日志").FontSize(12).TextColor(t.Muted)
+				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(12).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
-			ui.Segmented(c, &v.logTab, "操作日志", "nginx 日志").Label("日志类型").Width(220)
+			ui.Segmented(c, &v.logTab, "操作日志", "访问日志").Label("日志类型").Width(220)
 			if v.logTab == 0 {
 				ui.Segmented(c, &v.logLevel, "全部", "错误", "警告", "信息").Label("级别").Width(300)
 			}
@@ -47,12 +47,12 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					})
 				}
 			} else {
-				if ui.Switch(c, boolPtr(a.NginxLogRead())).Label("读取 nginx 日志").Changed() {
+				if ui.Switch(c, boolPtr(a.NginxLogRead())).Label("读取访问日志").Changed() {
 					a.SetNginxLogRead(!a.NginxLogRead())
 				}
-				if ui.Button(c, "清空 nginx 日志").Disabled(busy).Clicked() {
+				if ui.Button(c, "清空访问日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
-						Title: "清空 nginx 日志", Body: "access.log、stream_access.log 和 error.log 都会被清空。",
+						Title: "清空访问日志", Body: "引擎写的 access.log 会被清空。",
 						Label: "清空", Destructive: true,
 						Run: a.ClearNginxLogs,
 					})
@@ -125,12 +125,12 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 	}).Grow(1)
 }
 
-// nginxLogList draws nginx's own logs, read when the page is shown.
+// nginxLogList draws the engine's access log.
 func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 	a := v.App
 	if !a.NginxLogRead() {
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "nginx 日志读取已关闭").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "访问日志读取已关闭").FontSize(12).TextColor(t.Muted)
 		})
 		return
 	}
@@ -152,13 +152,13 @@ func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 
 	ui.Column(c).Fill().Gap(0).Children(func() {
 		if len(errs) > 0 {
-			ui.Text(c, "error.log").FontSize(11).Bold().TextColor(t.Danger).Padding(6, 14)
+			ui.Text(c, "错误").FontSize(11).Bold().TextColor(t.Danger).Padding(6, 14)
 			ui.List(c, nil, len(errs), func(i int) {
 				ui.Text(c, errs[i]).Font("monospace").FontSize(11).TextColor(t.Danger).
 					Padding(2, 14).SingleLine()
 			}).MaxHeight(200)
 		}
-		ui.Text(c, "access 日志").FontSize(11).Bold().TextColor(t.Muted).Padding(6, 14)
+		ui.Text(c, "访问记录").FontSize(11).Bold().TextColor(t.Muted).Padding(6, 14)
 		if len(access) == 0 {
 			ui.Text(c, "还没有访问记录").FontSize(12).TextColor(t.Muted).Padding(8, 14)
 			return
@@ -199,11 +199,11 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 
 		ui.Column(c).Gap(3).Children(func() {
 			ui.Text(c, "配置历史").FontSize(26).Bold().TextColor(t.FG)
-			ui.Text(c, "每次成功应用都会存一份快照，最多保留 50 份。回滚会立刻写回磁盘并校验。").
-				FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "每次成功应用都会存一份快照，最多保留 50 份。回滚会把当时的规则恢复回来并立即生效。").
+				FontSize(12).TextColor(t.Muted).Wrap()
 		})
 		if dirty {
-			ui.Text(c, "当前映射与运行中的配置不一致；回滚后用“应用配置”会以当前映射为准覆盖。").
+			ui.Text(c, "有改动还没应用；表里的状态点会显示哪些规则还没生效。").
 				FontSize(11).TextColor(t.Warning)
 		}
 
@@ -268,7 +268,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 		})
 
 		ui.Scroll(c).Children(func() {
-			ui.Row(c).Gap(16).AlignItems(ui.Start).Children(func() {
+			ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
 				v.card(c, t, "外观", func() {
 					ui.Field(c, "主题", func() {
 						if ui.Segmented(c, &themeIdx, "跟随系统", "亮色", "暗色").Label("主题").Changed() {
@@ -283,7 +283,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					ui.Text(c, "亮色与暗色各有一套配色；跟随系统时随桌面的外观自动切换。").
-						FontSize(11).TextColor(t.Muted)
+						FontSize(11).TextColor(t.Muted).Wrap()
 					ui.Field(c, "网关名称", func() {
 						if ui.TextInput(c, &v.settingsName).Submitted() {
 							a.SetHostName(v.settingsName)
@@ -354,7 +354,13 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					ui.Text(c, "导出不含密码；导入会全量替换现有映射。").
-						FontSize(11).TextColor(t.Muted)
+						FontSize(11).TextColor(t.Muted).Wrap()
+					ui.Divider(c)
+					if ui.Button(c, "导出 nginx 配置").Clicked() {
+						v.exportNginx()
+					}
+					ui.Text(c, "导出成标准 nginx.conf，可以在真正的 nginx 上运行。").
+						FontSize(11).TextColor(t.Muted).Wrap()
 					ui.Divider(c)
 					if ui.Button(c, "清空所有数据").Disabled(busy).Clicked() {
 						a.Ask(&appt.Confirm{
@@ -364,7 +370,8 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							Run: a.Wipe,
 						})
 					}
-					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).TextColor(t.Muted).Selectable()
+					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).
+						TextColor(t.Muted).Wrap().Selectable()
 					if a.Paths.Fallback {
 						ui.Text(c, "程序目录不可写，数据改存在用户目录。").
 							FontSize(10).TextColor(t.Warning)
@@ -377,7 +384,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 
 // card draws a titled panel of settings.
 func (v *View) card(c *ui.Context, t Tokens, title string, fn func()) {
-	ui.Column(c).Grow(1).Gap(10).Padding(16).Radius(4).
+	ui.Column(c).Grow(1).MinWidth(260).MaxWidth(360).Gap(10).Padding(16).Radius(4).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Text(c, title).FontSize(13).Bold().TextColor(t.FG)
 		fn()

@@ -3,6 +3,8 @@ package appt
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lianxin255/nginx-jump-gui/internal/model"
@@ -66,6 +68,13 @@ func (a *App) FormState() (open bool, editing *model.Mapping, f FormValues, errs
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.formOpen, a.formEdit, a.form, a.formErrs
+}
+
+// FormOpen reports whether the mapping form is up, for the shortcuts.
+func (a *App) FormOpen() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.formOpen
 }
 
 // SetForm stores the values the inputs edited.
@@ -187,6 +196,20 @@ func (a *App) ClearStatus() {
 	a.mu.Unlock()
 }
 
+// ClearStatusSoon drops a status after its time, unless a newer one was
+// shown meanwhile: a message with a countdown of its own.
+func (a *App) ClearStatusSoon(at time.Time) {
+	go func() {
+		time.Sleep(6 * time.Second)
+		a.mu.Lock()
+		if a.status.At.Equal(at) {
+			a.status = Status{}
+		}
+		a.mu.Unlock()
+		a.notify()
+	}()
+}
+
 // --- actions, which change data and run off the main thread ---
 
 // SaveForm validates the form and stores the mapping.
@@ -280,6 +303,23 @@ func (a *App) SetMappingEnabled(id string, on bool) error {
 	return nil
 }
 
+// CopyAddress puts a mapping's public address on the clipboard, which is
+// what someone sharing a rule actually needs.
+func (a *App) CopyAddress(m model.Mapping) error {
+	addr := nginx.HumanizeListen(m)
+	if strings.HasPrefix(addr, ":") {
+		addr = "本机" + addr
+	}
+	a.mu.Lock()
+	a.copied = addr
+	a.mu.Unlock()
+	if a.Clipboard != nil {
+		a.Clipboard(addr)
+	}
+	a.setStatus("已复制 "+addr, false)
+	return nil
+}
+
 // CloneMapping copies a mapping under a new name.
 func (a *App) CloneMapping(id string) error {
 	m, err := a.Store.GetMapping(id)
@@ -309,68 +349,61 @@ func (a *App) ReorderMappings(ids []string) error {
 	return nil
 }
 
-// Apply generates a configuration from the database and applies it.
+// Apply builds the rule set from the database and starts it.
 //
-// Failure is reported by stage: a bad configuration is the user's to fix
-// and shows as a warning, while a reload that fails is the app's problem
-// and shows as an error.
+// The engine applies the whole set at once: it opens every new listener
+// before closing the ones it replaces, so a port that cannot be bound
+// leaves the running rules untouched. That makes the operation
+// transactional without a configuration file, a test run or a rollback.
 func (a *App) Apply() error {
 	a.mu.Lock()
-	a.applyErr = ""
+	a.applyErr, a.applyWarn = "", ""
 	a.mu.Unlock()
 
-	// A whitelist with no addresses would deny everyone, so refuse to
-	// write a configuration that does.
-	var wl []string
-	if a.Store.WhitelistOn() {
-		ips, err := a.Store.EnabledWhitelistIPs()
-		if err != nil {
-			return err
-		}
-		if len(ips) == 0 {
-			return fmt.Errorf("白名单已开启但没有任何 IP，请先添加或在设置里关闭白名单")
-		}
-		wl = ips
-	}
-	mappings, err := a.Store.ListEnabledMappings()
+	spec, err := a.spec()
 	if err != nil {
 		return err
 	}
-	conf := nginx.Generate(mappings, nginx.GenOptions{WhitelistIPs: wl})
-
-	// A stopped engine only needs the file written and checked: nginx
-	// loads it at the next start, and reloading would fail.
-	skipReload := a.Eng.Status() != "running"
-	res := a.Eng.Apply(conf, skipReload)
-
-	switch {
-	case res.OK && skipReload:
-		a.setStatus("配置已写入并通过校验，启动 nginx 后生效", false)
-		a.Log.Info("配置已写入（引擎未运行），%d 条映射", len(mappings))
-	case res.OK:
-		a.setStatus("配置已应用", false)
-		a.Log.Info("配置已应用，%d 条映射", len(mappings))
-	case res.Stage == "test":
+	res, err := a.Eng.Apply(spec)
+	if err != nil {
 		a.mu.Lock()
-		a.applyErr = res.Output
+		a.applyErr = err.Error()
 		a.mu.Unlock()
-		a.Log.Warn("配置校验失败: %s", res.Output)
-		return fmt.Errorf("配置校验失败，已回滚")
-	default:
-		a.mu.Lock()
-		a.applyErr = res.Output
-		a.mu.Unlock()
-		a.Log.Error("配置应用失败（%s）: %s", res.Stage, res.Output)
-		return fmt.Errorf("应用失败（%s），已回滚", res.Stage)
+		a.Log.Error("应用规则失败: %v", err)
+		a.refreshEngine()
+		return err
 	}
 
-	if res.OK {
-		_ = a.Store.AddSnapshot(conf, "reload")
-		_ = a.Store.TrimSnapshots(50)
+	if len(res.Warnings) > 0 {
 		a.mu.Lock()
-		a.dirty = false
+		a.applyWarn = strings.Join(res.Warnings, "；")
 		a.mu.Unlock()
+		for _, w := range res.Warnings {
+			a.Log.Warn("%s", w)
+		}
 	}
+	a.refreshEngine()
+	a.mu.Lock()
+	a.applied = true
+	a.mu.Unlock()
+	if len(spec.Mappings) == 0 {
+		a.setStatus("没有启用的映射，所有监听已关闭", false)
+	} else {
+		a.setStatus(fmt.Sprintf("已应用 %d 条映射", len(spec.Mappings)), false)
+	}
+	a.Log.Info("规则已应用：%d 条映射", len(spec.Mappings))
+
+	// A snapshot keeps the configuration the rules describe, so that it can
+	// be exported to a real nginx or compared later.
+	conf := nginx.Generate(spec.Mappings, nginx.GenOptions{WhitelistIPs: spec.WhitelistIPs})
+	_ = a.Store.AddSnapshot(conf, "apply")
+	_ = a.Store.TrimSnapshots(50)
+	// The export is written for anyone who wants the same rules in nginx.
+	_ = os.WriteFile(filepath.Join(a.Paths.ExportDir, "nginx.conf"), []byte(conf), 0o644)
+
+	a.mu.Lock()
+	a.dirty = false
+	a.mu.Unlock()
 	return nil
 }
 
@@ -382,52 +415,67 @@ func (a *App) ApplyError() string {
 	return a.applyErr
 }
 
-// StartEngine starts nginx with the configuration on disk.
-func (a *App) StartEngine() error {
-	if err := a.Eng.Start(); err != nil {
-		a.Log.Error("启动 nginx 失败: %v", err)
-		return err
-	}
-	a.Log.Info("nginx 已启动")
-	a.setStatus("nginx 已启动", false)
-	return nil
+// ApplyWarning returns what the engine could not honor.
+func (a *App) ApplyWarning() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.applyWarn
 }
 
-// StopEngine stops nginx.
+// StartEngine re-applies the rules: the engine has no separate start, and
+// a stopped engine is one with no listeners.
+func (a *App) StartEngine() error { return a.Apply() }
+
+// StopEngine closes every listener.
 func (a *App) StopEngine() error {
 	if err := a.Eng.Stop(); err != nil {
 		return err
 	}
-	a.Log.Info("nginx 已停止，所有转发失效")
-	a.setStatus("nginx 已停止", false)
+	a.refreshEngine()
+	a.Log.Info("已停止，所有转发失效")
+	a.setStatus("已停止，所有转发失效", false)
 	return nil
 }
 
-// TestConfig runs nginx -t on the file on disk.
+// TestConfig applies the rule set without keeping it, which is what the
+// old nginx -t did: a port that is taken is reported before the running
+// rules change.
 func (a *App) TestConfig() error {
-	ok, out := a.Eng.Test()
-	if !ok {
-		a.mu.Lock()
-		a.applyErr = out
-		a.mu.Unlock()
-		return fmt.Errorf("配置校验失败")
+	spec, err := a.spec()
+	if err != nil {
+		return err
 	}
-	a.setStatus("配置校验通过", false)
+	if err := a.Eng.Check(spec); err != nil {
+		a.mu.Lock()
+		a.applyErr = err.Error()
+		a.mu.Unlock()
+		return fmt.Errorf("预检失败：%v", err)
+	}
+	a.setStatus("预检通过：端口可用，上游地址可解析", false)
 	return nil
 }
 
-// Rollback restores a snapshot.
+// Rollback restores a snapshot's configuration into the rule set.
+//
+// A snapshot holds nginx directives, not the app's own model, so the
+// mappings it names are imported back into the database and then applied:
+// the snapshot becomes the truth for both.
 func (a *App) RollbackSnapshot(sn model.Snapshot) error {
-	skipReload := a.Eng.Status() != "running"
-	res := a.Eng.Apply(sn.Content, skipReload)
-	if !res.OK {
-		return fmt.Errorf("回滚失败（%s）: %s", res.Stage, res.Output)
+	mappings, err := nginx.Parse(sn.Content)
+	if err != nil {
+		return fmt.Errorf("快照无法解析：%v", err)
 	}
-	// The database and the restored file now differ; applying would bring
-	// them back together, which the dirty flag says.
-	a.markDirty()
-	a.Log.Info("已回滚到快照 %s", sn.ID)
-	a.setStatus("已回滚到所选快照；点“应用配置”会用当前映射覆盖它", false)
+	if err := a.Store.ReplaceAllMappings(mappings); err != nil {
+		return err
+	}
+	if err := a.Reload(); err != nil {
+		return err
+	}
+	if err := a.Apply(); err != nil {
+		return err
+	}
+	a.Log.Info("已回滚到快照 %s（%d 条映射已恢复）", sn.ID, len(mappings))
+	a.setStatus(fmt.Sprintf("已回滚：%d 条映射已恢复", len(mappings)), false)
 	return nil
 }
 
@@ -480,16 +528,14 @@ func (a *App) Import(data []byte) error {
 
 // Wipe clears every piece of data and rebuilds the engine.
 func (a *App) Wipe() error {
-	if a.Eng.Status() == "running" {
-		_ = a.Eng.Stop()
-	}
+	_ = a.Eng.Stop()
 	if err := a.Store.Wipe(); err != nil {
 		return err
 	}
 	if err := a.Store.EnsureLocalHost(); err != nil {
 		return err
 	}
-	a.writeConfFromStore()
+	a.refreshEngine()
 	a.Log.Warn("已清空所有数据")
 	a.mu.Lock()
 	a.dirty = false
@@ -497,32 +543,23 @@ func (a *App) Wipe() error {
 	return nil
 }
 
-// ReloadNginxLogs reads nginx's own logs from the prefix.
+// NginxLogs reads the engine's access log.
 func (a *App) NginxLogs(lines int) (access, errs []string) {
 	if !a.nginxLogRead {
 		return nil, nil
 	}
-	logsDir := a.Paths.PrefixDir + "/logs"
-	for _, name := range []string{"access.log", "stream_access.log"} {
-		if got, err := services.TailFile(logsDir+"/"+name, lines); err == nil {
-			access = append(access, got...)
-		}
+	if got, err := services.TailFile(filepath.Join(a.Paths.LogsDir, "access.log"), lines); err == nil {
+		access = got
 	}
-	if got, err := services.TailFile(logsDir+"/error.log", lines); err == nil {
-		errs = got
-	}
-	return access, errs
+	return access, nil
 }
 
-// ClearNginxLogs truncates nginx's own logs.
+// ClearNginxLogs truncates the access log.
 func (a *App) ClearNginxLogs() error {
-	logsDir := a.Paths.PrefixDir + "/logs"
-	for _, name := range []string{"access.log", "stream_access.log", "error.log"} {
-		if err := os.Truncate(logsDir+"/"+name, 0); err != nil {
-			return nil // missing files are fine
-		}
+	if err := os.Truncate(filepath.Join(a.Paths.LogsDir, "access.log"), 0); err != nil {
+		return nil // a missing file is nothing to clear
 	}
-	a.Log.Info("nginx 日志已清空")
+	a.Log.Info("访问日志已清空")
 	return nil
 }
 
