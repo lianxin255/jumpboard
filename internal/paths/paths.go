@@ -41,7 +41,19 @@ func Resolve() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
-	resourceDir, err := mygo.App.Path(mygo.PathResources)
+	// NGJ_RESOURCES names the folder holding nginx/, for the tests and for
+	// running from a directory the toolkit cannot infer.
+	// The nginx path must be absolute: the engine runs nginx with its
+	// prefix as the working directory, so a relative path would resolve
+	// against that, not against where the app was started.
+	resourceDir, err := filepath.Abs(firstNonEmpty(os.Getenv("NGJ_RESOURCES"), ""))
+	if err == nil && os.Getenv("NGJ_RESOURCES") == "" {
+		dir, pathErr := mygo.App.Path(mygo.PathResources)
+		if pathErr != nil {
+			return Paths{}, pathErr
+		}
+		resourceDir, err = filepath.Abs(dir)
+	}
 	if err != nil {
 		return Paths{}, err
 	}
@@ -68,8 +80,65 @@ func Resolve() (Paths, error) {
 			return Paths{}, fmt.Errorf("creating %s: %w", d, err)
 		}
 	}
+	if err := p.ensureMimeTypes(); err != nil {
+		return Paths{}, err
+	}
 	return p, nil
 }
+
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// ensureMimeTypes puts nginx's mime.types beside the configuration it
+// includes.
+//
+// nginx resolves an include relative to its prefix, and a configuration
+// that includes a missing file fails to load, which would make every apply
+// fail with no explanation. The copy comes from the bundled nginx; when
+// there is none (a user-provided nginx, or a test), the built-in list
+// covers the types a reverse proxy serves.
+func (p Paths) ensureMimeTypes() error {
+	dst := filepath.Join(p.PrefixDir, "conf", "mime.types")
+	if _, err := os.Stat(dst); err == nil {
+		return nil
+	}
+	src := filepath.Join(filepath.Dir(p.NginxBinary), "mime.types")
+	if data, err := os.ReadFile(src); err == nil {
+		return os.WriteFile(dst, data, 0o644)
+	}
+	return os.WriteFile(dst, []byte(minimalMimeTypes), 0o644)
+}
+
+// minimalMimeTypes is a short list for the types a proxy serves; nginx
+// needs at least a valid types block.
+const minimalMimeTypes = `types {
+    text/html                     html htm shtml;
+    text/css                      css;
+    text/xml                      xml;
+    text/plain                    txt md;
+    application/javascript        js mjs;
+    application/json              json map;
+    application/wasm              wasm;
+    application/pdf               pdf;
+    application/zip               zip;
+    application/octet-stream      bin exe dll iso dmg;
+    image/gif                     gif;
+    image/jpeg                    jpeg jpg;
+    image/png                     png;
+    image/svg+xml                 svg svgz;
+    image/webp                    webp;
+    font/woff                     woff;
+    font/woff2                    woff2;
+    video/mp4                     mp4;
+}
+`
 
 // dataRoot returns the folder that holds data/.
 func dataRoot() (root string, fallback bool, err error) {

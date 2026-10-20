@@ -34,23 +34,23 @@
 - **Windows 官方 nginx.exe 依赖审计**：仅 `KERNEL32/USER32/ADVAPI32/WS2_32/CRYPT32`，无 VCRUNTIME。
 - **mygo 目标架构实测**：`windows/amd64` ✅、`darwin/amd64` ✅、`darwin/universal` ✅（产 24 MB app）、`windows/386` ❌（mygo 不支持）。
 
-界面预览（同一份 Go 代码 + `ui.Tester` 无窗口渲染，亮/暗两套 token）：
+界面预览（真实 app 状态 + 真实视图 + `ui.Tester` 无窗口渲染）：
 
 | 映射列表（暗） | 映射列表（亮） |
 |---|---|
-| ![](assets/2026-10-20-ui-mappings-dark.png) | ![](assets/2026-10-20-ui-mappings-light.png) |
+| ![](assets/2026-10-21-mappings-dark.png) | ![](assets/2026-10-21-mappings-light.png) |
 
-| 新建映射（暗） | 新建映射（亮） |
-|---|---|
-| ![](assets/2026-10-20-ui-form-dark.png) | ![](assets/2026-10-20-ui-form-light.png) |
+| 新建映射（暗） |
+|---|
+| ![](assets/2026-10-21-form-dark.png) |
 
-| 日志（暗） | 设置（亮） |
+| 日志（暗） | 历史（亮） |
 |---|---|
-| ![](assets/2026-10-20-ui-logs-dark.png) | ![](assets/2026-10-20-ui-settings-light.png) |
+| ![](assets/2026-10-21-logs-dark.png) | ![](assets/2026-10-21-history-light.png) |
 
-| 设置（暗） | 历史（亮） |
+| 设置（暗） | 设置（亮） |
 |---|---|
-| ![](assets/2026-10-20-ui-settings-dark.png) | ![](assets/2026-10-20-ui-history-light.png) |
+| ![](assets/2026-10-21-settings-dark.png) | ![](assets/2026-10-21-settings-light.png) |
 
 ---
 
@@ -532,14 +532,15 @@ mygo.App.SetLocale("zh-Hans")           // 或让用户选
 ## 八、进度
 
 - [x] 现状盘点、mygo 能力与构建链验证
-- [x] 原生 UI 原型（映射 / 表单 / 日志 / 历史 / 设置，亮暗双主题）渲染通过
+- [x] 原生 UI 原型渲染通过
 - [x] 规划文档（本文）
-- [ ] B0 骨架
-- [ ] B1 存储层
-- [ ] B2 配置生成
-- [ ] B3 nginx 引擎
-- [ ] B4 应用流水线与服务
-- [ ] B5 界面
-- [ ] B6 打包与发布
-- [ ] B7 清理与回归 + 全量 e2e
-- [ ] B8 AI 配置（可选）
+- [x] **B0 骨架**：`go.mod` / `mygo.json` / `main.go` / 资源目录。`mygo build -platform darwin/universal,windows/amd64` 双产物通过；mac 42.5 MB / dmg 14.5 MB；Windows exe 16.3 MB
+- [x] **B1 存储层**：schema 与原 Electron 版逐字一致，6 个 repo + settings，`go test ./internal/store` 通过（含迁移幂等、真实旧库字段兼容）
+- [x] **B2 配置生成**：`confgen.go` 重写完成，11 份 golden `.conf` 锁定输出，注入/白名单/非法端口/proxy_headers 逃逸共 4 组安全测试通过
+- [x] **B3 nginx 引擎**：`engine.go` + `apply.go`，**真机跑通**：启动→`nginx -t`→真实 HTTP 流量→停止→端口释放；失败回滚验证通过
+- [x] **B4 应用流水线与服务**：健康检查（TCP/HTTP/HTTPS + 轮询）、日志尾部、模板 13 个、导入导出（恶意样本清洗）、操作日志
+- [x] **B5 界面**：4 个页面 + 表单/模板/确认/快照/Toast 弹层 + 亮暗双主题 + AI 面板，`ui.Tester` 出图验证
+- [x] **B6 打包**：mac 通用包 + Windows exe 均产出，嵌套 nginx 双架构、deep-verify 通过
+- [ ] B7 清理旧 Electron 目录与 CI
+- [x] **B8 AI 配置**：设置页可配 Base URL/模型/Key（存 `mygo.Secrets`）；自然语言→JSON 草稿→表单；AI 只出草稿、不写盘
+- [x] **e2e**：L1 单元 30+ 用例、L2 界面 e2e 5 个（映射全流程/校验/主题/白名单/日志历史）、L3 真 nginx 4 个（转发/回滚/快照/退出清理）全绿

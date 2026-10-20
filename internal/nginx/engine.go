@@ -79,13 +79,20 @@ func (e *Engine) Test() (bool, string) {
 	cmd := exec.CommandContext(ctx, e.bin, "-t", "-p", e.prefix, "-c", "conf/nginx.conf")
 	cmd.Dir = e.prefix
 	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return false, "nginx -t 超时"
 		}
-		return false, strings.TrimSpace(string(out))
+		// An empty output means the command never ran: no permission, a
+		// missing interpreter, a quarantined binary. Say why, or the
+		// reason would be invisible.
+		if text == "" {
+			text = err.Error()
+		}
+		return false, text
 	}
-	return true, strings.TrimSpace(string(out))
+	return true, text
 }
 
 // Start launches nginx in the background.

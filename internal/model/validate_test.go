@@ -29,7 +29,7 @@ func TestValidIPOrCIDR(t *testing.T) {
 	invalid := []string{
 		"", "192.168.1", "192.168.1.1.1", "256.1.1.1", "1.2.3.-1",
 		"01.2.3.4", "1.2.3.004", // leading zeros would read differently
-		"0.0.0.0/0",  // would match everything and disable the whitelist
+		"0.0.0.0/0", // would match everything and disable the whitelist
 		"1.2.3.4/33", "1.2.3.4/-1", "1.2.3.4/", "abc", "1.2.3.4 5",
 	}
 	for _, s := range invalid {
