@@ -342,6 +342,21 @@ schema + 6 repo + settings。
 | 提示词 | 一份 system prompt 带上：字段说明、合法取值、当前白名单状态、当前被占用端口、示例；输出必须是 JSON |
 | 离线 | 没有配置 API Key 时整个功能隐藏（不出现按钮），避免用户点了报错 |
 
+### 已验证的原型（本次 spike 跑通）
+
+不联网、不花钱，用 `httptest` 起一个假的 OpenAI 兼容服务，验证了整条链路：
+
+| 环节 | 验证方式 | 结果 |
+|---|---|---|
+| 请求 | `net/http` POST `/v1/chat/completions` | ✅ |
+| 流式 | SSE `data: {...}` 逐块读取、拼装 | ✅ |
+| 渲染 | `markdown.Stream()`（专为 LLM 流式设计，半截语法按「将变成什么」画） | ✅ 粗体/代码块/列表都正常 |
+| 结构化 | 解析返回的 JSON 到 `MappingInput` 草稿 | ✅ `{Name:内网 MySQL Protocol:tcp ListenPort:9000}` |
+
+关键发现：**`markdown.Stream` 的淡入动画需要推进时钟**（`Tester.Advance`），否则截图会拍在动画起点（几乎透明）。真实使用中动画会自然跑完，但 e2e 截图必须 `Advance`。
+
+这套假服务可以直接搬进 L2 测试：**AI 功能的 e2e 不需要真实模型**，用 `httptest` 返回固定响应即可覆盖「正常/非法 JSON/超时/401」所有分支。
+
 ### 需要注意的坑
 
 - **模型会编造端口/IP**。所有 AI 填的端口都要跑一次 `portCheck`，冲突就在预览里标红。
