@@ -205,9 +205,12 @@ func formHeight(f appt.FormValues) float32 {
 		}
 	}
 	rows += 2 // extra directives, as a text area
-	h := float32(rows) * 42
-	if h > 460 {
-		h = 460
+	// A field with its label is about 44 DIPs; the ceiling is what the
+	// window can spare once the title, the buttons and the padding are
+	// there, so a long form scrolls rather than growing past the screen.
+	h := float32(rows) * 44
+	if h > 600 {
+		h = 600
 	}
 	return h
 }
