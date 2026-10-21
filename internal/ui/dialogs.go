@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -34,11 +35,11 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 // to a copy is the classic way to lose every keystroke, and the e2e tests
 // check they stick.
 //
-// The fields are grouped the way a person fills them in: what to forward
-// first, then the web settings HTTP and HTTPS need, then the certificate,
-// then health checks, and last the advanced text that few rules use. The
-// protocol is a segmented control rather than a dropdown: it is the first
-// question every rule answers, and its four choices are legible.
+// The layout follows the design: labels sit above their fields, and the
+// fields form a two-column grid, so a rule reads as a form rather than a
+// checklist. Groups (转发 / 反向代理 / 健康检查) carry a small heading;
+// the protocol is a segmented control, and the extra-directives box gets
+// quick-insert chips for the directives people ask for most.
 func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f appt.FormValues, errs map[string]string) {
 	a := v.App
 	open := true
@@ -47,17 +48,33 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 		title = "编辑映射"
 	}
 
+	// fld is one labelled field: the label above the control, the error
+	// under it. Outside a ui.Form, Field draws exactly that.
+	fld := func(label, errKey string, fn func()) {
+		e := ui.Field(c, label, fn)
+		if msg := errs[errKey]; msg != "" {
+			e.Error(msg)
+		}
+	}
+	// groupHead is the small heading above a set of fields.
+	groupHead := func(label string) {
+		ui.Text(c, label).FontSize(12).Bold().TextColor(t.FG)
+	}
+
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(640).Gap(14).Padding(20).Radius(8).
+		ui.Column(c).Width(640).Gap(16).Padding(24).Radius(12).
 			Background(t.Surface).Border(1, t.Border).Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).
 			Children(func() {
 
-				ui.Row(c).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 					ui.Text(c, title).FontSize(16).Bold().TextColor(t.FG)
-					ui.Spacer(c)
 					if isWeb(f.Protocol) {
 						ui.Text(c, "反代").FontSize(10).Bold().TextColor(t.HTTP).
-							Padding(3, 8).Radius(4).Background(ui.RGBA(t.HTTP.R, t.HTTP.G, t.HTTP.B, 0.12))
+							Padding(2, 8).Radius(5).Background(t.HTTP.Alpha(0.14))
+					}
+					ui.Spacer(c)
+					if ui.Text(c, "×").FontSize(16).TextColor(t.Muted).Label("关闭").Clicked() {
+						a.CloseForm()
 					}
 				})
 
@@ -66,48 +83,45 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 				// is what bounds the form. A short form stays short and a
 				// long one (HTTPS with every field) scrolls.
 				ui.Box(c).Height(formHeight(f)).Clip().Children(func() {
-					ui.Scroll(c).Fill().Padding(0, 4).Children(func() {
-						ui.Form(c, func() {
-							fld := func(label, errKey string, fn func()) {
-								e := ui.Field(c, label, fn)
-								if msg := errs[errKey]; msg != "" {
-									e.Error(msg)
-								}
-							}
+					ui.Scroll(c).Fill().Children(func() {
+						ui.Column(c).Gap(16).Children(func() {
 
 							fld("名称", "Name", func() {
-								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
+								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL")
 							})
 							ui.Field(c, "协议", func() {
 								protoIdx := appt.ProtocolIndex(f.Protocol)
-								ui.Segmented(c, &protoIdx, appt.ProtocolChoices...).Grow(1).OnChange(func() {
+								ui.Segmented(c, &protoIdx, appt.ProtocolChoices...).OnChange(func() {
 									f.Protocol = appt.ProtocolChoices[protoIdx]
 									a.SetForm(f)
 								})
 							})
 
-							ui.Fieldset(c, "转发", func() {
+							groupHead("转发")
+							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 								fld("监听端口", "ListenPort", func() {
 									if isWeb(f.Protocol) {
-										ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443").Width(140)
+										ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443").Width(180)
 									} else {
-										ui.TextInput(c, &f.ListenPort).Placeholder("9000").Width(140)
+										ui.TextInput(c, &f.ListenPort).Placeholder("9000").Width(180)
 									}
 								})
 								if isWeb(f.Protocol) {
 									fld("server_name", "ServerNames", func() {
 										ui.TextInput(c, &f.ServerNames).Placeholder("git.example.com").Grow(1)
 									})
+								}
+							})
+							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+								if isWeb(f.Protocol) {
 									fld("location 路径", "", func() {
 										ui.TextInput(c, &f.ListenPath).Placeholder("/").Width(140)
 									})
 								}
-								// The upstream reads as one line: host on the
-								// left, its port on the right, the way an
-								// address is written. The inputs keep their
-								// own labels: a line with two controls has
-								// to say which is which, to a screen reader
-								// and to the tests.
+								// Host and port on one line, the way an address
+								// is written. Each keeps its own label: two
+								// controls in one field have to say which is
+								// which, to a screen reader and to the tests.
 								ui.Field(c, "上游地址", func() {
 									ui.Row(c).Gap(8).Children(func() {
 										e := ui.TextInput(c, &f.UpstreamHost).Label("上游主机").Placeholder("192.168.1.10")
@@ -120,68 +134,80 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 											e2.Error(msg)
 										}
 									})
-								})
+								}).Grow(1)
 							})
 
 							if isWeb(f.Protocol) {
-								ui.Fieldset(c, "反向代理", func() {
-									modeIdx := appt.ProxyModeIndex(f.ProxyMode)
-									ui.Field(c, "代理模式", func() {
-										ui.Segmented(c, &modeIdx, appt.ProxyModes...).OnChange(func() {
-											f.ProxyMode = appt.ProxyModes[modeIdx]
-											a.SetForm(f)
-										})
+								groupHead("反向代理")
+								modeIdx := appt.ProxyModeIndex(f.ProxyMode)
+								ui.Field(c, "代理模式", func() {
+									ui.Segmented(c, &modeIdx, appt.ProxyModes...).OnChange(func() {
+										f.ProxyMode = appt.ProxyModes[modeIdx]
+										a.SetForm(f)
 									})
-									if f.ProxyMode == appt.ProxyModes[2] {
-										fld("自定义代理头", "", func() {
-											ui.TextArea(c, &f.ProxyHeaders).Lines(3, 8).
-												Placeholder("proxy_set_header Host $host;")
-										})
-									}
-									fld("自定义 proxy_pass", "ProxyPassURL", func() {
-										ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用上面的上游地址").Grow(1)
+								})
+								if f.ProxyMode == appt.ProxyModes[2] {
+									fld("自定义代理头", "", func() {
+										ui.TextArea(c, &f.ProxyHeaders).Lines(3, 8).
+											Placeholder("proxy_set_header Host $host;")
 									})
+								}
+								fld("自定义 proxy_pass", "ProxyPassURL", func() {
+									ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用上面的上游地址")
 								})
 							}
 
 							if f.Protocol == appt.ProtocolChoices[3] {
-								ui.Fieldset(c, "TLS 证书", func() {
+								groupHead("TLS 证书")
+								ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 									fld("证书文件", "TLSCertPath", func() {
 										ui.TextInput(c, &f.TLSCertPath).Placeholder("/etc/ssl/cert.pem").Grow(1)
 									})
 									fld("私钥文件", "", func() {
 										ui.TextInput(c, &f.TLSKeyPath).Placeholder("/etc/ssl/key.pem").Grow(1)
 									})
-									fld("HTTP 跳转 HTTPS", "", func() {
-										ui.Switch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
-									})
+								})
+								ui.Field(c, "HTTP 跳转 HTTPS", func() {
+									ui.Switch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
 								})
 							}
 
-							ui.Fieldset(c, "健康检查", func() {
-								fld("启用检查", "", func() {
-									ui.Switch(c, &f.HealthCheckEnabled).OnChange(func() { a.SetForm(f) })
-								})
-								if f.HealthCheckEnabled {
+							groupHead("健康检查")
+							ui.Field(c, "启用检查", func() {
+								ui.Switch(c, &f.HealthCheckEnabled).OnChange(func() { a.SetForm(f) })
+							})
+							if f.HealthCheckEnabled {
+								ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 									fld("间隔（秒）", "HealthCheckInterval", func() {
 										ui.TextInput(c, &f.HealthCheckInterval).Placeholder("30").Width(140)
 									})
 									if isWeb(f.Protocol) {
 										fld("检查路径", "", func() {
-											ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health").Width(140)
+											ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health").Width(180)
 										})
 										fld("期望状态码", "HealthCheckCode", func() {
 											ui.TextInput(c, &f.HealthCheckCode).Placeholder("200").Width(140)
 										})
 									}
-								}
-							})
-
-							ui.Fieldset(c, "高级", func() {
-								fld("额外指令", "", func() {
-									ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
-										Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
 								})
+							}
+
+							groupHead("额外指令")
+							fld("", "", func() {
+								ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
+									Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
+							})
+							// Quick inserts for the directives the engine
+							// honors: a click appends one to the box, so the
+							// common cases need no typing.
+							ui.Row(c).Gap(8).Children(func() {
+								for _, chip := range directiveChips {
+									if ui.Button(c, chip.label).FontSize(11).
+										Tooltip("插入 " + chip.directive).Clicked() {
+										f.ExtraDirectives = appendDirective(f.ExtraDirectives, chip.directive)
+										a.SetForm(f)
+									}
+								}
 							})
 						})
 					})
@@ -191,7 +217,10 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 					ui.Textf(c, "还有 %d 处需要修正", n).FontSize(11).TextColor(t.Danger)
 				}
 
-				ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				ui.Divider(c)
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "保存后需点“应用配置”才生效 · ⌘S").FontSize(11).TextColor(t.Muted)
+					ui.Spacer(c)
 					if ui.Button(c, "取消").Clicked() {
 						a.CloseForm()
 					}
@@ -211,6 +240,33 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 }
 
+// directiveChip is a quick-insert for the extra-directives box.
+type directiveChip struct {
+	label     string
+	directive string
+}
+
+// directiveChips are the directives the engine honors, which is also what
+// makes them worth a button.
+var directiveChips = []directiveChip{
+	{"超时 1 小时", "proxy_timeout 1h;"},
+	{"WebSocket", "proxy_http_version 1.1;"},
+	{"不缓冲", "proxy_buffering off;"},
+}
+
+// appendDirective adds a directive to the box, on its own line, skipping
+// one that is already there.
+func appendDirective(existing, directive string) string {
+	trimmed := strings.TrimSpace(existing)
+	if trimmed != "" && strings.Contains(trimmed, strings.Split(directive, " ")[0]) {
+		return existing
+	}
+	if trimmed == "" {
+		return directive
+	}
+	return trimmed + "\n" + directive
+}
+
 // isWeb reports whether a protocol label is HTTP or HTTPS, the two that
 // reverse-proxy and therefore take the web fields.
 func isWeb(protocol string) bool {
@@ -220,39 +276,34 @@ func isWeb(protocol string) bool {
 // formHeight is how tall the scroll area of the form should be.
 //
 // The toolkit has no "at most the content, at most this" size, so the
-// height is estimated from the fields the form shows: about 44 DIPs each,
-// with the text areas and the section headings counted higher.
+// height is estimated from the fields the form shows. The grid packs two
+// fields to a row, so a row costs one field's height (about 57 DIPs: the
+// label, its gap, and the control) and a group heading about 25.
 func formHeight(f appt.FormValues) float32 {
-	rows := 5.0 // name, protocol, port, upstream, and the health switch
-	if isWeb(f.Protocol) {
-		rows += 2 // server_name, listen path
-	}
-	if isWeb(f.Protocol) {
-		rows++ // the section heading
-		rows++ // the proxy mode
-		if f.ProxyMode == appt.ProxyModes[2] {
-			rows += 3 // custom headers, as a text area
-		}
-		rows++ // custom proxy_pass
-	}
+	const row, head = float32(57), float32(25)
+	h := 2*row + head // name, protocol, the 转发 heading
+	h += row          // listen port, sharing a row with server_name
+	h += row          // upstream, sharing a row with the location path
 	if f.Protocol == appt.ProtocolChoices[3] {
-		rows += 4 // heading, certificate, key, redirect
+		h += head + row + row // TLS heading, cert+key row, redirect
 	}
-	if f.HealthCheckEnabled {
-		rows++
-		if isWeb(f.Protocol) {
-			rows += 2
+	if isWeb(f.Protocol) {
+		h += head + row + row // 反向代理 heading, mode, proxy_pass
+		if f.ProxyMode == appt.ProxyModes[2] {
+			h += 3 * row // custom headers, as a text area
 		}
 	}
-	rows += 6 // two section headings and the extra directives text area
-	// A field with its label is about 44 DIPs. The ceiling is what the
-	// window can spare once the title, the error line, the buttons and the
-	// padding are there: a modal taller than the window pushes its own
-	// buttons off screen, where nothing can reach them. A long form
-	// scrolls instead.
-	h := float32(rows) * 44
-	if h > 480 {
-		h = 480
+	h += head + row // 健康检查 heading and its switch
+	if f.HealthCheckEnabled {
+		h += row // the interval, path, code share a row
+	}
+	h += head + 3*row + row // 额外指令 heading, the box, the chips
+	// The ceiling is what the window can spare once the title, the error
+	// line, the footer and the padding are there: a modal taller than the
+	// window pushes its own buttons off screen, where nothing can reach
+	// them. A long form scrolls instead.
+	if h > 560 {
+		h = 560
 	}
 	return h
 }

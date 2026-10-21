@@ -99,6 +99,10 @@ func (v *View) shortcuts(c *ui.Context) {
 
 // topbar draws the header: the app's name, the pages, the engine state and
 // the buttons that act on it.
+//
+// The pages are tabs with an underline on the chosen one, centered in the
+// bar, the way the design asks: the segmented pill made the navigation
+// shout when the page title below already says where you are.
 func (v *View) topbar(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, _, _, engine, dirty, busy, _ := a.Snapshot()
@@ -109,7 +113,7 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).
 		AlignItems(ui.Center).Gap(10).Children(func() {
 
-		ui.Box(c).Size(26, 26).Radius(4).Background(t.Accent).Children(func() {
+		ui.Box(c).Size(26, 26).Radius(6).Background(t.Accent).Children(func() {
 			ui.Text(c, "跳").FontSize(13).Bold().TextColor(t.AccentText)
 		})
 		ui.Text(c, "NginxJump").FontSize(14).Bold().TextColor(t.FG)
@@ -117,7 +121,29 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 
 		ui.Spacer(c)
 
-		if ui.Segmented(c, &page, "映射", "日志", "历史", "设置").Label("页面").Width(340).Changed() {
+		labels := []string{"映射", "日志", "历史", "设置"}
+		tabs := ui.TabsBase(c, &page, len(labels))
+		tabs.List.Gap(4).AlignItems(ui.Center).Children(func() {
+			for i, label := range labels {
+				on := i == page
+				tabs.Tab(i).Padding(18, 14).Children(func() {
+					ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+						text := ui.Text(c, label).FontSize(13)
+						if on {
+							text.Bold().TextColor(t.FG)
+						} else {
+							text.TextColor(t.Muted)
+						}
+						bar := ui.Color{}
+						if on {
+							bar = t.Accent
+						}
+						ui.Box(c).Size(22, 2).Radius(2).Background(bar)
+					})
+				})
+			}
+		})
+		if tabs.List.Changed() {
 			a.SetPage(appt.Page(page))
 		}
 
@@ -184,18 +210,21 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 	}
 
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(3).
+		// One pill for the engine, one for what it is doing: two borders
+		// around two short phrases read as clutter.
+		dot := t.Success
+		if engine != "running" {
+			dot = t.Muted
+		}
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(4).
 			Background(t.Surface3).Border(1, t.Border).Children(func() {
-			dot := t.Success
-			if engine != "running" {
-				dot = t.Muted
-			}
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
 			ui.Text(c, a.Eng.Mode()).FontSize(12).TextColor(t.FG2)
+			ui.Text(c, "·").FontSize(12).TextColor(t.Muted)
 			ui.Text(c, engineLabel(engine)).FontSize(12).TextColor(dot)
 		})
 		if len(rules) > 0 {
-			ui.Row(c).Padding(5, 10).Radius(3).Background(t.Surface3).Border(1, t.Border).Children(func() {
+			ui.Row(c).Gap(4).Padding(5, 10).Radius(4).Background(t.Surface3).Border(1, t.Border).Children(func() {
 				ui.Textf(c, "监听 %d/%d 条 · 累计 %d 连接", listening, len(rules), conns).
 					FontSize(12).TextColor(t.FG2)
 			})
@@ -336,6 +365,10 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 }
 
 // nameCell shows the protocol badge and the mapping's name.
+//
+// The badge is a filled chip, and the live state is a dot on the line
+// under the name: the row's second line already says the protocol, so
+// repeating it was noise, and a dot beside the name competed with it.
 func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 	color := t.TCP
 	switch m.Protocol {
@@ -347,14 +380,15 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 		color = t.HTTPS
 	}
 	listening, problem := v.App.RuleState(m.ID)
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Padding(2, 7).Radius(2).Border(1, color).Children(func() {
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Padding(3, 8).Radius(4).
+			Background(color.Alpha(0.14)).Children(func() {
 			ui.Text(c, m.Protocol.Label()).FontSize(10).Bold().TextColor(color)
 		})
-		ui.Column(c).Gap(1).Children(func() {
-			ui.Text(c, m.Name).FontSize(13).TextColor(t.FG).SingleLine()
-			sub := strings.ToUpper(string(m.Protocol)) + " · " + displayHost(m)
-			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Gap(2).Children(func() {
+			ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine()
+			sub := displayHost(m)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				// The dot says whether the rule is listening right now. It
 				// is only drawn once the engine has been applied to: before
 				// that, "not listening" is the expected state, not news.
@@ -371,7 +405,7 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 					default:
 						dot, hint = t.Danger, problem
 					}
-					ui.Box(c).Size(5, 5).Radius(3).Background(dot).Tooltip(hint)
+					ui.Box(c).Size(6, 6).Radius(3).Background(dot).Tooltip(hint)
 				}
 				ui.Text(c, sub).FontSize(11).TextColor(t.Muted).SingleLine()
 				// A rule that cannot listen says why in the row itself:

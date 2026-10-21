@@ -109,17 +109,22 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 	ls.Key = func(i int) any { return shown[i].ID }
 	ui.List(c, &ls, len(shown), func(i int) {
 		e := shown[i]
-		color := t.FG2
+		// The level is a chip with its color as a tint, not just colored
+		// text: the eye scans a wall of messages by the chip, and error
+		// and warn should be findable without reading.
+		color, tint := t.Muted, t.Surface2
 		switch e.Level {
 		case model.LogError:
-			color = t.Danger
+			color, tint = t.Danger, t.Danger.Alpha(0.14)
 		case model.LogWarn:
-			color = t.Warning
+			color, tint = t.Warning, t.Warning.Alpha(0.14)
 		}
 		ui.Row(c).Gap(10).Padding(8, 14).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
 			ui.Text(c, formatClock(e.Timestamp)).FontSize(11).TextColor(t.Muted).Width(70)
-			ui.Text(c, string(e.Level)).FontSize(10).Bold().TextColor(color).Width(46)
+			ui.Box(c).Width(52).Radius(4).Background(tint).Padding(2, 0).Children(func() {
+				ui.Text(c, string(e.Level)).FontSize(10).Bold().TextColor(color)
+			})
 			ui.Text(c, e.Message).FontSize(12).TextColor(t.FG).SingleLine().Grow(1)
 		})
 	}).Grow(1)
@@ -356,20 +361,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					ui.Text(c, "导出不含密码；导入会全量替换现有映射。").
 						FontSize(11).TextColor(t.Muted).Wrap()
 					ui.Divider(c)
-					if ui.Button(c, "导出 nginx 配置").Clicked() {
-						v.exportNginx()
-					}
-					ui.Text(c, "导出成标准 nginx.conf，可以在真正的 nginx 上运行。").
-						FontSize(11).TextColor(t.Muted).Wrap()
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						if ui.Button(c, "导出 nginx 配置").Clicked() {
+							v.exportNginx()
+						}
+						ui.Text(c, "导出成标准 nginx.conf，可在真正的 nginx 上运行。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+					})
 					ui.Divider(c)
-					if ui.Button(c, "清空所有数据").Disabled(busy).Clicked() {
-						a.Ask(&appt.Confirm{
-							Title: "清空所有数据",
-							Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
-							Label: "全部删除", Destructive: true,
-							Run: a.Wipe,
-						})
-					}
 					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).
 						TextColor(t.Muted).Wrap().Selectable()
 					if a.Paths.Fallback {
@@ -378,13 +377,38 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					}
 				})
 			})
+
+			// The danger zone is a band across the page, not a button
+			// among the tools: wiping everything deserves to look
+			// different from exporting a backup.
+			ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
+				Padding(14, 16).Radius(8).
+				Background(t.Danger.Alpha(0.08)).Border(1, t.Danger.Alpha(0.45)).
+				Children(func() {
+					ui.Column(c).Gap(2).Grow(1).Children(func() {
+						ui.Text(c, "危险操作").FontSize(13).Bold().TextColor(t.Danger)
+						ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
+							FontSize(11).TextColor(t.FG2)
+					})
+					btn := ui.PrimaryButton(c, "清空所有数据").Disabled(busy)
+					btn.Background(t.Danger)
+					if btn.Clicked() {
+						a.Ask(&appt.Confirm{
+							Title: "清空所有数据",
+							Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
+							Label: "全部删除", Destructive: true,
+							Run: a.Wipe,
+						})
+					}
+				})
 		}).Grow(1)
 	})
 }
 
-// card draws a titled panel of settings.
+// card draws a titled panel of settings. The width lets two fit a row in
+// the window's default size, the way the design lays them out.
 func (v *View) card(c *ui.Context, t Tokens, title string, fn func()) {
-	ui.Column(c).Grow(1).MinWidth(260).MaxWidth(360).Gap(10).Padding(16).Radius(4).
+	ui.Column(c).Grow(1).MinWidth(320).MaxWidth(560).Gap(10).Padding(16).Radius(8).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Text(c, title).FontSize(13).Bold().TextColor(t.FG)
 		fn()
