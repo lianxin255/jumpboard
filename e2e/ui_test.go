@@ -1,12 +1,14 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/lianxin255/nginx-jump-gui/internal/appt"
+	"github.com/lianxin255/nginx-jump-gui/internal/store"
 	njui "github.com/lianxin255/nginx-jump-gui/internal/ui"
 )
 
@@ -217,4 +219,44 @@ func TestWhitelistRefusesEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the address in the list", func() bool { return tt.HasText("192.168.1.0/24") })
+}
+
+// TestWhitelistSetIsIdempotent checks that asking for the state the app
+// already has writes nothing to the operation log. An access-control
+// switch that logs "已开启" every time a frame touches it is worse than
+// one that does not flip at all.
+func TestWhitelistSetIsIdempotent(t *testing.T) {
+	a := testApp(t)
+	before, _ := a.Store.CountLogs()
+
+	a.SetWhitelistOn(false) // it already is off
+	a.SetWhitelistOn(false)
+	if a.WhitelistOn() {
+		t.Error("it should still be off")
+	}
+
+	a.SetWhitelistOn(true)
+	if !a.WhitelistOn() {
+		t.Fatal("the real change should land")
+	}
+	a.SetWhitelistOn(true) // now a no-op
+
+	logs, err := a.Store.ListLogs(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flips := 0
+	for _, e := range logs {
+		if strings.Contains(e.Message, "白名单已") {
+			flips++
+		}
+	}
+	// Exactly one log line: the single off→on change. The duplicate calls
+	// and the startup state write nothing.
+	if flips != 1 {
+		t.Errorf("one real flip should log one line, got %d (before=%d)", flips, before)
+	}
+	if a.Store.Setting(store.SettingWhitelistOn, "") != "1" {
+		t.Error("the store should hold the turned-on state")
+	}
 }

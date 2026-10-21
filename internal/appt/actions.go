@@ -145,7 +145,15 @@ func (a *App) SetHostName(name string) {
 func (a *App) WhitelistOn() bool { return a.whitelistOn }
 
 // SetWhitelistOn turns the whitelist on or off.
+//
+// Setting it to what it already is does nothing: the switch already
+// reports only real changes, and a repeated call would write "已开启" into
+// the operation log for a flip that never happened, which reads like an
+// access-control change.
 func (a *App) SetWhitelistOn(on bool) {
+	if a.whitelistOn == on {
+		return
+	}
 	a.whitelistOn = on
 	_ = a.Store.SetWhitelistOn(on)
 	if on {
