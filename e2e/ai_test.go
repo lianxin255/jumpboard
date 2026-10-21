@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -148,3 +149,67 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 
 // itoa renders a port for the fake reply.
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// TestAIProbeAnswers checks the settings page's 测试连接 path: the probe
+// costs one small request, and what the endpoint answers decides the
+// outcome the user sees.
+func TestAIProbeAnswers(t *testing.T) {
+	t.Run("a live endpoint answers", func(t *testing.T) {
+		a := testApp(t)
+		srv := fakeOpenAI(t, `{"name":"x","protocol":"tcp","upstreamHost":"10.0.0.1",
+			"upstreamPort":3306,"listenPort":9000,"explanation":"ok"}`)
+		a.SetAI(srv.URL, "test-model")
+		if err := a.ProbeAI(); err != nil {
+			t.Errorf("a reachable endpoint should probe clean: %v", err)
+		}
+	})
+	t.Run("a refused endpoint says so", func(t *testing.T) {
+		a := testApp(t)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(srv.Close)
+		a.SetAI(srv.URL, "test-model")
+		err := a.ProbeAI()
+		if err == nil {
+			t.Fatal("a 401 endpoint should fail the probe")
+		}
+		if !strings.Contains(err.Error(), "401") {
+			t.Errorf("the error should name the status: %v", err)
+		}
+	})
+	t.Run("an unconfigured endpoint is refused before the request", func(t *testing.T) {
+		a := testApp(t)
+		if err := a.ProbeAI(); err == nil {
+			t.Fatal("probing without settings should fail")
+		} else if !strings.Contains(err.Error(), "地址") {
+			t.Errorf("the error should say what to fill: %v", err)
+		}
+	})
+}
+
+// TestAITestConnectionButton walks the button itself: the click hands the
+// probe to the background, the app stays responsive, and a failure lands
+// in the status line rather than a crash.
+func TestAITestConnectionButton(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	a.SetAI(srv.URL, "test-model")
+
+	tt := tester(t, a, 1200, 760)
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("测试连接"); err != nil {
+		t.Fatal(err)
+	}
+	// The probe runs in the background; the failure arrives as a status.
+	waitFor(t, tt, "the probe result", func() bool {
+		st, ok := a.Status()
+		return ok && st.IsErr && strings.Contains(st.Text, "500")
+	})
+}
