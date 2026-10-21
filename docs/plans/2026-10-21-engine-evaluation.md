@@ -30,6 +30,7 @@
 | HTTP 反代 | `httputil.ReverseProxy`，`FlushInterval=-1` | `TestHTTPProxy` |
 | WebSocket / Upgrade | 反向代理透传 Upgrade 头（Go 1.12+） | 依赖 `Hijacker` 实现 |
 | HTTPS | `crypto/tls` + `GetCertificate(SNI)` + 通配符 | `TestTLSProxy` |
+| 80→443 跳转 | 专用 :80 redirect 监听（带白名单），绑定失败降级为警告 | `TestHTTPSMappingEndToEnd`（TLS 终止 + 301 Location；无权限时应用出警告且 TLS 规则照常跑） |
 | server_name 路由 | Host 精确/通配匹配，未知 Host 落默认规则 | `TestHTTPHostAndPathRouting` |
 | location 前缀 | 最长前缀，按段边界匹配（`/api` 不匹配 `/apix`） | 同上 |
 | IP 白名单 | `net.ParseCIDR` + RemoteAddr，未命中 403 | `TestWhitelistBlocks` |

@@ -212,7 +212,13 @@ func renderHTTPS(m model.Mapping, whitelist []string) []string {
 		out = append(out, "    return 301 https://$host$request_uri;", "  }", "")
 	}
 
-	out = append(out, "  server {", "    listen 443 ssl;")
+	// The TLS port is the mapping's own: 443 only when the user left it
+	// empty, the same default the form and the engine apply.
+	port := m.ListenPort
+	if port == 0 {
+		port = 443
+	}
+	out = append(out, "  server {", fmt.Sprintf("    listen %d ssl;", port))
 	if names != "" {
 		out = append(out, "    server_name "+names+";")
 	}

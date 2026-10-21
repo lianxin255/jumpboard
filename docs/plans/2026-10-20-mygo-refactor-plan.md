@@ -470,22 +470,24 @@ TestUIAppliesToRealEngine 界面状态随引擎状态变化 → PASS
 - **每个页面必须至少有一条 L2 用例**（用 `go test -run` 过滤验证）
 - 每个 `internal/` 包必须有测试文件（脚本检查）
 
-### 实际达成的覆盖率（2026-10-21，引擎换为 Go 自研后）
+### 实际达成的覆盖率（2026-10-21，e2e 第二批补齐后）
+
+单一合并 profile（`go test ./e2e/ ./internal/... -coverpkg=./internal/... -coverprofile`）按语句加权：
 
 | 包 | 覆盖率 |
 |---|---|
-| `internal/nginx`（生成/解析） | 83.5% |
-| `internal/services` | 80.1% |
-| `internal/ai` | 78.9% |
-| `internal/store` | 77.5% |
-| `internal/model` | 76.9% |
-| `internal/engine`（转发内核） | 73.6% |
-| `internal/paths` | 72.1% |
-| `internal/appt` | 69.4% |
-| `internal/ui` | 49.8%（绘制代码，靠 `ui.Tester` 与截图验证） |
-| **合计** | **72.0%** |
+| `internal/nginx`（生成/解析） | 88.7% |
+| `internal/engine`（转发内核） | 81.1% |
+| `internal/model` | 82.5% |
+| `internal/ai` | 82.6% |
+| `internal/ui` | 80.3%（绘制代码，靠 `ui.Tester` 驱动） |
+| `internal/services` | 78.6% |
+| `internal/store` | 78.6% |
+| `internal/appt` | 74.0% |
+| `internal/paths` | 48.9%（大量「程序目录不可写回退」平台分支） |
+| **合计** | **79.3%** |
 
-`go test ./... -race` 全绿，共 **46 个测试函数 / 106 个用例**。
+`go test ./... -race` 全绿，共 **99 个测试函数 / 118 个用例**（含子测试）。
 
 | 用例 | 覆盖的功能 |
 |---|---|
@@ -505,9 +507,20 @@ TestUIAppliesToRealEngine 界面状态随引擎状态变化 → PASS
 | `TestCloneMapping` / `TestToggleMapping` / `TestHealthCheckNow` / `TestCopyAddress` | 克隆、启停、立即健康检查、复制地址 |
 | `TestKeyboardShortcuts` / `TestToastShowsOnce` | ⌘N / Esc、toast 只出现一次 |
 | `TestProxyHeadersAndStreaming` / `TestMinimalModeAddsNoHeaders` | 代理头、SSE 流式、精简模式不加头 |
+| `TestHTTPSMappingEndToEnd` / `TestHTTPSExportHonorsListenPort` / `TestHTTPSFormSavesAllFields` | HTTPS 全链路：自签证书 TLS 终止、80→443 跳转 301（无权限时降级警告）、自定义端口导出往返、表单 HTTPS 全字段入库 |
+| `TestAIPanelWalkthrough` / `TestAIPanelShowsAnError` | AI 面板 UI 路径：设置卡配置 → 一句话生成（真点「生成」，过 race detector）→ 采用草稿入表；垃圾响应报错不落库 |
+| `TestLogFilters` | 日志级别筛选（错误/警告/信息）+ 关键字搜索 + 空态 |
+| `TestWhitelistEntryToggle` / `TestSnapshotViewDialog` | 白名单单条启停、快照查看弹层内容与关闭 |
+| `TestExportNginxButton` / `TestImportBackupButton` | 设置页「导出 nginx 配置」「导入备份」按钮路径（对话框注入） |
 | `TestExportWritesAnNginxConfig` / `TestRuleStateIsVisible` | 导出 nginx.conf、每行监听状态 |
-| `internal/engine` 的 18 个用例 | TCP/UDP 转发、HTTP 路由、TLS/SNI、白名单、事务性应用、超时解析、不支持指令告警 |
+| `internal/engine` 的 19 个用例 | TCP/UDP 转发、HTTP 路由、TLS/SNI、白名单、事务性应用、超时解析、不支持指令告警、80 跳转 |
 | `internal/nginx` 的 7 个用例 | 11 份 golden conf、注入防护、白名单自锁防护、conf 解析往返 |
+
+这一批 e2e 顺手抓出并修掉的三个真问题：
+
+1. **引擎没有实现 80→443 跳转**（`RedirectHTTP` 只存在于导出格式）——补了专用 80 端口 redirect 监听，带白名单，绑定失败降级为警告而不是拖垮整次应用（80 端口常需要特权）。
+2. **导出格式无视 HTTPS 自定义端口**（`listen 443 ssl` 写死）——改为尊重 `ListenPort`，留空仍默认 443。
+3. **AI 面板数据竞态**：goroutine 写 `busy/reply/err/draft` 有锁但帧读取无锁——收进 `snapshot()`，Tester 驱动真「生成」按钮在 `-race` 下验证通过。
 
 ## 七、风险
 

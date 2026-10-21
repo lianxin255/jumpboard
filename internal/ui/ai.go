@@ -13,17 +13,28 @@ import (
 type markdownState = markdown.Options
 
 // aiState is the AI panel's own state.
+//
+// open and prompt are the main thread's: only a frame or an action a frame
+// ran touches them. busy, err, reply and draft are written by the request
+// goroutine and read by every frame, so they live behind mu, and the frame
+// takes one snapshot instead of holding the lock while it draws.
 type aiState struct {
 	open   bool
 	prompt string
-	reply  string
-	busy   bool
-	err    string
+
+	mu    sync.Mutex
+	busy  bool
+	err   string
+	reply string
 	// draft is the mapping the model proposed, waiting for the user.
-	draft   *model.Mapping
-	adopted bool
-	// edited lets the user fix the draft in the normal form.
-	mu sync.Mutex
+	draft *model.Mapping
+}
+
+// snapshot reads what the goroutine may have changed.
+func (s *aiState) snapshot() (busy bool, errMsg, reply string, draft *model.Mapping) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.busy, s.err, s.reply, s.draft
 }
 
 // aiDialog draws the AI panel when it is open.
@@ -32,6 +43,7 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 		return
 	}
 	a := v.App
+	busy, errMsg, reply, draft := v.ai.snapshot()
 	open := true
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(620).Gap(12).Padding(20).Radius(6).
@@ -45,29 +57,29 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 			ui.Row(c).Gap(8).Children(func() {
 				if ui.TextInput(c, &v.ai.prompt).
 					Placeholder("把内网 MySQL 192.168.1.10:3306 暴露到 9000").
-					Grow(1).Submitted() {
+					Grow(1).Label("描述").Submitted() {
 					v.runAI()
 				}
-				if ui.PrimaryButton(c, "生成").Disabled(v.ai.busy).Clicked() {
+				if ui.PrimaryButton(c, "生成").Disabled(busy).Clicked() {
 					v.runAI()
 				}
 			})
 
-			if v.ai.busy {
+			if busy {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c).Label("生成中")
 					ui.Text(c, "正在生成草稿…").FontSize(12).TextColor(t.Muted)
 				})
 			}
-			if v.ai.err != "" {
-				ui.Text(c, v.ai.err).FontSize(12).TextColor(t.Danger)
+			if errMsg != "" {
+				ui.Text(c, errMsg).FontSize(12).TextColor(t.Danger)
 			}
-			if v.ai.reply != "" {
+			if reply != "" {
 				ui.Scroll(c).Children(func() {
-					markdown.View(c, v.ai.reply, &v.md)
+					markdown.View(c, reply, &v.md)
 				}).MaxHeight(200)
 			}
-			if d := v.ai.draft; d != nil {
+			if d := draft; d != nil {
 				ui.Column(c).Gap(6).Padding(10).Radius(4).
 					Background(t.Surface3).Border(1, t.Border).Children(func() {
 					ui.Text(c, "草稿").FontSize(11).Bold().TextColor(t.Muted)
@@ -83,9 +95,9 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 				if ui.Button(c, "关闭").Clicked() {
 					v.ai.open = false
 				}
-				if v.ai.draft != nil {
+				if draft != nil {
 					if ui.Button(c, "在表单里改").Clicked() || ui.PrimaryButton(c, "采用草稿").Clicked() {
-						m := *v.ai.draft
+						m := *draft
 						v.ai.open = false
 						a.OpenNewFormFrom(m)
 						a.Info("草稿已填入表单，确认后保存")
@@ -101,11 +113,14 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 
 // runAI asks the model for a draft from the user's sentence.
 func (v *View) runAI() {
-	if v.ai.prompt == "" || v.ai.busy {
+	busy, _, _, _ := v.ai.snapshot()
+	if v.ai.prompt == "" || busy {
 		return
 	}
 	a := v.App
+	v.ai.mu.Lock()
 	v.ai.busy, v.ai.err, v.ai.reply, v.ai.draft = true, "", "", nil
+	v.ai.mu.Unlock()
 	prompt := v.ai.prompt
 
 	go func() {

@@ -196,6 +196,11 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		res.Started = append(res.Started, listenAddr(port))
 	}
 
+	// The HTTP→HTTPS redirects. One listener on port 80 serves every
+	// mapping that asks for one, the way the generated configuration's
+	// shared redirect block did.
+	res.Warnings = append(res.Warnings, l.applyRedirects(spec, byPort, want, next, &opened)...)
+
 	// Close what is no longer wanted.
 	for key, f := range l.running {
 		if want[key] {
@@ -220,6 +225,46 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 	sort.Strings(res.Stopped)
 	res.OK = true
 	return res, nil
+}
+
+// applyRedirects starts or keeps the port-80 listener that sends plain
+// HTTP to the TLS port.
+//
+// The redirect is a convenience: a port it cannot bind — port 80 wants
+// privileges, and an HTTP rule may already hold it — degrades to a warning
+// instead of failing the apply, because the TLS rules it belongs to still
+// work without it.
+func (l *Local) applyRedirects(spec Spec, byPort map[int][]route,
+	want map[ruleKey]bool, next map[ruleKey]forwarder, opened *[]forwarder) []string {
+
+	if _, taken := byPort[80]; taken {
+		return []string{"HTTP→HTTPS 跳转未生效：80 端口已由 HTTP 规则使用"}
+	}
+	wanted := false
+	for _, m := range spec.Mappings {
+		if m.Protocol == model.HTTPS && m.RedirectHTTP &&
+			strings.TrimSpace(m.ServerNames) != "" && m.ListenPort != 80 {
+			wanted = true
+			break
+		}
+	}
+	if !wanted {
+		return nil
+	}
+	key := ruleKey{proto: redirectProto, listen: listenAddr(80)}
+	if existing, ok := l.running[key]; ok {
+		want[key] = true
+		next[key] = existing
+		return nil
+	}
+	f, err := newRedirectForwarder(80, parseWhitelist(spec.WhitelistIPs), l.access)
+	if err != nil {
+		return []string{"HTTP→HTTPS 跳转未生效：无法监听 80 端口（需要管理员权限或端口被占用）"}
+	}
+	want[key] = true
+	next[key] = f
+	*opened = append(*opened, f)
+	return nil
 }
 
 // statuses builds the per-rule rows the window shows.

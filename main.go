@@ -51,6 +51,9 @@ func main() {
 	// The clipboard needs the running app, so it is wired here rather than
 	// inside the app's own code.
 	app.Clipboard = mygo.Clipboard.WriteText
+	// The native file dialogs too.
+	app.SaveDialog = mygo.Dialog.Save
+	app.OpenDialog = mygo.Dialog.Open
 
 	// The engine is started here, before the window appears, so that a
 	// failure is known when the first frame draws.

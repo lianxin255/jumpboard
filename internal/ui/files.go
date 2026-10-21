@@ -25,7 +25,10 @@ func (v *View) exportBackup() {
 		return
 	}
 	name := "nginx-jump-backup-" + time.Now().Format("2006-01-02") + ".json"
-	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
+	if a.SaveDialog == nil {
+		return
+	}
+	path, err := a.SaveDialog(mygo.SaveDialogOptions{
 		Title:       "导出备份",
 		DefaultPath: filepath.Join(homeDir(), "Downloads", name),
 		Filters:     []mygo.FileFilter{{Name: "JSON", Extensions: []string{"json"}}},
@@ -43,7 +46,10 @@ func (v *View) exportBackup() {
 // importBackup asks for a file and replaces the data with it.
 func (v *View) importBackup() {
 	a := v.App
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+	if a.OpenDialog == nil {
+		return
+	}
+	paths, err := a.OpenDialog(mygo.OpenDialogOptions{
 		Title:   "导入备份",
 		Filters: []mygo.FileFilter{{Name: "JSON", Extensions: []string{"json"}}},
 	})
@@ -68,7 +74,10 @@ func (v *View) exportNginx() {
 		return
 	}
 	conf := nginx.Generate(spec.Mappings, nginx.GenOptions{WhitelistIPs: spec.WhitelistIPs})
-	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
+	if a.SaveDialog == nil {
+		return
+	}
+	path, err := a.SaveDialog(mygo.SaveDialogOptions{
 		Title:       "导出 nginx 配置",
 		DefaultPath: filepath.Join(homeDir(), "Downloads", "nginx.conf"),
 		Filters:     []mygo.FileFilter{{Name: "nginx.conf", Extensions: []string{"conf"}}},

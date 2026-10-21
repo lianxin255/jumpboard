@@ -3,6 +3,8 @@ package engine
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -96,7 +98,10 @@ func newHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec,
 				f.active.Add(-1)
 			}
 		},
-		ErrorLog: nil,
+		// A GUI has no stderr to read, and the probe dials a health
+		// checker and a port scanner make are noise here; the access log
+		// is the record that matters.
+		ErrorLog: log.New(io.Discard, "", 0),
 	}
 	f.srv = srv
 	go func() {

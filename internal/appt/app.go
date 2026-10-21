@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/egoist/mygo"
+
 	"github.com/lianxin255/nginx-jump-gui/internal/engine"
 	"github.com/lianxin255/nginx-jump-gui/internal/model"
 	"github.com/lianxin255/nginx-jump-gui/internal/paths"
@@ -70,6 +72,12 @@ type App struct {
 	// mygo's clipboard, which needs the running app; a test leaves it nil
 	// and reads Copied instead.
 	Clipboard func(string)
+	// SaveDialog and OpenDialog ask the user where to put a file and
+	// which files to read. main.go points them at the native dialogs,
+	// which need the running app; a test leaves them nil, and the UI
+	// treats a nil hook as a dialog the user canceled.
+	SaveDialog func(mygo.SaveDialogOptions) (string, error)
+	OpenDialog func(mygo.OpenDialogOptions) ([]string, error)
 
 	mu sync.Mutex
 	// data below is read by the frame and written from goroutines.
