@@ -9,14 +9,10 @@ import (
 	"github.com/lianxin255/nginx-jump-gui/internal/model"
 )
 
-// chooseProtocol switches the form's protocol dropdown, the way a user
-// does: click the dropdown, click the option.
+// chooseProtocol picks the protocol on the form's segmented control, the
+// way a user does: one click on the segment.
 func chooseProtocol(t *testing.T, tt *ui.Tester, want string) {
 	t.Helper()
-	if err := tt.Click("TCP"); err != nil {
-		t.Fatalf("opening the protocol dropdown: %v", err)
-	}
-	tt.Frame()
 	if err := tt.Click(want); err != nil {
 		t.Fatalf("choosing %q: %v", want, err)
 	}
@@ -39,7 +35,7 @@ func TestHTTPSFormSavesAllFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	chooseProtocol(t, tt, "HTTPS")
+	chooseProtocol(t, tt, "HTTPS 反代")
 
 	// The HTTPS-only fields are on the form now.
 	if !tt.HasText("TLS 证书") || !tt.HasText("HTTP 跳转 HTTPS") {
@@ -64,12 +60,11 @@ func TestHTTPSFormSavesAllFields(t *testing.T) {
 	fillField(t, tt, "上游主机", "127.0.0.1")
 	fillField(t, tt, "上游端口", "8443")
 
-	// The certificate fields sit below the fold; the user scrolls, and so
-	// does the test.
-	tt.Scroll(600, 380, 0, -600)
-	tt.Frame()
-	fillField(t, tt, "TLS 证书", certPath)
-	fillField(t, tt, "TLS 私钥", keyPath)
+	// The certificate fields sit below the fold; the test scrolls each
+	// into view, as a user would, before filling it.
+	fillFieldScrolled(t, tt, "证书文件", certPath)
+	fillFieldScrolled(t, tt, "私钥文件", keyPath)
+	reveal(t, tt, "HTTP 跳转 HTTPS")
 	if err := tt.Click("HTTP 跳转 HTTPS"); err != nil {
 		t.Fatalf("toggling the redirect: %v", err)
 	}

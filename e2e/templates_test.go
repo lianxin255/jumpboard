@@ -3,6 +3,7 @@ package e2e
 import (
 	"testing"
 
+	"github.com/lianxin255/nginx-jump-gui/internal/appt"
 	"github.com/lianxin255/nginx-jump-gui/internal/model"
 )
 
@@ -28,7 +29,7 @@ func TestTemplatePickerFillsTheForm(t *testing.T) {
 	if f.UpstreamPort != "3306" {
 		t.Errorf("the MySQL template should prefill 3306: %+v", f)
 	}
-	if f.Protocol != "TCP" {
+	if f.Protocol != appt.ProtocolLabel(model.TCP) {
 		t.Errorf("the chosen template's protocol should be TCP: %q", f.Protocol)
 	}
 	if f.ExtraDirectives == "" {

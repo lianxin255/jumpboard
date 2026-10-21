@@ -115,6 +115,36 @@ func fillField(t *testing.T, tt *ui.Tester, label, text string) {
 	tt.Frame()
 }
 
+// reveal scrolls the form until the element labelled label is visible.
+//
+// A long form (HTTPS with every field) is taller than its scroll box, so a
+// field near the bottom is clipped to no height. Clicking a clipped field
+// lands on the dialog's backdrop and closes it — which is right for a real
+// user, who cannot click what they cannot see, and wrong for a test that
+// has not scrolled. So the test scrolls, as the user would.
+func reveal(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		if r, ok := tt.Find(label); ok && r.H > 0 {
+			return
+		}
+		// The toolkit's scroll event carries the wheel's own direction:
+		// a positive delta moves the content up, which reveals what sits
+		// below the fold.
+		tt.Scroll(600, 400, 0, 120)
+		tt.Frame()
+	}
+	t.Fatalf("%q never became visible", label)
+}
+
+// fillFieldScrolled fills a field that may sit below the fold, scrolling
+// the form until the field is visible first.
+func fillFieldScrolled(t *testing.T, tt *ui.Tester, label, text string) {
+	t.Helper()
+	reveal(t, tt, label)
+	fillField(t, tt, label, text)
+}
+
 // waitFor runs the frames until cond holds.
 //
 // The app changes its state in goroutines, so a test asks for frames until

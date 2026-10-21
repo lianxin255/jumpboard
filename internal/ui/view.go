@@ -136,9 +136,9 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 			ui.Text(c, label).FontSize(12).TextColor(dot)
 		})
 		if engine == "running" {
-			if ui.Button(c, "停止").Tooltip("停止 nginx，所有转发立即失效").Disabled(busy).Clicked() {
+			if ui.Button(c, "停止").Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
 				a.Ask(&appt.Confirm{
-					Title: "停止 nginx",
+					Title: "停止引擎",
 					Body:  "停止后所有转发规则立即失效，外部无法访问。",
 					Label: "停止", Destructive: true,
 					Run: a.StopEngine,
@@ -150,7 +150,7 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 			}
 		}
 		if dirty {
-			ui.Badge(c, "未应用").Background(t.Warning).TextColor(ui.Hex("#141413"))
+			ui.Badge(c, "未应用").Background(t.Warning).TextColor(t.Base)
 		}
 	})
 }

@@ -36,25 +36,67 @@ type FormValues struct {
 	HealthCheckInterval string
 }
 
-// protocolFromLabel maps the dropdown's text back to a protocol.
+// ProtocolChoices are the protocols as the form shows them. Each word says
+// what the choice does, so the control is legible without opening a
+// dropdown: TCP and UDP forward a port, HTTP and HTTPS reverse-proxy a web
+// service.
+var ProtocolChoices = []string{"TCP 转发", "UDP 转发", "HTTP 反代", "HTTPS 反代"}
+
+// ProtocolLabel is a protocol as the form's control shows it.
+func ProtocolLabel(p model.Protocol) string {
+	switch p {
+	case model.UDP:
+		return ProtocolChoices[1]
+	case model.HTTP:
+		return ProtocolChoices[2]
+	case model.HTTPS:
+		return ProtocolChoices[3]
+	}
+	return ProtocolChoices[0]
+}
+
+// ProtocolIndex is the choice's position in ProtocolChoices.
+func ProtocolIndex(label string) int {
+	for i, c := range ProtocolChoices {
+		if c == label {
+			return i
+		}
+	}
+	return 0
+}
+
+// protocolFromLabel maps the control's text back to a protocol.
 func protocolFromLabel(label string) model.Protocol {
 	switch label {
-	case "UDP":
+	case ProtocolChoices[1], "UDP":
 		return model.UDP
-	case "HTTP":
+	case ProtocolChoices[2], "HTTP":
 		return model.HTTP
-	case "HTTPS":
+	case ProtocolChoices[3], "HTTPS":
 		return model.HTTPS
 	}
 	return model.TCP
 }
 
-// proxyModeFromLabel maps the dropdown's text back to a mode.
+// ProxyModes are the proxy modes as the form shows them.
+var ProxyModes = []string{"标准反代", "精简代理", "完全自定义"}
+
+// ProxyModeIndex is the mode's position in ProxyModes.
+func ProxyModeIndex(label string) int {
+	for i, c := range ProxyModes {
+		if c == label {
+			return i
+		}
+	}
+	return 0
+}
+
+// proxyModeFromLabel maps the control's text back to a mode.
 func proxyModeFromLabel(label string) model.ProxyMode {
 	switch label {
-	case "精简代理":
+	case ProxyModes[1]:
 		return model.ProxyMinimal
-	case "完全自定义":
+	case ProxyModes[2]:
 		return model.ProxyCustom
 	}
 	return model.ProxyStandard
@@ -63,9 +105,9 @@ func proxyModeFromLabel(label string) model.ProxyMode {
 // NewForm returns the values of an empty form.
 func NewForm() FormValues {
 	return FormValues{
-		Protocol:            "TCP",
+		Protocol:            ProtocolChoices[0],
 		ListenPath:          "/",
-		ProxyMode:           "标准反代",
+		ProxyMode:           ProxyModes[0],
 		HealthCheckInterval: "30",
 		HealthCheckCode:     "200",
 	}
@@ -75,7 +117,7 @@ func NewForm() FormValues {
 func FormFromMapping(m model.Mapping) FormValues {
 	f := NewForm()
 	f.Name = m.Name
-	f.Protocol = m.Protocol.Label()
+	f.Protocol = ProtocolLabel(m.Protocol)
 	f.ListenPort = itoa(m.ListenPort)
 	f.ServerNames = m.ServerNames
 	f.ListenPath = m.ListenPath
@@ -103,7 +145,7 @@ func FormFromMapping(m model.Mapping) FormValues {
 // FormFromTemplate fills the form from a template.
 func FormFromTemplate(t model.Template) FormValues {
 	f := NewForm()
-	f.Protocol = t.Mapping.Protocol.Label()
+	f.Protocol = ProtocolLabel(t.Mapping.Protocol)
 	f.ListenPort = itoa(t.Mapping.ListenPort)
 	f.UpstreamHost = t.Mapping.UpstreamHost
 	f.UpstreamPort = itoa(t.Mapping.UpstreamPort)

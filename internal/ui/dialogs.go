@@ -33,6 +33,12 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 // The inputs bind straight to the form value the app holds: binding them
 // to a copy is the classic way to lose every keystroke, and the e2e tests
 // check they stick.
+//
+// The fields are grouped the way a person fills them in: what to forward
+// first, then the web settings HTTP and HTTPS need, then the certificate,
+// then health checks, and last the advanced text that few rules use. The
+// protocol is a segmented control rather than a dropdown: it is the first
+// question every rule answers, and its four choices are legible.
 func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f appt.FormValues, errs map[string]string) {
 	a := v.App
 	open := true
@@ -42,16 +48,16 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(600).Gap(14).Padding(20).Radius(6).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.5)).
+		ui.Column(c).Width(640).Gap(14).Padding(20).Radius(8).
+			Background(t.Surface).Border(1, t.Border).Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).
 			Children(func() {
 
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, title).FontSize(16).Bold().TextColor(t.FG)
 					ui.Spacer(c)
-					if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
-						ui.Text(c, "反代").FontSize(10).TextColor(t.HTTP).
-							Padding(2, 6).Radius(2).Border(1, t.HTTP)
+					if isWeb(f.Protocol) {
+						ui.Text(c, "反代").FontSize(10).Bold().TextColor(t.HTTP).
+							Padding(3, 8).Radius(4).Background(ui.RGBA(t.HTTP.R, t.HTTP.G, t.HTTP.B, 0.12))
 					}
 				})
 
@@ -60,91 +66,118 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 				// is what bounds the form. A short form stays short and a
 				// long one (HTTPS with every field) scrolls.
 				ui.Box(c).Height(formHeight(f)).Clip().Children(func() {
-					ui.Scroll(c).Fill().Children(func() {
-						ui.Column(c).Gap(12).Children(func() {
-							ui.Form(c, func() {
-								fld := func(label, errKey string, fn func()) {
-									e := ui.Field(c, label, fn)
-									if msg := errs[errKey]; msg != "" {
-										e.Error(msg)
-									}
+					ui.Scroll(c).Fill().Padding(0, 4).Children(func() {
+						ui.Form(c, func() {
+							fld := func(label, errKey string, fn func()) {
+								e := ui.Field(c, label, fn)
+								if msg := errs[errKey]; msg != "" {
+									e.Error(msg)
 								}
-								fld("名称", "Name", func() {
-									ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL")
+							}
+
+							fld("名称", "Name", func() {
+								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
+							})
+							ui.Field(c, "协议", func() {
+								protoIdx := appt.ProtocolIndex(f.Protocol)
+								ui.Segmented(c, &protoIdx, appt.ProtocolChoices...).Grow(1).OnChange(func() {
+									f.Protocol = appt.ProtocolChoices[protoIdx]
+									a.SetForm(f)
 								})
-								fld("协议", "", func() {
-									ui.Select(c, &f.Protocol, []string{"TCP", "UDP", "HTTP", "HTTPS"}).OnChange(func() {
-										a.SetForm(f)
-									})
+							})
+
+							ui.Fieldset(c, "转发", func() {
+								fld("监听端口", "ListenPort", func() {
+									if isWeb(f.Protocol) {
+										ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443").Width(140)
+									} else {
+										ui.TextInput(c, &f.ListenPort).Placeholder("9000").Width(140)
+									}
 								})
-								if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
+								if isWeb(f.Protocol) {
 									fld("server_name", "ServerNames", func() {
-										ui.TextInput(c, &f.ServerNames).Placeholder("git.example.com")
+										ui.TextInput(c, &f.ServerNames).Placeholder("git.example.com").Grow(1)
 									})
 									fld("location 路径", "", func() {
-										ui.TextInput(c, &f.ListenPath).Placeholder("/")
+										ui.TextInput(c, &f.ListenPath).Placeholder("/").Width(140)
 									})
 								}
-								fld("监听端口", "ListenPort", func() {
-									if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
-										ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443")
-									} else {
-										ui.TextInput(c, &f.ListenPort).Placeholder("9000")
-									}
+								// The upstream reads as one line: host on the
+								// left, its port on the right, the way an
+								// address is written. The inputs keep their
+								// own labels: a line with two controls has
+								// to say which is which, to a screen reader
+								// and to the tests.
+								ui.Field(c, "上游地址", func() {
+									ui.Row(c).Gap(8).Children(func() {
+										e := ui.TextInput(c, &f.UpstreamHost).Label("上游主机").Placeholder("192.168.1.10")
+										if msg := errs["UpstreamHost"]; msg != "" {
+											e.Error(msg)
+										}
+										e.Grow(1)
+										e2 := ui.TextInput(c, &f.UpstreamPort).Label("上游端口").Placeholder("3306").Width(90)
+										if msg := errs["UpstreamPort"]; msg != "" {
+											e2.Error(msg)
+										}
+									})
 								})
-								fld("上游主机", "UpstreamHost", func() {
-									ui.TextInput(c, &f.UpstreamHost).Placeholder("192.168.1.10")
-								})
-								fld("上游端口", "UpstreamPort", func() {
-									ui.TextInput(c, &f.UpstreamPort).Placeholder("3306")
-								})
+							})
 
-								if f.Protocol == "HTTPS" {
-									fld("TLS 证书", "TLSCertPath", func() {
-										ui.TextInput(c, &f.TLSCertPath).Placeholder("/etc/ssl/cert.pem")
-									})
-									fld("TLS 私钥", "", func() {
-										ui.TextInput(c, &f.TLSKeyPath).Placeholder("/etc/ssl/key.pem")
-									})
-									fld("HTTP 跳转 HTTPS", "", func() {
-										ui.Switch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
-									})
-								}
-
-								if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
-									fld("代理模式", "", func() {
-										ui.Select(c, &f.ProxyMode, []string{"标准反代", "精简代理", "完全自定义"}).OnChange(func() {
+							if isWeb(f.Protocol) {
+								ui.Fieldset(c, "反向代理", func() {
+									modeIdx := appt.ProxyModeIndex(f.ProxyMode)
+									ui.Field(c, "代理模式", func() {
+										ui.Segmented(c, &modeIdx, appt.ProxyModes...).OnChange(func() {
+											f.ProxyMode = appt.ProxyModes[modeIdx]
 											a.SetForm(f)
 										})
 									})
-									if f.ProxyMode == "完全自定义" {
+									if f.ProxyMode == appt.ProxyModes[2] {
 										fld("自定义代理头", "", func() {
-											ui.TextArea(c, &f.ProxyHeaders).Lines(4, 8).
+											ui.TextArea(c, &f.ProxyHeaders).Lines(3, 8).
 												Placeholder("proxy_set_header Host $host;")
 										})
 									}
 									fld("自定义 proxy_pass", "ProxyPassURL", func() {
-										ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用 http://上游主机:端口")
+										ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用上面的上游地址").Grow(1)
 									})
-								}
+								})
+							}
 
-								fld("健康检查", "", func() {
+							if f.Protocol == appt.ProtocolChoices[3] {
+								ui.Fieldset(c, "TLS 证书", func() {
+									fld("证书文件", "TLSCertPath", func() {
+										ui.TextInput(c, &f.TLSCertPath).Placeholder("/etc/ssl/cert.pem").Grow(1)
+									})
+									fld("私钥文件", "", func() {
+										ui.TextInput(c, &f.TLSKeyPath).Placeholder("/etc/ssl/key.pem").Grow(1)
+									})
+									fld("HTTP 跳转 HTTPS", "", func() {
+										ui.Switch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
+									})
+								})
+							}
+
+							ui.Fieldset(c, "健康检查", func() {
+								fld("启用检查", "", func() {
 									ui.Switch(c, &f.HealthCheckEnabled).OnChange(func() { a.SetForm(f) })
 								})
 								if f.HealthCheckEnabled {
-									fld("检查间隔（秒）", "HealthCheckInterval", func() {
-										ui.TextInput(c, &f.HealthCheckInterval).Placeholder("30")
+									fld("间隔（秒）", "HealthCheckInterval", func() {
+										ui.TextInput(c, &f.HealthCheckInterval).Placeholder("30").Width(140)
 									})
-									if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
+									if isWeb(f.Protocol) {
 										fld("检查路径", "", func() {
-											ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health")
+											ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health").Width(140)
 										})
 										fld("期望状态码", "HealthCheckCode", func() {
-											ui.TextInput(c, &f.HealthCheckCode).Placeholder("200")
+											ui.TextInput(c, &f.HealthCheckCode).Placeholder("200").Width(140)
 										})
 									}
 								}
+							})
 
+							ui.Fieldset(c, "高级", func() {
 								fld("额外指令", "", func() {
 									ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
 										Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
@@ -178,39 +211,48 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 }
 
+// isWeb reports whether a protocol label is HTTP or HTTPS, the two that
+// reverse-proxy and therefore take the web fields.
+func isWeb(protocol string) bool {
+	return protocol == appt.ProtocolChoices[2] || protocol == appt.ProtocolChoices[3]
+}
+
 // formHeight is how tall the scroll area of the form should be.
 //
 // The toolkit has no "at most the content, at most this" size, so the
-// height is estimated from the fields the form shows: about 48 DIPs each,
-// with the text areas counted higher.
+// height is estimated from the fields the form shows: about 44 DIPs each,
+// with the text areas and the section headings counted higher.
 func formHeight(f appt.FormValues) float32 {
-	rows := 6 // name, protocol, listen, host, port, health
-	if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
+	rows := 5.0 // name, protocol, port, upstream, and the health switch
+	if isWeb(f.Protocol) {
 		rows += 2 // server_name, listen path
 	}
-	if f.Protocol == "HTTPS" {
-		rows += 3 // certificate, key, redirect
-	}
-	if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
-		rows++ // proxy mode
-		if f.ProxyMode == "完全自定义" {
-			rows += 2 // custom headers, as a text area
+	if isWeb(f.Protocol) {
+		rows++ // the section heading
+		rows++ // the proxy mode
+		if f.ProxyMode == appt.ProxyModes[2] {
+			rows += 3 // custom headers, as a text area
 		}
 		rows++ // custom proxy_pass
 	}
+	if f.Protocol == appt.ProtocolChoices[3] {
+		rows += 4 // heading, certificate, key, redirect
+	}
 	if f.HealthCheckEnabled {
-		rows += 2
-		if f.Protocol == "HTTP" || f.Protocol == "HTTPS" {
+		rows++
+		if isWeb(f.Protocol) {
 			rows += 2
 		}
 	}
-	rows += 2 // extra directives, as a text area
-	// A field with its label is about 44 DIPs; the ceiling is what the
-	// window can spare once the title, the buttons and the padding are
-	// there, so a long form scrolls rather than growing past the screen.
+	rows += 6 // two section headings and the extra directives text area
+	// A field with its label is about 44 DIPs. The ceiling is what the
+	// window can spare once the title, the error line, the buttons and the
+	// padding are there: a modal taller than the window pushes its own
+	// buttons off screen, where nothing can reach them. A long form
+	// scrolls instead.
 	h := float32(rows) * 44
-	if h > 600 {
-		h = 600
+	if h > 480 {
+		h = 480
 	}
 	return h
 }
