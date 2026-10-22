@@ -82,7 +82,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 				// stretches its children, so the box, not the view itself,
 				// is what bounds the form. A short form stays short and a
 				// long one (HTTPS with every field) scrolls.
-				ui.Box(c).Height(formHeight(f)).Clip().Children(func() {
+				ui.Box(c).Height(formHeight(f, windowHeight(c))).Clip().Children(func() {
 					ui.Scroll(c).Fill().Children(func() {
 						ui.Column(c).Gap(16).Children(func() {
 
@@ -267,6 +267,16 @@ func appendDirective(existing, directive string) string {
 	return trimmed + "\n" + directive
 }
 
+// windowHeight is the room a dialog has: the window's height, or a
+// generous default when the frame is measured before layout.
+func windowHeight(c *ui.Context) float32 {
+	_, h := c.Size()
+	if h <= 0 {
+		return 760
+	}
+	return h
+}
+
 // isWeb reports whether a protocol label is HTTP or HTTPS, the two that
 // reverse-proxy and therefore take the web fields.
 func isWeb(protocol string) bool {
@@ -279,7 +289,12 @@ func isWeb(protocol string) bool {
 // height is estimated from the fields the form shows. The grid packs two
 // fields to a row, so a row costs one field's height (about 57 DIPs: the
 // label, its gap, and the control) and a group heading about 25.
-func formHeight(f appt.FormValues) float32 {
+//
+// maxHeight is the room the window has for the whole dialog: a modal
+// taller than that pushes its own buttons off screen, where nothing can
+// reach them — the smallest window the app allows must still be able to
+// save.
+func formHeight(f appt.FormValues, maxHeight float32) float32 {
 	const row, head = float32(57), float32(25)
 	h := 2*row + head // name, protocol, the 转发 heading
 	h += row          // listen port, sharing a row with server_name
@@ -298,12 +313,17 @@ func formHeight(f appt.FormValues) float32 {
 		h += row // the interval, path, code share a row
 	}
 	h += head + 3*row + row // 额外指令 heading, the box, the chips
-	// The ceiling is what the window can spare once the title, the error
-	// line, the footer and the padding are there: a modal taller than the
-	// window pushes its own buttons off screen, where nothing can reach
-	// them. A long form scrolls instead.
-	if h > 560 {
-		h = 560
+	// Everything but the scroll area: the title row, the error line, the
+	// divider, the footer, and the dialog's padding.
+	const chrome = 210
+	ceiling := maxHeight - chrome
+	if ceiling < 160 {
+		// A window too short for any form: keep the area usable and let
+		// the dialog overflow rather than vanish.
+		ceiling = 160
+	}
+	if h > ceiling {
+		h = ceiling
 	}
 	return h
 }

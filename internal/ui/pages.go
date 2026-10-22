@@ -105,9 +105,12 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 		return
 	}
 
-	var ls ui.ListState
+	// The state lives on the view, not in this frame: a fresh ListState
+	// each frame forgets the scroll position, so a long log could never
+	// be read past its first page.
+	ls := &v.logList
 	ls.Key = func(i int) any { return shown[i].ID }
-	ui.List(c, &ls, len(shown), func(i int) {
+	ui.List(c, ls, len(shown), func(i int) {
 		e := shown[i]
 		// The level is a chip with its color as a tint, not just colored
 		// text: the eye scans a wall of messages by the chip, and error
@@ -218,9 +221,9 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 		}
 
 		ui.Column(c).Fill().Radius(4).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
-			var ls ui.ListState
+			ls := &v.historyList
 			ls.Key = func(i int) any { return snaps[i].ID }
-			ui.List(c, &ls, len(snaps), func(i int) {
+			ui.List(c, ls, len(snaps), func(i int) {
 				sn := snaps[i]
 				ui.Row(c).Gap(12).Padding(10, 14).AlignItems(ui.Center).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {

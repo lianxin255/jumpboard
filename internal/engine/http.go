@@ -62,6 +62,22 @@ type route struct {
 
 // newHTTPForwarder starts a server for one port.
 func newHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec, access *accessLog) (*httpForwarder, error) {
+	return startHTTPForwarder(port, proto, routes, spec, access, nil)
+}
+
+// prepareTLS loads the certificates a port's rules need, so that a rule
+// with an unreadable certificate fails before any listener is touched: the
+// running site keeps serving while the user fixes the path.
+func prepareTLS(proto model.Protocol, routes []route) (*tls.Config, error) {
+	if proto != model.HTTPS {
+		return nil, nil
+	}
+	return tlsConfigFor(routes)
+}
+
+// startHTTPForwarder binds the port and serves it, with cfg when the port
+// is TLS (nil loads the certificates itself).
+func startHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec, access *accessLog, cfg *tls.Config) (*httpForwarder, error) {
 	addr := listenAddr(port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -69,12 +85,15 @@ func newHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec,
 	}
 
 	if proto == model.HTTPS {
-		tlsConfig, err := tlsConfigFor(routes)
-		if err != nil {
-			ln.Close()
-			return nil, err
+		if cfg == nil {
+			tlsConfig, err := tlsConfigFor(routes)
+			if err != nil {
+				ln.Close()
+				return nil, err
+			}
+			cfg = tlsConfig
 		}
-		ln = tls.NewListener(ln, tlsConfig)
+		ln = tls.NewListener(ln, cfg)
 	}
 
 	f := &httpForwarder{port: port, proto: proto, idle: spec.IdleTimeout, ln: ln, started: time.Now()}
@@ -511,26 +530,37 @@ func openAccessLog(path string) (*accessLog, error) {
 // writeStream logs a forwarded connection, in the shape nginx's stream log
 // has: the client, when it came in, and how long it lasted.
 func (l *accessLog) writeStream(client, upstream string, d time.Duration) {
-	if l == nil || l.file == nil {
+	if l == nil {
 		return
 	}
 	line := fmt.Sprintf("%s [%s] -> %s %s\n", client,
 		time.Now().Format("02/Jan/2006:15:04:05 -0700"), upstream, d.Round(time.Millisecond))
-	l.mu.Lock()
-	_, _ = l.file.WriteString(line)
-	l.mu.Unlock()
+	l.writeLine(line)
 }
 
 func (l *accessLog) write(port int, r *http.Request, status int, bytes int64) {
-	if l == nil || l.file == nil {
+	if l == nil {
 		return
 	}
 	line := fmt.Sprintf("%s - [%s] \"%s %s %s\" %d %d \"%s\"\n",
 		clientIP(r.RemoteAddr), time.Now().Format("02/Jan/2006:15:04:05 -0700"),
 		r.Method, r.URL.RequestURI(), r.Proto, status, bytes, r.Referer())
+	l.writeLine(line)
+}
+
+// writeLine appends one line, if the log is still open.
+//
+// Whether the file exists is decided under the lock: Stop closes it, and
+// a connection's logging goroutine has no way to know that happened, so
+// checking the pointer before taking the lock was a data race (and let a
+// write reach a closed descriptor).
+func (l *accessLog) writeLine(line string) {
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return
+	}
 	_, _ = l.file.WriteString(line)
-	l.mu.Unlock()
 }
 
 func (l *accessLog) Close() error {

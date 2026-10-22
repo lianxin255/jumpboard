@@ -1,4 +1,6 @@
-// Package nginx generates nginx configurations and runs the bundled nginx.
+// Package nginx generates and parses nginx configurations: the export
+// format and the snapshot carrier. The rules themselves run in the Go
+// engine, not in nginx.
 package nginx
 
 import (

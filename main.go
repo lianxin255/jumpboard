@@ -1,5 +1,5 @@
 // NginxJump keeps nginx forwarding rules for a list of services on the
-// internal network, and runs a bundled nginx to serve them.
+// internal network, and serves them itself, in this process.
 package main
 
 import (
@@ -66,7 +66,7 @@ func main() {
 			Height:          760,
 			MinWidth:        900,
 			MinHeight:       600,
-			BackgroundColor: "light-dark(#faf9f5, #141413)",
+			BackgroundColor: "light-dark(#ffffff, #18181b)",
 			StateKey:        "main",
 			// Immersive: the view reaches the top of the window and draws
 			// its own bar; the traffic lights float over it. The frame

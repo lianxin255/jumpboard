@@ -82,6 +82,9 @@ type Checker struct {
 	mu      sync.Mutex
 	timer   *time.Timer
 	stopped bool
+	// done closes when Stop runs, so a goroutine waiting on the interval
+	// wakes up and leaves instead of hanging on a stopped timer.
+	done chan struct{}
 	// OnResult is called from the loop's goroutine after each pass, with
 	// the mappings that changed status.
 	OnResult func(changed []model.Mapping)
@@ -130,11 +133,16 @@ func (c *Checker) RunOnce() []model.Mapping {
 // Start begins the loop. Calling it twice restarts the timer.
 func (c *Checker) Start() {
 	c.mu.Lock()
+	// A loop already running must end first: its goroutine waits on the
+	// done channel this call replaces, and closing that channel wakes it.
+	c.stopLocked()
 	c.stopped = false
 	interval := c.Interval
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
+	done := make(chan struct{})
+	c.done = done
 	c.mu.Unlock()
 
 	go func() {
@@ -151,7 +159,14 @@ func (c *Checker) Start() {
 			c.timer = time.NewTimer(interval)
 			t := c.timer
 			c.mu.Unlock()
-			<-t.C
+			// Wait for the interval or for Stop: stopping the timer alone
+			// leaves this goroutine blocked on a channel that never fires,
+			// so every Start/Stop pair used to strand one.
+			select {
+			case <-t.C:
+			case <-done:
+				return
+			}
 		}
 	}()
 }
@@ -160,8 +175,18 @@ func (c *Checker) Start() {
 func (c *Checker) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.stopLocked()
+}
+
+// stopLocked signals the loop to leave. Idempotent: the second call sees
+// done already nil.
+func (c *Checker) stopLocked() {
 	c.stopped = true
 	if c.timer != nil {
 		c.timer.Stop()
+	}
+	if c.done != nil {
+		close(c.done)
+		c.done = nil
 	}
 }

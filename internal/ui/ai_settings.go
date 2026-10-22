@@ -26,27 +26,48 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 	models, fetching, listErr := v.aiModels, v.aiFetching, v.aiListErr
 	v.aiMu.Unlock()
 
-	// A fetch that came back with a list, over an empty model field,
-	// suggests the first one: the point of 拉取模型 is to save typing, and
-	// leaving the field blank would make the user open the list anyway.
-	// It is only a suggestion — the field stays editable and 保存 is still
-	// theirs to press.
-	if len(models) > 0 && v.aiModel == "" {
-		v.aiModel = models[0]
-	}
-
 	v.card(c, t, "AI 配置", func() {
 		ui.Field(c, "接口地址", func() {
 			ui.TextInput(c, &v.aiBaseURL).Placeholder("https://api.openai.com 或本地网关")
 		})
 		ui.Field(c, "模型", func() {
-			if len(models) > 0 {
-				if ui.Combobox(c, &v.aiModel, models).
-					Placeholder("从列表选择，或直接输入").Submitted() {
-					a.SetAI(v.aiBaseURL, v.aiModel)
+			// A plain text field with a list beside it, not a combo box:
+			// a combo restores the field to the last chosen option when it
+			// loses focus, which silently throws away a name typed for a
+			// gateway whose list does not mention it. The field is the
+			// truth; the menu only fills it in.
+			ui.Row(c).Gap(8).Children(func() {
+				e := ui.TextInput(c, &v.aiModel).Placeholder("gpt-4o-mini / deepseek-chat / 本地模型名")
+				if ui.Button(c, "从列表选").Disabled(len(models) == 0).
+					Tooltip("先点「拉取模型」").Clicked() {
+					v.modelPicker = !v.modelPicker
 				}
-			} else {
-				ui.TextInput(c, &v.aiModel).Placeholder("gpt-4o-mini / deepseek-chat / 本地模型名")
+				if len(models) > 0 && v.modelPicker {
+					if ui.Button(c, "收起").Clicked() {
+						v.modelPicker = false
+					}
+				}
+				_ = e
+			})
+			if len(models) > 0 && v.modelPicker {
+				ui.Scroll(c).MaxHeight(150).Children(func() {
+					ui.Column(c).Gap(2).Children(func() {
+						for _, name := range models {
+							name := name
+							on := name == v.aiModel
+							row := ui.Text(c, name).FontSize(12).Label("选 "+name).Padding(3, 6)
+							if on {
+								row.Bold().TextColor(t.Accent)
+							} else {
+								row.TextColor(t.FG2)
+							}
+							if row.Clicked() {
+								v.aiModel = name
+								v.modelPicker = false
+							}
+						}
+					})
+				})
 			}
 		})
 		ui.Field(c, "API Key", func() {
@@ -93,10 +114,16 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 }
 
 // fetchModels asks the endpoint what it offers, off the main thread.
+//
+// Every field the goroutine also touches goes through aiMu, including the
+// ones set before it starts: the button's Disabled gate stops a second
+// click today, but the lock is what makes that true rather than a hope.
 func (v *View) fetchModels() {
 	a := v.App
 	base, key := v.aiBaseURL, v.aiKey
+	v.aiMu.Lock()
 	v.aiFetching, v.aiListErr = true, ""
+	v.aiMu.Unlock()
 	go func() {
 		models, err := a.FetchModels(base, key)
 		v.aiMu.Lock()
@@ -109,6 +136,13 @@ func (v *View) fetchModels() {
 			v.aiModels = nil
 		} else {
 			v.aiModels = models
+			// Suggest the first model once, as the fetch lands, so that a
+			// user who only wanted a working default has one step left:
+			// 保存. Doing it in the frame instead would refill the field
+			// every time someone cleared it to turn the feature off.
+			if v.aiModel == "" {
+				v.aiModel = models[0]
+			}
 		}
 		v.aiMu.Unlock()
 		a.Change()

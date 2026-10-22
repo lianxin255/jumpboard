@@ -31,6 +31,11 @@ type View struct {
 	logTab        int
 	logLevel      int
 	logQuery      string
+	// The log and history lists keep their scroll position in the view:
+	// a ListState built inside a frame forgets it every frame, so the
+	// list could never be scrolled past its first page.
+	logList       ui.ListState
+	historyList   ui.ListState
 	nginxAccess   []string
 	nginxErrors   []string
 	nginxLoadedAt int64
@@ -58,6 +63,8 @@ type View struct {
 	aiModels         []string
 	aiFetching       bool
 	aiListErr        string
+	// modelPicker shows the fetched list under the model field.
+	modelPicker bool
 }
 
 // NewView returns the window's content for an app.
@@ -272,13 +279,13 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 	})
 	if msg := a.ApplyError(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
-			Background(ui.RGBA(181, 51, 51, 0.12)).Children(func() {
+			Background(t.Danger.Alpha(0.12)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
 		})
 	}
 	if msg := a.ApplyWarning(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
-			Background(ui.RGBA(201, 162, 58, 0.12)).Children(func() {
+			Background(t.Warning.Alpha(0.12)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
 		})
 	}

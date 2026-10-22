@@ -173,7 +173,31 @@ func New(s Settings) *Client {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	return &Client{settings: s, http: &http.Client{Timeout: timeout}}
+	return &Client{settings: s, http: &http.Client{
+		Timeout:       timeout,
+		CheckRedirect: sameOriginOnly,
+	}}
+}
+
+// sameOriginOnly keeps the API key from following a redirect off the
+// endpoint the user configured.
+//
+// Go already drops Authorization across hosts, but not across a port or
+// scheme on the same host: a gateway that answers 302 to its own other
+// port, or to plain http, would receive the bearer token. A forwarding
+// endpoint never needs to redirect a POST, so refusing is safe.
+func sameOriginOnly(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return nil
+	}
+	first := via[0].URL
+	if req.URL.Host != first.Host || req.URL.Scheme != first.Scheme {
+		return errors.New("AI 服务重定向到别的地址，已停止发送凭据")
+	}
+	if len(via) >= 3 {
+		return errors.New("AI 服务重定向次数过多")
+	}
+	return nil
 }
 
 // request and response shapes, narrowed to what the client reads.

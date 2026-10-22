@@ -213,6 +213,13 @@ func (f *FormValues) Validate() (model.Mapping, map[string]string, bool) {
 	if strings.TrimSpace(f.ListenPort) == "" {
 		if proto.IsStream() {
 			errs["ListenPort"] = "请填写监听端口"
+		} else if proto == model.HTTPS {
+			// The form says "留空用 80 / 443", the table shows :443, and
+			// the export writes 443: leaving the port at 0 made the rule
+			// vanish from the engine instead, which none of them said.
+			m.ListenPort = 443
+		} else {
+			m.ListenPort = 80
 		}
 	} else if n, err := atoi(f.ListenPort); err != nil || !model.ValidPort(n) {
 		errs["ListenPort"] = "端口应为 1-65535"

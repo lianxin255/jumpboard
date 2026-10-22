@@ -145,22 +145,42 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 			continue
 		}
 		upstream := net.JoinHostPort(m.UpstreamHost, fmt.Sprint(m.UpstreamPort))
-		key := ruleKey{proto: m.Protocol, listen: listenAddr(m.ListenPort), upstream: upstream}
+		addr := listenAddr(m.ListenPort)
+		key := ruleKey{proto: m.Protocol, listen: addr, upstream: upstream}
 		if existing, ok := l.running[key]; ok {
 			want[key] = true
 			next[key] = existing
-			res.Retargeted = append(res.Retargeted, listenAddr(m.ListenPort))
+			res.Retargeted = append(res.Retargeted, addr)
+			continue
+		}
+		// The same port with a different upstream is a retarget, not a new
+		// rule: the old listener still holds the port, so opening another
+		// would fail with "address already in use" — and changing a
+		// backend is the most common edit there is.
+		if old, oldKey, ok := l.streamOn(addr, m.Protocol); ok {
+			// The listener moves to the map under its new key; the entry
+			// under the old one must survive the "close what is no longer
+			// wanted" pass, because both keys name the same forwarder.
+			// oldKey is the key as it sits in the map, not old.key(): a
+			// stream forwarder reports its bound address, which differs in
+			// form from the ":port" these keys are built from.
+			old.setUpstream(upstream)
+			want[oldKey] = true
+			want[key] = true
+			next[key] = old
+			res.Retargeted = append(res.Retargeted, addr)
 			continue
 		}
 		idle := idleFor(m, spec)
+		whitelist := parseWhitelist(spec.WhitelistIPs)
 		var (
 			f   forwarder
 			err error
 		)
 		if m.Protocol == model.UDP {
-			f, err = newUDPForwarder(listenAddr(m.ListenPort), upstream, idle)
+			f, err = newUDPForwarder(addr, upstream, idle, whitelist)
 		} else {
-			f, err = newTCPForwarder(listenAddr(m.ListenPort), upstream, idle, l.access)
+			f, err = newTCPForwarder(addr, upstream, idle, l.access, whitelist)
 		}
 		if err != nil {
 			closeAll(opened)
@@ -169,23 +189,40 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		want[key] = true
 		next[key] = f
 		opened = append(opened, f)
-		res.Started = append(res.Started, listenAddr(m.ListenPort))
+		res.Started = append(res.Started, addr)
 	}
 
 	// HTTP and HTTPS ports.
 	for port, routes := range byPort {
 		proto := routes[0].mapping.Protocol
+		// A port serves one protocol. Grouping by port alone would serve an
+		// HTTPS rule as plain HTTP whenever an HTTP rule shares the port:
+		// the certificate would never load, and the rule would quietly run
+		// with less protection than it says.
+		for _, r := range routes[1:] {
+			if r.mapping.Protocol != proto {
+				res.Warnings = append(res.Warnings,
+					fmt.Sprintf("「%s」没有生效：%s 端口 %d 已被 %s 规则占用",
+						r.mapping.Name, r.mapping.Protocol.Label(), port, proto.Label()))
+			}
+		}
 		key := ruleKey{proto: proto, listen: listenAddr(port)}
-		// Any existing HTTP forwarder for the port is replaced: its routes
-		// are the port's whole table, and the port is held by one server.
-		for k, f := range l.running {
+		// Load the certificates first: a rule whose certificate cannot be
+		// read must not take the running site down, and the old listener
+		// has to go before the new one can bind the same port.
+		cfg, err := prepareTLS(proto, routes)
+		if err != nil {
+			closeAll(opened)
+			return res, &ErrBind{Port: port, Proto: strings.ToUpper(string(proto)), Err: err}
+		}
+		for k, old := range l.running {
 			if k.listen == key.listen && (k.proto == model.HTTP || k.proto == model.HTTPS) {
 				want[k] = true
-				_ = f.Close()
+				_ = old.Close()
 				delete(l.running, k)
 			}
 		}
-		f, err := newHTTPForwarder(port, proto, routes, spec, l.access)
+		f, err := startHTTPForwarder(port, proto, routes, spec, l.access, cfg)
 		if err != nil {
 			closeAll(opened)
 			return res, &ErrBind{Port: port, Proto: strings.ToUpper(string(proto)), Err: err}
@@ -227,6 +264,28 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 	return res, nil
 }
 
+// streamOn finds the running stream listener on an address, whatever its
+// upstream: a rule pointed at a new backend keeps its port. It returns the
+// key the forwarder sits under, so the caller can keep that entry alive.
+func (l *Local) streamOn(addr string, proto model.Protocol) (streamRetargeter, ruleKey, bool) {
+	for k, f := range l.running {
+		if k.listen != addr || k.proto != proto {
+			continue
+		}
+		if r, ok := f.(streamRetargeter); ok {
+			return r, k, true
+		}
+	}
+	return nil, ruleKey{}, false
+}
+
+// streamRetargeter is a stream forwarder whose upstream can be swapped
+// without closing the listener.
+type streamRetargeter interface {
+	forwarder
+	setUpstream(string)
+}
+
 // applyRedirects starts or keeps the port-80 listener that sends plain
 // HTTP to the TLS port.
 //
@@ -251,11 +310,23 @@ func (l *Local) applyRedirects(spec Spec, byPort map[int][]route,
 	if !wanted {
 		return nil
 	}
-	key := ruleKey{proto: redirectProto, listen: listenAddr(80)}
+	// The whitelist is part of the listener's identity: a redirect that
+	// keeps answering after the list shrinks leaks the site to a client
+	// the user just removed. The upstream slot of the key carries its
+	// fingerprint, so changing the list rebuilds the listener.
+	key := ruleKey{proto: redirectProto, listen: listenAddr(80),
+		upstream: strings.Join(spec.WhitelistIPs, ",")}
 	if existing, ok := l.running[key]; ok {
 		want[key] = true
 		next[key] = existing
 		return nil
+	}
+	for k, old := range l.running {
+		if k.proto == redirectProto && k.listen == listenAddr(80) {
+			// Port 80 cannot be bound twice: the stale redirect goes first.
+			_ = old.Close()
+			delete(l.running, k)
+		}
 	}
 	f, err := newRedirectForwarder(80, parseWhitelist(spec.WhitelistIPs), l.access)
 	if err != nil {
@@ -488,11 +559,20 @@ func (l *Local) Check(spec Spec) error {
 		}
 
 		if proto == "udp" {
+			// A port this engine already holds is not "taken" in the sense
+			// the check means: the question is whether applying would
+			// work, and reapplying a running rule always does.
+			if l.holds(addr, proto) {
+				continue
+			}
 			pc, err := net.ListenPacket("udp", addr)
 			if err != nil {
 				return &ErrBind{Port: m.ListenPort, Proto: "UDP", Err: err}
 			}
 			_ = pc.Close()
+			continue
+		}
+		if l.holds(addr, "tcp") {
 			continue
 		}
 		ln, err := net.Listen("tcp", addr)
@@ -502,6 +582,25 @@ func (l *Local) Check(spec Spec) error {
 		_ = ln.Close()
 	}
 	return nil
+}
+
+// holds reports whether this engine already listens on an address, which
+// the preflight must not count as someone else's port.
+func (l *Local) holds(addr, proto string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for k := range l.running {
+		if k.listen != addr {
+			continue
+		}
+		if proto == "udp" && k.proto == model.UDP {
+			return true
+		}
+		if proto == "tcp" && k.proto != model.UDP {
+			return true
+		}
+	}
+	return false
 }
 
 // RuleState reports whether the rule of a mapping is listening, and why

@@ -19,9 +19,13 @@ import (
 // upstream, and replies are sent back to that address. A session closes
 // after idle.
 type udpForwarder struct {
-	conn     *net.UDPConn
-	upstream string
+	conn *net.UDPConn
+	// upstream is mutable, so retargeting a rule keeps its port.
+	upstream atomic.Pointer[string]
 	idle     time.Duration
+	// whitelist limits which clients may send, the same filter the HTTP
+	// and TCP paths apply.
+	whitelist []*net.IPNet
 
 	mu       sync.Mutex
 	sessions map[string]*udpSession
@@ -37,7 +41,7 @@ type udpSession struct {
 	lastSeen   atomic.Int64
 }
 
-func newUDPForwarder(listenAddr, upstream string, idle time.Duration) (*udpForwarder, error) {
+func newUDPForwarder(listenAddr, upstream string, idle time.Duration, whitelist []*net.IPNet) (*udpForwarder, error) {
 	addr, err := net.ResolveUDPAddr("udp", listenAddr)
 	if err != nil {
 		return nil, err
@@ -47,19 +51,38 @@ func newUDPForwarder(listenAddr, upstream string, idle time.Duration) (*udpForwa
 		return nil, err
 	}
 	f := &udpForwarder{
-		conn:     conn,
-		upstream: upstream,
-		idle:     idle,
-		sessions: map[string]*udpSession{},
+		conn:      conn,
+		idle:      idle,
+		whitelist: whitelist,
+		sessions:  map[string]*udpSession{},
 	}
+	f.upstream.Store(&upstream)
 	f.wg.Add(2)
 	go f.readClients()
 	go f.reapSessions()
 	return f, nil
 }
 
+// setUpstream points the rule at a new backend. Existing sessions are
+// dropped: their sockets lead to the old one, and a datagram protocol has
+// no way to move them.
+func (f *udpForwarder) setUpstream(upstream string) {
+	f.upstream.Store(&upstream)
+	f.mu.Lock()
+	var stale []string
+	for key := range f.sessions {
+		stale = append(stale, key)
+	}
+	f.mu.Unlock()
+	for _, key := range stale {
+		f.dropSessionByKey(key)
+	}
+}
+
+func (f *udpForwarder) target() string { return *f.upstream.Load() }
+
 func (f *udpForwarder) key() ruleKey {
-	return ruleKey{proto: model.UDP, listen: f.conn.LocalAddr().String(), upstream: f.upstream}
+	return ruleKey{proto: model.UDP, listen: f.conn.LocalAddr().String(), upstream: f.target()}
 }
 
 func (f *udpForwarder) stats() (int64, int) {
@@ -77,7 +100,16 @@ func (f *udpForwarder) readClients() {
 			}
 			continue
 		}
+		if !allowed(f.whitelist, clientAddr.String()) {
+			continue
+		}
 		s := f.session(clientAddr)
+		if s == nil {
+			// The upstream name does not resolve, or its socket cannot be
+			// opened: drop this datagram rather than write to a nil socket,
+			// which used to panic the whole process from a goroutine.
+			continue
+		}
 		s.lastSeen.Store(time.Now().UnixNano())
 		if _, err := s.upstream.Write(buf[:n]); err != nil {
 			f.dropSession(clientAddr)
@@ -86,6 +118,10 @@ func (f *udpForwarder) readClients() {
 }
 
 // session returns the session of a client, creating it on first use.
+//
+// A nil return means the upstream could not be reached; the caller drops
+// the datagram. The failure is not cached, so a name that starts resolving
+// works on the next packet.
 func (f *udpForwarder) session(client *net.UDPAddr) *udpSession {
 	key := client.String()
 	f.mu.Lock()
@@ -93,21 +129,15 @@ func (f *udpForwarder) session(client *net.UDPAddr) *udpSession {
 		f.mu.Unlock()
 		return s
 	}
-	upstreamAddr, err := net.ResolveUDPAddr("udp", f.upstream)
+	upstreamAddr, err := net.ResolveUDPAddr("udp", f.target())
 	if err != nil {
 		f.mu.Unlock()
-		// Without a resolvable upstream the datagram is dropped, but the
-		// client keeps its session slot so the next packet tries again.
-		s := &udpSession{clientAddr: client, lastSeen: atomic.Int64{}}
-		s.lastSeen.Store(time.Now().UnixNano())
-		return s
+		return nil
 	}
 	up, err := net.DialUDP("udp", nil, upstreamAddr)
 	if err != nil {
 		f.mu.Unlock()
-		s := &udpSession{clientAddr: client}
-		s.lastSeen.Store(time.Now().UnixNano())
-		return s
+		return nil
 	}
 	s := &udpSession{clientAddr: client, upstream: up}
 	s.lastSeen.Store(time.Now().UnixNano())

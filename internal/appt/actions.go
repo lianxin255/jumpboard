@@ -164,7 +164,7 @@ func (a *App) SetWhitelistOn(on bool) {
 	a.notify()
 }
 
-// NginxLogRead reports whether the app reads nginx's own logs.
+// NginxLogRead reports whether the app reads the engine's access log.
 func (a *App) NginxLogRead() bool { return a.nginxLogRead }
 
 // SetNginxLogRead stores the setting.
@@ -581,6 +581,16 @@ func (a *App) Wipe() error {
 	}
 	a.refreshEngine()
 	a.Log.Warn("已清空所有数据")
+	// The settings live in the store and are mirrored in memory; a wipe
+	// resets the store, so the mirror has to be reloaded or the window
+	// keeps showing the old theme and, worse, an "enabled" whitelist that
+	// the next apply reads as off — which would allow every address.
+	a.theme = ThemeChoice(a.Store.Setting(store.SettingTheme, string(ThemeSystem)))
+	a.whitelistOn = a.Store.WhitelistOn()
+	a.nginxLogRead = a.Store.SettingBool(store.SettingNginxLogRead, true)
+	if name, err := a.Store.HostName(); err == nil {
+		a.hostName = name
+	}
 	a.mu.Lock()
 	a.dirty = false
 	a.mu.Unlock()
