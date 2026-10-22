@@ -213,3 +213,86 @@ func TestAITestConnectionButton(t *testing.T) {
 		return ok && st.IsErr && strings.Contains(st.Text, "500")
 	})
 }
+
+// fakeModels is an endpoint that answers GET /v1/models, so the 拉取模型
+// path runs end to end without a network.
+func fakeModels(t *testing.T, models ...string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/v1/models") {
+			http.NotFound(w, r)
+			return
+		}
+		data := make([]any, 0, len(models))
+		for _, m := range models {
+			data = append(data, map[string]any{"id": m})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestAIListModels walks 拉取模型: configuring an endpoint, clicking the
+// button, and the built-in draft flow still working against the fetched
+// model. It checks the UI reaches the list rather than that a real gateway
+// answers.
+func TestAIListModels(t *testing.T) {
+	a := testApp(t)
+	srv := fakeModels(t, "deepseek-chat", "gpt-4o-mini")
+	tt := tester(t, a, 1200, 760)
+
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	fillField(t, tt, "接口地址", srv.URL)
+	if err := tt.Click("拉取模型"); err != nil {
+		t.Fatal(err)
+	}
+	// The fetch runs in a goroutine; the model list lands and the card says so.
+	waitFor(t, tt, "the model list", func() bool {
+		return tt.HasText("已拉取 2 个模型")
+	})
+	// The fetch suggests the first sorted model into the field, so the
+	// user who only wanted a working default still has one step: 保存.
+	// Saving then lights up the whole path: ready, and the entry appears.
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.AIReady() {
+		t.Fatalf("saving a fetched model should make the AI ready: model=%q", a.AIModel())
+	}
+	if a.AIModel() != "deepseek-chat" {
+		t.Errorf("the suggestion should be the first sorted model: %q", a.AIModel())
+	}
+}
+
+// TestAIListModelsReportsFailure checks the failure path: a gateway that
+// refuses the list shows the reason, and no model picker appears.
+func TestAIListModelsReportsFailure(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]string{"message": "bad key"},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	tt := tester(t, a, 1200, 760)
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	fillField(t, tt, "接口地址", srv.URL)
+	if err := tt.Click("拉取模型"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the failure", func() bool { return tt.HasText("拉取失败") })
+	if !tt.HasText("401") {
+		t.Errorf("the failure should name the status: %v", tt.Texts())
+	}
+}

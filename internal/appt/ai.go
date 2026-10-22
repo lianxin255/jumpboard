@@ -149,6 +149,26 @@ func (a *App) ProbeAI() error {
 	return a.aiClient().Probe(ctx)
 }
 
+// FetchModels lists the models the endpoint offers, for the settings
+// picker. The caller passes what the fields hold, so an address typed but
+// not yet saved still works; an empty key falls back to the stored one.
+func (a *App) FetchModels(baseURL, apiKey string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	key := apiKey
+	if key == "" {
+		key, _ = readSecret(aiSecretKey)
+	}
+	c := ai.New(ai.Settings{BaseURL: baseURL, APIKey: key, Timeout: 20 * time.Second})
+	models, err := c.Models(ctx)
+	if err != nil {
+		a.Log.Warn("拉取模型列表失败: %v", err)
+		return nil, err
+	}
+	a.Log.Info("拉取到 %d 个模型", len(models))
+	return models, nil
+}
+
 // Change asks for a frame, for code outside the frame that changed
 // something the view shows.
 func (a *App) Change() { a.notify() }

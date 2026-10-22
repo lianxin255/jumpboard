@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -45,12 +46,18 @@ type View struct {
 	// focusSearch asks the next frame to put the caret in the search box.
 	focusSearch bool
 
-	// AI settings, loaded once from the store.
+	// AI settings, loaded once from the store. The model list is filled by
+	// 拉取模型, whose goroutine writes it, so it sits behind aiMu and the
+	// frame reads a snapshot.
 	aiSettingsLoaded bool
 	aiBaseURL        string
 	aiModel          string
 	aiKey            string
 	aiKeySet         bool
+	aiMu             sync.Mutex
+	aiModels         []string
+	aiFetching       bool
+	aiListErr        string
 }
 
 // NewView returns the window's content for an app.
@@ -103,15 +110,30 @@ func (v *View) shortcuts(c *ui.Context) {
 // The pages are tabs with an underline on the chosen one, centered in the
 // bar, the way the design asks: the segmented pill made the navigation
 // shout when the page title below already says where you are.
+//
+// The bar is the window's title bar: the window is created with
+// TitleBarHiddenInset, so this row reaches the top of the window, pads
+// itself clear of the traffic lights, and drags the window from anywhere
+// that is not a control.
 func (v *View) topbar(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, _, _, engine, dirty, busy, _ := a.Snapshot()
 	page := int(a.Page())
+	bar := c.TitleBar()
 
-	ui.Row(c).FillWidth().Height(56).Padding(0, 24).
+	left := bar.Left + 14
+	if bar.Left == 0 {
+		left = 24
+	}
+	right := bar.Right + 14
+	if bar.Right == 0 {
+		right = 24
+	}
+
+	ui.Row(c).FillWidth().Height(56).Padding(0, right, 0, left).
 		Background(t.Topbar).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).
-		AlignItems(ui.Center).Gap(10).Children(func() {
+		AlignItems(ui.Center).Gap(10).DragWindow().Children(func() {
 
 		ui.Box(c).Size(26, 26).Radius(6).Background(t.Accent).Children(func() {
 			ui.Text(c, "跳").FontSize(13).Bold().TextColor(t.AccentText)

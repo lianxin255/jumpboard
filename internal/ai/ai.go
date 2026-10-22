@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -287,4 +288,67 @@ func (c *Client) Probe(ctx context.Context) error {
 	}
 	_, err := c.Draft(ctx, "把内网 MySQL 3306 暴露到 9000")
 	return err
+}
+
+// modelsResponse is the OpenAI shape of GET /v1/models, narrowed to the
+// one field worth reading: each entry's id, which is what a request names.
+type modelsResponse struct {
+	Data []struct {
+		ID string `json:"id"`
+	} `json:"data"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// Models lists what the endpoint offers, for the settings page's picker.
+//
+// The list comes from GET /v1/models, which every OpenAI compatible
+// gateway answers; a base URL that already carries /v1 is trimmed so the
+// path is not doubled. The ids are sorted and de-duplicated: gateways
+// repeat them, and a dropdown of "gpt-4o, gpt-4o, gpt-4o" reads as a bug.
+func (c *Client) Models(ctx context.Context) ([]string, error) {
+	base := strings.TrimRight(c.settings.BaseURL, "/")
+	base = strings.TrimSuffix(base, "/v1")
+	if base == "" {
+		return nil, errors.New("请先填写接口地址")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.settings.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.settings.APIKey)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("连接 AI 服务失败：%w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		var mr modelsResponse
+		msg := ""
+		if json.Unmarshal(data, &mr) == nil && mr.Error != nil {
+			msg = "：" + mr.Error.Message
+		}
+		return nil, fmt.Errorf("AI 服务返回 %d%s", resp.StatusCode, msg)
+	}
+	var mr modelsResponse
+	if err := json.Unmarshal(data, &mr); err != nil {
+		return nil, fmt.Errorf("无法解析模型列表：%w", err)
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(mr.Data))
+	for _, m := range mr.Data {
+		if m.ID != "" && !seen[m.ID] {
+			seen[m.ID] = true
+			out = append(out, m.ID)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }

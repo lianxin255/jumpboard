@@ -68,7 +68,11 @@ func main() {
 			MinHeight:       600,
 			BackgroundColor: "light-dark(#faf9f5, #141413)",
 			StateKey:        "main",
-			Content:         ui.View(njui.NewView(app)),
+			// Immersive: the view reaches the top of the window and draws
+			// its own bar; the traffic lights float over it. The frame
+			// reads c.TitleBar() to keep clear of the controls.
+			TitleBarStyle: mygo.TitleBarHiddenInset,
+			Content:       ui.View(njui.NewView(app)),
 		})
 		app.OnChange = func() { win.Update(func() {}) }
 		app.Change()

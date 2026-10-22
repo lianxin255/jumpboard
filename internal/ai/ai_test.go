@@ -136,3 +136,79 @@ func TestExtractJSON(t *testing.T) {
 		}
 	}
 }
+
+// TestModelsListsEndpoint checks 拉取模型: the client reads GET /v1/models,
+// sorts the ids, drops the duplicates a gateway repeats, and trims a base
+// URL that already carries /v1 so the path is not doubled.
+func TestModelsListsEndpoint(t *testing.T) {
+	var gotPath string
+	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-test" {
+			t.Errorf("Authorization = %q", got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []any{
+				map[string]any{"id": "gpt-4o-mini"},
+				map[string]any{"id": "gpt-4o"},
+				map[string]any{"id": "gpt-4o"},
+				map[string]any{"id": ""},
+				map[string]any{"id": "deepseek-chat"},
+			},
+		})
+	})
+
+	c := New(Settings{BaseURL: srv.URL + "/v1", APIKey: "sk-test"})
+	models, err := c.Models(context.Background())
+	if err != nil {
+		t.Fatalf("Models: %v", err)
+	}
+	if gotPath != "/v1/models" {
+		t.Errorf("path = %q, want /v1/models", gotPath)
+	}
+	want := []string{"deepseek-chat", "gpt-4o", "gpt-4o-mini"}
+	if len(models) != len(want) {
+		t.Fatalf("models = %v, want %v", models, want)
+	}
+	for i := range want {
+		if models[i] != want[i] {
+			t.Errorf("models[%d] = %q, want %q", i, models[i], want[i])
+		}
+	}
+}
+
+// TestModelsReportsErrors checks that a gateway refusing the list, or
+// answering rubbish, is reported rather than shown as an empty picker.
+func TestModelsReportsErrors(t *testing.T) {
+	t.Run("a refused endpoint", func(t *testing.T) {
+		srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]string{"message": "invalid api key"},
+			})
+		})
+		c := New(Settings{BaseURL: srv.URL})
+		_, err := c.Models(context.Background())
+		if err == nil {
+			t.Fatal("a 401 should be an error")
+		}
+		if !strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "invalid api key") {
+			t.Errorf("the error should name the status and reason: %v", err)
+		}
+	})
+	t.Run("no base url", func(t *testing.T) {
+		c := New(Settings{})
+		if _, err := c.Models(context.Background()); err == nil {
+			t.Fatal("an empty address should be refused")
+		}
+	})
+	t.Run("rubbish body", func(t *testing.T) {
+		srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("not json"))
+		})
+		c := New(Settings{BaseURL: srv.URL})
+		if _, err := c.Models(context.Background()); err == nil {
+			t.Fatal("a body that is not JSON should be an error")
+		}
+	})
+}
