@@ -135,9 +135,9 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).
 		AlignItems(ui.Center).Gap(10).DragWindow().Children(func() {
 
-		ui.Box(c).Size(26, 26).Radius(6).Background(t.Accent).Children(func() {
-			ui.Text(c, "跳").FontSize(13).Bold().TextColor(t.AccentText)
-		})
+		// The wordmark, not a square logo: the blue box beside red, amber
+		// and green read as a fourth window control. macOS puts the app
+		// name here, like any title bar; the icon lives in the Dock.
 		ui.Text(c, "NginxJump").FontSize(14).Bold().TextColor(t.FG)
 		ui.Text(c, "v1.1").FontSize(11).TextColor(t.Muted)
 

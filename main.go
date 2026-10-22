@@ -72,7 +72,10 @@ func main() {
 			// its own bar; the traffic lights float over it. The frame
 			// reads c.TitleBar() to keep clear of the controls.
 			TitleBarStyle: mygo.TitleBarHiddenInset,
-			Content:       ui.View(njui.NewView(app)),
+			// Centred in the 56 DIP bar the view draws: the default sits a
+			// few DIPs higher, which reads as misaligned beside the text.
+			TrafficLightPosition: &mygo.Point{X: 20, Y: 22},
+			Content:              ui.View(njui.NewView(app)),
 		})
 		app.OnChange = func() { win.Update(func() {}) }
 		app.Change()
