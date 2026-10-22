@@ -1,7 +1,7 @@
 // Package e2e drives the whole app the way a user does: real store, real
-// view, real nginx. The UI tests use ui.Tester, which needs no window, so
-// they run on a locked screen and in CI; the engine tests start the real
-// bundled nginx and push traffic through it.
+// view, real forwarding engine. The UI tests use ui.Tester, which needs no
+// window, so they run on a locked screen and in CI; the engine tests start
+// the real listeners and push traffic through them.
 package e2e
 
 import (

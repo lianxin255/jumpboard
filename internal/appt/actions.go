@@ -150,18 +150,28 @@ func (a *App) WhitelistOn() bool { return a.whitelistOn }
 // reports only real changes, and a repeated call would write "已开启" into
 // the operation log for a flip that never happened, which reads like an
 // access-control change.
-func (a *App) SetWhitelistOn(on bool) {
+func (a *App) SetWhitelistOn(on bool) error {
 	if a.whitelistOn == on {
-		return
+		return nil
 	}
+	prev := a.whitelistOn
 	a.whitelistOn = on
-	_ = a.Store.SetWhitelistOn(on)
+	// An access-control switch that reports success without reaching the
+	// database is worse than an error: the window would say "已开启" while
+	// the next launch — and any other reader of the store — sees it off,
+	// allowing every address. A failed write rolls the mirror back.
+	if err := a.Store.SetWhitelistOn(on); err != nil {
+		a.whitelistOn = prev
+		a.Fail("白名单设置未保存：%v", err)
+		return err
+	}
 	if on {
 		a.Log.Info("白名单已开启，仅允许列表中的 IP 访问")
 	} else {
 		a.Log.Info("白名单已关闭，全部允许")
 	}
 	a.notify()
+	return nil
 }
 
 // NginxLogRead reports whether the app reads the engine's access log.
@@ -195,13 +205,6 @@ func (a *App) Status() (Status, bool) {
 		return Status{}, false
 	}
 	return a.status, true
-}
-
-// ClearStatus drops the toast.
-func (a *App) ClearStatus() {
-	a.mu.Lock()
-	a.status = Status{}
-	a.mu.Unlock()
 }
 
 // ClearStatusSoon drops a status after its time, unless a newer one was
@@ -328,42 +331,6 @@ func (a *App) CopyAddress(m model.Mapping) error {
 	return nil
 }
 
-// SetMappingsEnabled turns several mappings on or off.
-func (a *App) SetMappingsEnabled(ids []string, on bool) error {
-	var firstErr error
-	done := 0
-	for _, id := range ids {
-		if err := a.SetMappingEnabled(id, on); err != nil && firstErr == nil {
-			firstErr = err
-			continue
-		}
-		done++
-	}
-	a.Log.Info("批量%s %d 条映射", map[bool]string{true: "启用", false: "停用"}[on], done)
-	if firstErr != nil {
-		return fmt.Errorf("%d 条中有 %d 条失败：%v", len(ids), len(ids)-done, firstErr)
-	}
-	return nil
-}
-
-// DeleteMappings removes several mappings.
-func (a *App) DeleteMappings(ids []string) error {
-	var firstErr error
-	done := 0
-	for _, id := range ids {
-		if err := a.DeleteMapping(id); err != nil && firstErr == nil {
-			firstErr = err
-			continue
-		}
-		done++
-	}
-	a.Log.Info("批量删除 %d 条映射", done)
-	if firstErr != nil {
-		return fmt.Errorf("%d 条中有 %d 条失败：%v", len(ids), len(ids)-done, firstErr)
-	}
-	return nil
-}
-
 // CloneMapping copies a mapping under a new name.
 func (a *App) CloneMapping(id string) error {
 	m, err := a.Store.GetMapping(id)
@@ -380,15 +347,6 @@ func (a *App) CloneMapping(id string) error {
 		return err
 	}
 	a.Log.Info("克隆映射「%s」", m.Name)
-	a.markDirty()
-	return nil
-}
-
-// ReorderMappings applies a new order from the table's drag.
-func (a *App) ReorderMappings(ids []string) error {
-	if err := a.Store.ReorderMappings(ids); err != nil {
-		return err
-	}
 	a.markDirty()
 	return nil
 }
@@ -602,16 +560,30 @@ func (a *App) NginxLogs(lines int) (access, errs []string) {
 	if !a.nginxLogRead {
 		return nil, nil
 	}
-	if got, err := services.TailFile(filepath.Join(a.Paths.LogsDir, "access.log"), lines); err == nil {
-		access = got
+	got, err := services.TailFile(filepath.Join(a.Paths.LogsDir, "access.log"), lines)
+	if err == nil {
+		return got, nil
 	}
-	return access, nil
+	// "No log yet" and "cannot read the log" are different answers: the
+	// first is an engine that has served nothing, the second is a problem
+	// the log page exists to reveal. A missing file is the first; anything
+	// else (permissions, a directory in its place) reaches the page.
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return nil, []string{"读取访问日志失败：" + err.Error()}
 }
 
 // ClearNginxLogs truncates the access log.
 func (a *App) ClearNginxLogs() error {
-	if err := os.Truncate(filepath.Join(a.Paths.LogsDir, "access.log"), 0); err != nil {
-		return nil // a missing file is nothing to clear
+	path := filepath.Join(a.Paths.LogsDir, "access.log")
+	if err := os.Truncate(path, 0); err != nil {
+		// A log that was never written is already empty; other failures
+		// must say so, or the user clears a problem and believes it gone.
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
 	a.Log.Info("访问日志已清空")
 	return nil

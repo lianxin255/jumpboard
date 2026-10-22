@@ -30,10 +30,16 @@ func (a *App) AIModel() string {
 }
 
 // SetAI stores the endpoint and model. The key is separate, see SetAIKey.
-func (a *App) SetAI(baseURL, model string) {
-	_ = a.Store.SetSetting(store.SettingAIBaseURL, strings.TrimSpace(baseURL))
-	_ = a.Store.SetSetting(store.SettingAIModel, strings.TrimSpace(model))
+func (a *App) SetAI(baseURL, model string) error {
+	baseURL, model = strings.TrimSpace(baseURL), strings.TrimSpace(model)
+	if err := a.Store.SetSetting(store.SettingAIBaseURL, baseURL); err != nil {
+		return err
+	}
+	if err := a.Store.SetSetting(store.SettingAIModel, model); err != nil {
+		return err
+	}
 	a.notify()
+	return nil
 }
 
 // AIReady reports whether the AI panel should show at all: without an
@@ -57,6 +63,10 @@ func (a *App) SetAIKey(key string) error {
 	if os.Getenv("NGJ_NO_KEYCHAIN") == "1" {
 		return fmt.Errorf("当前环境没有系统凭据库，无法保存 API Key")
 	}
+	// The goroutine below outlives a timed-out caller: the credential
+	// store is a C binding with no cancellation, so it stays blocked on
+	// the keychain until the system answers. One stranded goroutine per
+	// timed-out call is the price of never blocking the UI thread on it.
 	ch := make(chan error, 1)
 	key = strings.TrimSpace(key)
 	go func() {

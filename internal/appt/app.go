@@ -14,7 +14,6 @@
 package appt
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -97,6 +96,8 @@ type App struct {
 	ruleStatus []engine.RuleStatus
 	// copied is the last text CopyAddress put on the clipboard.
 	copied string
+	// bg tracks RunBackground's goroutines, so Close can wait them out.
+	bg sync.WaitGroup
 	// applied is set once a rule set has been started, so that the table
 	// can tell "not started yet" from "started and not listening".
 	applied bool
@@ -116,11 +117,9 @@ type App struct {
 	hostName     string
 	whitelistOn  bool
 	nginxLogRead bool
-	aiOpen       bool
 
 	// The last draft the model proposed, kept for the AI panel.
-	lastAIDraft       *model.Mapping
-	lastAIExplanation string
+	lastAIDraft *model.Mapping
 }
 
 // Confirm is a question the user must answer before an action runs.
@@ -183,21 +182,17 @@ func New(p paths.Paths) (*App, error) {
 }
 
 // Close stops the background work and closes the database.
+//
+// The background tasks are waited for first: an Apply still binding ports
+// or an Import still writing rows would otherwise race the store closing
+// underneath them at quit.
 func (a *App) Close() {
 	a.Check.Stop()
 	_ = a.Eng.Stop()
+	a.bg.Wait()
 	if a.Store != nil {
 		_ = a.Store.Close()
 	}
-}
-
-// Stopped reports whether no rule is running, for the frame.
-func (a *App) Stopped() bool { return a.engStatus() != "running" }
-
-func (a *App) engStatus() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.engine
 }
 
 // refreshEngine copies the engine's state into what the frame reads.
@@ -350,6 +345,8 @@ func (a *App) Snapshot() (mappings []model.Mapping, logs []model.LogEntry,
 // RunBackground runs fn off the main thread and asks for a frame when it
 // is done, reporting a panic as an error toast rather than crashing.
 func (a *App) RunBackground(fn func() error) {
+	a.bg.Add(1)
+	defer a.bg.Done()
 	a.mu.Lock()
 	a.busy = true
 	a.mu.Unlock()
@@ -373,6 +370,3 @@ func (a *App) RunBackground(fn func() error) {
 		_ = a.Reload()
 	}()
 }
-
-// ErrNoMappings is what an apply with nothing enabled reports.
-var ErrNoMappings = errors.New("没有启用的映射")

@@ -1,6 +1,6 @@
 # NginxJump
 
-内网跳板机的 nginx 管理工具：在一台机器上跑内置 nginx，用图形界面维护端口转发与反向代理规则，把内网的数据库、Web、SSH 等服务的端口暴露出去。
+内网跳板机的 nginx 管理工具：由内置 Go 引擎在一台机器上转发，用图形界面维护端口转发与反向代理规则，把内网的数据库、Web、SSH 等服务的端口暴露出去。
 
 **Go 单二进制 + 原生界面**：没有 Electron，没有 Chromium，没有 Node，没有前端构建。界面由 [mygo](https://github.com/egoist/mygo) 用 GPU 直接绘制（macOS 用 Metal，Windows 用 Direct3D 11），中英文都支持，亮色/暗色两套主题。
 
@@ -34,7 +34,7 @@
 
 ```sh
 make build      # 产出 mac 通用包与 Windows exe
-make test       # 单元 + 界面 e2e + 真 nginx 转发测试
+make test       # 单元 + 界面 e2e + 真实转发测试（Go 引擎直连）
 make shots      # 无窗口渲染所有页面截图（亮/暗）
 ```
 

@@ -123,6 +123,7 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 	// Group the HTTP and HTTPS mappings by port: one server per port
 	// routes among them.
 	byPort := map[int][]route{}
+	broken := map[string]string{}
 	for _, m := range spec.Mappings {
 		if m.Protocol.IsStream() {
 			continue
@@ -130,6 +131,7 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		r, err := buildRoute(m, spec)
 		if err != nil {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("「%s」%v", m.Name, err))
+			broken[m.ID] = err.Error()
 			continue
 		}
 		byPort[m.ListenPort] = append(byPort[m.ListenPort], r)
@@ -256,7 +258,7 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 	l.status = Running
 	l.started = time.Now()
 	l.lastWarning = warnings
-	l.rules = statuses(spec.Mappings)
+	l.rules = statuses(spec.Mappings, broken)
 
 	sort.Strings(res.Started)
 	sort.Strings(res.Stopped)
@@ -339,7 +341,10 @@ func (l *Local) applyRedirects(spec Spec, byPort map[int][]route,
 }
 
 // statuses builds the per-rule rows the window shows.
-func statuses(mappings []model.Mapping) []ruleEntry {
+// statuses builds the per-rule rows the window shows. broken maps a
+// mapping ID to why its route could not be built: such a rule is not
+// listening, whatever its port's server does for the rules that did build.
+func statuses(mappings []model.Mapping, broken map[string]string) []ruleEntry {
 	out := make([]ruleEntry, 0, len(mappings))
 	for _, m := range mappings {
 		upstream := net.JoinHostPort(m.UpstreamHost, fmt.Sprint(m.UpstreamPort))
@@ -352,6 +357,13 @@ func statuses(mappings []model.Mapping) []ruleEntry {
 		if m.ListenPort == 0 {
 			row.Listen = ""
 			row.Err = "没有监听端口"
+		}
+		if msg, bad := broken[m.ID]; bad {
+			// A rule whose route failed to build is not served by its
+			// port's server, however well that server is doing for the
+			// rules that did build.
+			row.Err = msg
+			row.Listening = false
 		}
 		key := ruleKey{proto: m.Protocol, listen: listenAddr(m.ListenPort), upstream: upstream}
 		if m.Protocol.IsStream() {
@@ -371,7 +383,7 @@ func statuses(mappings []model.Mapping) []ruleEntry {
 
 // buildRoute prepares one HTTP mapping.
 func buildRoute(m model.Mapping, spec Spec) (route, error) {
-	proxy, u, err := newProxy(m, spec)
+	proxy, u, tr, err := newProxy(m, spec)
 	if err != nil {
 		return route{}, err
 	}
@@ -385,6 +397,7 @@ func buildRoute(m model.Mapping, spec Spec) (route, error) {
 		proxy:       proxy,
 		serverNames: splitNames(m.ServerNames),
 		path:        path,
+		transport:   tr,
 	}, nil
 }
 

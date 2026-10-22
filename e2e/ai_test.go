@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 // fakeOpenAI stands in for the model: the AI paths are tested end to end
@@ -57,7 +56,6 @@ func TestAIDraftFillsTheForm(t *testing.T) {
 		t.Fatal("AI should be ready once the endpoint and model are set")
 	}
 
-	a.OpenAIForTest()
 	if err := a.RunAISync("把内网 mysql 暴露到 9000"); err != nil {
 		t.Fatalf("asking the model: %v", err)
 	}
@@ -97,7 +95,6 @@ func TestAIBadJSONDegrades(t *testing.T) {
 	srv := fakeOpenAI(t, "I'm sorry, I can't help with that.")
 	a.SetAI(srv.URL, "test-model")
 
-	a.OpenAIForTest()
 	if err := a.RunAISync("把 mysql 暴露到 9000"); err == nil {
 		t.Fatal("a reply that is not JSON should be an error")
 	}
@@ -125,7 +122,6 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 		"upstreamHost":"10.0.0.1","upstreamPort":3306,"explanation":"x"}`
 	srv := fakeOpenAI(t, reply)
 	a.SetAI(srv.URL, "test-model")
-	a.OpenAIForTest()
 	if err := a.RunAISync("x"); err != nil {
 		t.Fatal(err)
 	}
@@ -137,14 +133,19 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 		t.Errorf("port %d should read as taken", draft.ListenPort)
 	}
 
-	// The form shows the conflict, and saving is refused until it changes.
+	// The draft opens in the form; saving it is allowed — the conflict is
+	// the engine's to report on apply — but the row says why it is not
+	// listening, so the user is not left guessing.
 	a.OpenNewFormFrom(*draft)
 	if err := a.SaveForm(); err != nil {
-		// Saving is allowed: the conflict is a warning the user sees, not
-		// a hard error, since nginx itself will refuse to bind.
-		t.Logf("save: %v", err)
+		t.Fatalf("saving a conflicted draft should be allowed: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
+	if err := a.Apply(); err == nil {
+		t.Fatal("applying onto a taken port should fail")
+	}
+	if listening, problem := a.RuleState(draft.ID); listening || problem == "" {
+		t.Errorf("the rule should say why it is not listening: %q", problem)
+	}
 }
 
 // itoa renders a port for the fake reply.
@@ -257,7 +258,6 @@ func TestAIListModels(t *testing.T) {
 	})
 	// The fetch suggests the first sorted model into the field, so the
 	// user who only wanted a working default still has one step: 保存.
-	// Saving then lights up the whole path: ready, and the entry appears.
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
@@ -267,6 +267,37 @@ func TestAIListModels(t *testing.T) {
 	}
 	if a.AIModel() != "deepseek-chat" {
 		t.Errorf("the suggestion should be the first sorted model: %q", a.AIModel())
+	}
+
+	// Choosing the second model from the picker changes what is saved.
+	reveal(t, tt, "从列表选")
+	if err := tt.Click("从列表选"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	// The picker's rows carry a 选-prefix label so a screen reader (and
+	// this test) can tell them from the field's own text.
+	if err := tt.Click("选 gpt-4o-mini"); err != nil {
+		t.Fatalf("the picker should list the fetched models: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.AIModel() != "gpt-4o-mini" {
+		t.Errorf("choosing from the list should save the choice: %q", a.AIModel())
+	}
+
+	// A gateway whose list omits a model still accepts its name typed by
+	// hand: the field is the truth, the list only fills it in.
+	fillField(t, tt, "模型", "my-private-model")
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.AIModel() != "my-private-model" {
+		t.Errorf("a hand-typed model must not be discarded: %q", a.AIModel())
 	}
 }
 

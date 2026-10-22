@@ -260,7 +260,6 @@ func (f *FormValues) Validate() (model.Mapping, map[string]string, bool) {
 	return m, errs, len(errs) == 0
 }
 
-// ListenPortSuggest returns a free port the form can suggest, starting
 // from the protocol's usual one.
 func (f FormValues) ListenPortSuggest() int {
 	proto := protocolFromLabel(f.Protocol)

@@ -23,15 +23,19 @@ import (
 
 // httpForwarder is a listening HTTP or HTTPS server.
 type httpForwarder struct {
-	srv     *http.Server
-	ln      net.Listener
-	port    int
-	proto   model.Protocol
-	idle    time.Duration
-	conns   atomic.Int64
-	active  atomic.Int32
-	closing atomic.Bool
-	started time.Time
+	srv   *http.Server
+	ln    net.Listener
+	port  int
+	proto model.Protocol
+	idle  time.Duration
+	// routesMu guards routes, which a later Apply replaces by handing the
+	// forwarder a fresh table on the same port.
+	routesMu sync.Mutex
+	routes   []route
+	conns    atomic.Int64
+	active   atomic.Int32
+	closing  atomic.Bool
+	started  time.Time
 }
 
 func (f *httpForwarder) key() ruleKey {
@@ -48,7 +52,18 @@ func (f *httpForwarder) Close() error {
 	}
 	// Shutdown waits for in-flight requests, which a reload should not
 	// block on: the timeout bounds it.
-	return f.srv.Close()
+	err := f.srv.Close()
+	// The transports' idle connections would otherwise hold sockets to the
+	// upstreams open for their idle timeout, past the rule that used them.
+	f.routesMu.Lock()
+	for _, r := range f.routes {
+		if r.transport != nil {
+			r.transport.CloseIdleConnections()
+		}
+	}
+	f.routes = nil
+	f.routesMu.Unlock()
+	return err
 }
 
 // route is one mapping's place in a port's routing table.
@@ -58,6 +73,10 @@ type route struct {
 	proxy       *httputil.ReverseProxy
 	serverNames []string
 	path        string
+	// transport is the proxy's own, so a forwarder being replaced can
+	// close its idle connections: without that, sockets to the upstream
+	// linger for the transport's idle timeout after the rule is gone.
+	transport *http.Transport
 }
 
 // newHTTPForwarder starts a server for one port.
@@ -96,7 +115,7 @@ func startHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spe
 		ln = tls.NewListener(ln, cfg)
 	}
 
-	f := &httpForwarder{port: port, proto: proto, idle: spec.IdleTimeout, ln: ln, started: time.Now()}
+	f := &httpForwarder{port: port, proto: proto, idle: spec.IdleTimeout, ln: ln, started: time.Now(), routes: routes}
 	if f.idle == 0 {
 		f.idle = 5 * time.Minute
 	}
@@ -341,7 +360,7 @@ func (s *statusRecorder) Flush() {
 }
 
 // newProxy builds the reverse proxy of a mapping.
-func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, error) {
+func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, *http.Transport, error) {
 	target := m.ProxyPassURL
 	if target == "" {
 		scheme := "http"
@@ -357,7 +376,7 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, err
 	}
 	u, err := url.Parse(target)
 	if err != nil {
-		return nil, nil, fmt.Errorf("proxy_pass %q: %w", target, err)
+		return nil, nil, nil, fmt.Errorf("proxy_pass %q: %w", target, err)
 	}
 
 	transport := &http.Transport{
@@ -401,7 +420,7 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, err
 			_, _ = w.Write([]byte("502 bad gateway: " + err.Error()))
 		},
 	}
-	return proxy, u, nil
+	return proxy, u, transport, nil
 }
 
 // applyHeaders sets the headers a mapping asks for.

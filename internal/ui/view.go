@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,8 +49,10 @@ type View struct {
 	// Last status shown as a toast, so that it is not added every frame.
 	shownStatusAt   time.Time
 	shownStatusText string
-	// focusSearch asks the next frame to put the caret in the search box.
-	focusSearch bool
+	// searchBorn counts ⌘F presses. AutoFocus only works on the frame an
+	// element is born, so the shortcut changes the search box's Key: the
+	// field is reborn and takes the caret, no clicking needed.
+	searchBorn int
 
 	// AI settings, loaded once from the store. The model list is filled by
 	// 拉取模型, whose goroutine writes it, so it sits behind aiMu and the
@@ -101,7 +104,7 @@ func (v *View) shortcuts(c *ui.Context) {
 	})
 	c.OnShortcut(ui.Cmd, ui.KeyF, func() {
 		if a.Page() == appt.PageMappings {
-			v.focusSearch = true
+			v.searchBorn++
 		}
 	})
 	c.OnShortcut(ui.Cmd, ui.KeyR, func() {
@@ -323,12 +326,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			ui.Spacer(c)
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
-				search := ui.SearchField(c, &v.query).Label("搜索规则").Width(200).
-					Tooltip("按名称、域名、端口搜索（⌘F）")
-				if v.focusSearch {
-					search.AutoFocus()
-					v.focusSearch = false
-				}
+				v.searchBox(c, t)
 				v.aiEntry(c, t)
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
@@ -547,6 +545,34 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 				Run:         func() error { return a.DeleteMapping(id) },
 			})
 		}
+	})
+}
+
+// searchBox is the mappings page's filter: a plain text input, so that
+// ⌘F can focus it — the input itself carries the AutoFocus, and changing
+// its Key on the shortcut rebirths it, which is the one moment AutoFocus
+// takes the caret. (The toolkit's SearchField hides its input inside a
+// wrapper that neither Handle.Focus nor AutoFocus can reach.)
+func (v *View) searchBox(c *ui.Context, t Tokens) {
+	ui.Box(c).Width(220).Padding(0, 10).Radius(6).
+		Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "⌕").FontSize(13).TextColor(t.Muted)
+			// The key goes on the context before the input is built: a
+			// TextInput owns its buffer in state, so its identity has to
+			// be fixed up front, not changed afterwards.
+			ic := c.Key("search-" + strconv.Itoa(v.searchBorn))
+			ui.TextInput(ic, &v.query).Placeholder("搜索规则").Grow(1).
+				Label("搜索规则").
+				Tooltip("按名称、域名、端口搜索（⌘F）").
+				AutoFocus()
+			if v.query != "" {
+				if ui.Text(c, "×").FontSize(12).TextColor(t.Muted).
+					Label("清空搜索").Clicked() {
+					v.query = ""
+				}
+			}
+		})
 	})
 }
 

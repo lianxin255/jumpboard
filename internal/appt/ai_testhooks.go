@@ -15,9 +15,9 @@ import (
 
 // RunAISync asks the model and keeps the draft, without the UI.
 func (a *App) RunAISync(sentence string) error {
-	execution, draft, err := a.AskAI(sentence)
+	_, draft, err := a.AskAI(sentence)
 	a.mu.Lock()
-	a.lastAIExplanation, a.lastAIDraft = execution, draft
+	a.lastAIDraft = draft
 	a.mu.Unlock()
 	return err
 }
@@ -28,9 +28,6 @@ func (a *App) AIDraftForTest() *model.Mapping {
 	defer a.mu.Unlock()
 	return a.lastAIDraft
 }
-
-// OpenAIForTest marks the AI panel open, as the UI's button does.
-func (a *App) OpenAIForTest() { a.aiOpen = true }
 
 // PortTaken reports whether something already listens on a port, which the
 // form shows before the user saves.

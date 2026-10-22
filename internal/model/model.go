@@ -152,8 +152,7 @@ type LogSource string
 
 // Log sources.
 const (
-	SourceApp        LogSource = "app"
-	SourceNginxError LogSource = "nginx-error"
+	SourceApp LogSource = "app"
 )
 
 // LogEntry is one line of the operation log.

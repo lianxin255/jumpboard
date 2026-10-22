@@ -41,27 +41,6 @@ func (s Settings) Ready() bool {
 	return strings.TrimSpace(s.BaseURL) != "" && strings.TrimSpace(s.Model) != ""
 }
 
-// draftSchema is the JSON shape the model must produce. Constraining it is
-// what keeps the reply parseable: the model cannot wrap the object in
-// prose or invent fields.
-const draftSchema = `{
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["name", "protocol", "upstreamHost", "upstreamPort", "explanation"],
-  "properties": {
-    "name":          {"type": "string", "description": "A short Chinese name for the rule."},
-    "protocol":      {"type": "string", "enum": ["tcp", "udp", "http", "https"]},
-    "listenPort":    {"type": "integer", "description": "Port this machine listens on. 0 to leave it to the user."},
-    "serverNames":   {"type": "string", "description": "Only for http/https."},
-    "listenPath":    {"type": "string", "description": "Only for http/https; \"/\" when unsure."},
-    "upstreamHost":  {"type": "string"},
-    "upstreamPort":  {"type": "integer"},
-    "proxyMode":     {"type": "string", "enum": ["standard", "minimal", "custom"]},
-    "extraDirectives": {"type": "string", "description": "At most one or two standard nginx directives, or empty."},
-    "explanation":   {"type": "string", "description": "One or two Chinese sentences saying what was understood."}
-  }
-}`
-
 // systemPrompt tells the model what it is doing and what the fields mean.
 const systemPrompt = `You turn a Chinese or English sentence into one nginx forwarding rule.
 

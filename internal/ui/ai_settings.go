@@ -88,9 +88,12 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 				ui.Spinner(c).Label("拉取中")
 			}
 			if ui.Button(c, "保存").Clicked() {
-				a.SetAI(v.aiBaseURL, v.aiModel)
-				v.saveAIKey()
-				a.Info("AI 配置已保存")
+				if err := a.SetAI(v.aiBaseURL, v.aiModel); err != nil {
+					a.Fail("AI 配置未保存：%v", err)
+				} else {
+					v.saveAIKey()
+					a.Info("AI 配置已保存")
+				}
 			}
 			if ui.Button(c, "测试连接").Clicked() {
 				a.RunBackground(a.ProbeAI)

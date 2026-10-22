@@ -465,6 +465,3 @@ func formatTime(ms int64) string {
 	}
 	return timeAt(ms).Format("2006-01-02 15:04")
 }
-
-// settingString reads a setting for the frame.
-func (v *View) settingString(key, def string) string { return v.App.Store.Setting(key, def) }
