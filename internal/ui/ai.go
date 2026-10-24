@@ -46,8 +46,9 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 	busy, errMsg, reply, draft := v.ai.snapshot()
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(620).Gap(12).Padding(20).Radius(6).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Width(620).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "用一句话新建映射").FontSize(16).Bold().TextColor(t.FG)
 				ui.Spacer(c)
@@ -80,7 +81,7 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 				}).MaxHeight(200)
 			}
 			if d := draft; d != nil {
-				ui.Column(c).Gap(6).Padding(10).Radius(4).
+				ui.Column(c).Gap(6).Padding(10).Radius(RadiusChip).
 					Background(t.Surface3).Border(1, t.Border).Children(func() {
 					ui.Text(c, "草稿").FontSize(11).Bold().TextColor(t.Muted)
 					ui.Textf(c, "%s · %s · 监听 %d → %s:%d",

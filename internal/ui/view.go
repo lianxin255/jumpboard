@@ -210,7 +210,9 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 			}
 		}
 		if dirty {
-			ui.Badge(c, "未应用").Background(t.Warning).TextColor(t.Base)
+			// Amber chip with dark ink: readable on both light and dark bases.
+			ui.Badge(c, "未应用").Background(t.Warning).TextColor(ui.Hex("#18181b")).
+				Tooltip("改动还没对外生效，点「应用配置」或按 ⌘R")
 		}
 	})
 }
@@ -250,7 +252,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 		if engine != "running" {
 			dot = t.Muted
 		}
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(4).
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(RadiusBadge).
 			Background(t.Surface3).Border(1, t.Border).Children(func() {
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
 			ui.Text(c, a.Eng.Mode()).FontSize(12).TextColor(t.FG2)
@@ -258,7 +260,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Text(c, engineLabel(engine)).FontSize(12).TextColor(dot)
 		})
 		if len(rules) > 0 {
-			ui.Row(c).Gap(4).Padding(5, 10).Radius(4).Background(t.Surface3).Border(1, t.Border).Children(func() {
+			ui.Row(c).Gap(4).Padding(5, 10).Radius(RadiusBadge).Background(t.Surface3).Border(1, t.Border).Children(func() {
 				ui.Textf(c, "监听 %d/%d 条 · 累计 %d 连接", listening, len(rules), conns).
 					FontSize(12).TextColor(t.FG2)
 			})
@@ -268,7 +270,11 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Spinner(c).Label("正在处理")
 		}
 		if dirty {
-			ui.Text(c, "有未生效的改动").FontSize(11).TextColor(t.Warning)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(4, 10).Radius(RadiusChip).
+				Background(t.Warning.Alpha(0.14)).Border(1, t.Warning.Alpha(0.35)).Children(func() {
+				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
+				ui.Text(c, "未生效 · 点「应用配置」或 ⌘R").FontSize(11).TextColor(t.Warning)
+			})
 		}
 		// The check binds each port for a moment and resolves the
 		// upstreams: it answers "would applying work", without touching
@@ -283,14 +289,14 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 		}
 	})
 	if msg := a.ApplyError(); msg != "" {
-		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
-			Background(t.Danger.Alpha(0.12)).Children(func() {
+		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
+			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
 		})
 	}
 	if msg := a.ApplyWarning(); msg != "" {
-		ui.Box(c).FillWidth().Padding(8, 10).Radius(3).
-			Background(t.Warning.Alpha(0.12)).Children(func() {
+		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
+			Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
 		})
 	}
@@ -310,12 +316,12 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 
 	filtered := filterMappings(mappings, v.query, v.filter)
 
-	ui.Column(c).Fill().Padding(20, 28).Gap(14).Children(func() {
+	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		v.actionRow(c, t)
 
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
-				ui.Text(c, "转发规则").FontSize(24).Bold().TextColor(t.FG)
+				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)
 				enabled := 0
 				for _, m := range mappings {
 					if m.Enabled {
@@ -362,11 +368,11 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
 
-		ui.Column(c).Fill().Radius(10).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 			cols := []ui.TableColumn{
 				{Title: "规则", Width: 240},
 				{Title: "本地 → 上游"},
-				{Title: "健康", Width: 100},
+				{Title: "健康", Width: 110},
 				{Title: "启用", Width: 70},
 				{Title: "操作", Width: 210},
 			}
@@ -420,8 +426,8 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 	}
 	listening, problem := v.App.RuleState(m.ID)
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Padding(3, 8).Radius(4).
-			Background(color.Alpha(0.14)).Children(func() {
+		ui.Box(c).Padding(3, 8).Radius(RadiusBadge).
+			Background(color.Alpha(0.14)).Border(1, color.Alpha(0.25)).Children(func() {
 			ui.Text(c, m.Protocol.Label()).FontSize(10).Bold().TextColor(color)
 		})
 		ui.Column(c).Gap(2).Children(func() {
@@ -469,23 +475,24 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 	}
 	info := v.App.RuleInfo(m.ID)
 	a := v.App
+	localLabel := fmt.Sprintf("本机:%d", port)
+	if m.ServerNames != "" {
+		localLabel = fmt.Sprintf("%s:%d", m.ServerNames, port)
+	}
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		if m.ServerNames != "" {
-			ui.Text(c, m.ServerNames).FontSize(11).TextColor(t.FG2).
-				Padding(2, 6).Radius(2).Background(t.Surface3)
-		} else {
-			ui.Text(c, "外部").FontSize(11).TextColor(t.Muted).
-				Padding(2, 6).Radius(2).Background(t.Surface3)
-		}
+		ui.Text(c, "本地").FontSize(10).TextColor(t.Muted).
+			Padding(2, 6).Radius(RadiusTiny).Background(t.Surface3)
 		// The address is what someone shares, so a click puts it on the
 		// clipboard rather than making them select the text by hand.
-		if ui.Textf(c, ":%d", port).FontSize(12).TextColor(t.Accent).
-			Label("复制地址-" + m.Name).Tooltip("点一下复制这个地址").Clicked() {
+		if ui.Text(c, localLabel).FontSize(12).Bold().TextColor(t.Accent).
+			Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
+			Padding(2, 6).Radius(RadiusBadge).Background(t.Accent.Alpha(0.10)).Clicked() {
 			mm := m
 			a.RunBackground(func() error { return a.CopyAddress(mm) })
 		}
 		ui.Text(c, "→").FontSize(12).TextColor(t.Muted)
-		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).FontSize(12).TextColor(t.FG2)
+		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).FontSize(12).TextColor(t.FG2).
+			Tooltip("上游目标")
 		if info.Connections > 0 {
 			ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Muted).
 				Tooltip("这条规则累计转发的连接数")
@@ -504,34 +511,29 @@ func displayHost(m model.Mapping) string {
 	return m.UpstreamHost
 }
 
-// healthCell shows the last check's outcome.
+// healthCell shows the last check's outcome as a status chip.
 func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if !m.HealthCheckEnabled {
-		ui.Text(c, "○ 未启用").FontSize(12).TextColor(t.Muted)
+		ui.Box(c).Padding(3, 8).Radius(RadiusBadge).Background(t.Surface3).Children(func() {
+			ui.Text(c, "○ 未启用").FontSize(11).TextColor(t.Muted)
+		})
 		return
 	}
 	// The label carries the mapping's name: several rows can show the same
 	// status, and a control has to say which one it acts on.
 	label := "检查-" + m.Name
+	word, color, tip := "○ 未检查", t.Muted, "点一下检查"
 	switch m.HealthStatus {
 	case model.HealthHealthy:
-		if ui.Text(c, "● 健康").FontSize(12).TextColor(t.Success).Label(label).
-			Tooltip("点一下重新检查").Clicked() {
-			mm := m
-			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
-		}
+		word, color, tip = "● 健康", t.Success, "点一下重新检查"
 	case model.HealthUnhealthy:
-		if ui.Text(c, "● 不可达").FontSize(12).TextColor(t.Danger).Label(label).
-			Tooltip("点一下重新检查").Clicked() {
-			mm := m
-			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
-		}
-	default:
-		if ui.Text(c, "○ 未检查").FontSize(12).TextColor(t.Muted).Label(label).
-			Tooltip("点一下检查").Clicked() {
-			mm := m
-			v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
-		}
+		word, color, tip = "● 不可达", t.Danger, "点一下重新检查"
+	}
+	if ui.Text(c, word).FontSize(11).Bold().TextColor(color).Label(label).
+		Tooltip(tip).Padding(3, 8).Radius(RadiusBadge).
+		Background(color.Alpha(0.14)).Clicked() {
+		mm := m
+		v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
 	}
 }
 
@@ -566,7 +568,7 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 // takes the caret. (The toolkit's SearchField hides its input inside a
 // wrapper that neither Handle.Focus nor AutoFocus can reach.)
 func (v *View) searchBox(c *ui.Context, t Tokens) {
-	ui.Box(c).Width(220).Padding(0, 10).Radius(6).
+	ui.Box(c).Width(220).Padding(0, 10).Radius(RadiusChip).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "⌕").FontSize(13).TextColor(t.Muted)
@@ -592,13 +594,19 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		ui.Box(c).Width(440).Padding(28, 28).Radius(12).
+		ui.Box(c).Width(460).Padding(32, 28).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).Children(func() {
-			ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Size(36, 36).Radius(10).Background(t.Accent.Alpha(0.14)).
+					Border(1, t.Accent.Alpha(0.28)).Children(func() {
+					ui.Column(c).Fill().Center().Children(func() {
+						ui.Text(c, "⇄").FontSize(16).TextColor(t.Accent)
+					})
+				})
 				ui.Text(c, "还没有转发规则").FontSize(18).Bold().TextColor(t.FG)
-				ui.Text(c, "例如把内网 MySQL、SSH、Web 转到这台机器的端口上。").
+				ui.Text(c, "把内网 MySQL、SSH、Web 等服务转到这台机器的端口上。").
 					FontSize(13).TextColor(t.Muted)
-				ui.Text(c, "建好后点「应用配置」，立刻对外生效。").FontSize(13).TextColor(t.Muted)
+				ui.Text(c, "建好后点「应用配置」或 ⌘R，立刻对外生效。").FontSize(13).TextColor(t.Muted)
 				ui.Row(c).Gap(10).Children(func() {
 					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
 						Tooltip("新建一条映射（⌘N）").Clicked() {
@@ -616,9 +624,14 @@ func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 
 // emptyState draws the placeholder a page shows with nothing in it.
 func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
-	ui.Column(c).Fill().Center().Gap(8).Children(func() {
-		ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG2)
-		ui.Text(c, hint).FontSize(12).TextColor(t.Muted)
+	ui.Column(c).Fill().Center().Gap(10).Children(func() {
+		ui.Box(c).Width(360).Padding(24, 20).Radius(RadiusPanel).
+			Background(t.Surface).Border(1, t.Border).Children(func() {
+			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
+				ui.Text(c, hint).FontSize(12).TextColor(t.Muted)
+			})
+		})
 	})
 }
 

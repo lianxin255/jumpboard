@@ -267,6 +267,15 @@ func (a *App) SaveForm() error {
 	return nil
 }
 
+// SaveFormAndApply saves the form and immediately applies the configuration,
+// which is the one-step path for "make this forward live now".
+func (a *App) SaveFormAndApply() error {
+	if err := a.SaveForm(); err != nil {
+		return err
+	}
+	return a.Apply()
+}
+
 // markDirty records that the database and the running configuration
 // differ, which the apply button shows.
 func (a *App) markDirty() {

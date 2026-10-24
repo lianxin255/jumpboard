@@ -7,6 +7,22 @@ import (
 	"github.com/lianxin255/nginx-jump-gui/internal/appt"
 )
 
+// Shape tokens keep panels, modals and chips consistent across pages.
+// The toolkit theme uses Radius/Spacing 8/6; these are for hand-drawn boxes.
+const (
+	RadiusModal = float32(12)
+	RadiusPanel = float32(10)
+	RadiusChip  = float32(6)
+	RadiusBadge = float32(4)
+	RadiusTiny  = float32(2)
+
+	PagePadY   = float32(20)
+	PagePadX   = float32(28)
+	PageGap    = float32(14)
+	TitleSize  = float32(22)
+	SubtitleSz = float32(12)
+)
+
 // Tokens are the colors of one appearance. The light and dark sets share
 // the same roles, so a widget asks for a role and both themes answer.
 //

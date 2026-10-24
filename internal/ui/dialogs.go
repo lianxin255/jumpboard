@@ -62,7 +62,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(640).Gap(16).Padding(24).Radius(12).
+		ui.Column(c).Width(640).Gap(16).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).
 			Children(func() {
 
@@ -70,12 +70,22 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 					ui.Text(c, title).FontSize(16).Bold().TextColor(t.FG)
 					if isWeb(f.Protocol) {
 						ui.Text(c, "反代").FontSize(10).Bold().TextColor(t.HTTP).
-							Padding(2, 8).Radius(5).Background(t.HTTP.Alpha(0.14))
+							Padding(2, 8).Radius(RadiusBadge).Background(t.HTTP.Alpha(0.14))
 					}
 					ui.Spacer(c)
 					if ui.Text(c, "×").FontSize(16).TextColor(t.Muted).Label("关闭").Clicked() {
 						a.CloseForm()
 					}
+				})
+				// Live forward preview so the rule reads as an address path while editing.
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
+					Background(t.Surface3).Border(1, t.Border).Children(func() {
+					ui.Text(c, "转发").FontSize(10).Bold().TextColor(t.Muted)
+					ui.Text(c, formPreviewLocal(f)).FontSize(12).Bold().TextColor(t.Accent)
+					ui.Text(c, "→").FontSize(12).TextColor(t.Muted)
+					ui.Text(c, formPreviewUpstream(f)).FontSize(12).TextColor(t.FG2)
+					ui.Spacer(c)
+					ui.Text(c, f.Protocol).FontSize(10).TextColor(t.Muted)
 				})
 
 				// The scroll view fills a box of a fixed height: a modal
@@ -219,15 +229,21 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 
 				ui.Divider(c)
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "保存后需点“应用配置”才生效 · ⌘S").FontSize(11).TextColor(t.Muted)
+					ui.Text(c, "「保存」只入库；「立即生效」保存并应用配置").FontSize(11).TextColor(t.Muted)
 					ui.Spacer(c)
 					if ui.Button(c, "取消").Clicked() {
 						a.CloseForm()
 					}
-					if ui.PrimaryButton(c, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
+					if ui.Button(c, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
 						f := f
 						a.SetForm(f)
 						a.RunBackground(a.SaveForm)
+					}
+					if ui.PrimaryButton(c, "立即生效").
+						Tooltip("保存规则并立即应用配置").Label("立即生效").Clicked() {
+						f := f
+						a.SetForm(f)
+						a.RunBackground(a.SaveFormAndApply)
 					}
 				})
 			})
@@ -313,9 +329,9 @@ func formHeight(f appt.FormValues, maxHeight float32) float32 {
 		h += row // the interval, path, code share a row
 	}
 	h += head + 3*row + row // 额外指令 heading, the box, the chips
-	// Everything but the scroll area: the title row, the error line, the
-	// divider, the footer, and the dialog's padding.
-	const chrome = 210
+	// Everything but the scroll area: the title row, the live-preview band,
+	// the error line, the divider, the footer, and the dialog's padding.
+	const chrome = 268
 	ceiling := maxHeight - chrome
 	if ceiling < 160 {
 		// A window too short for any form: keep the area usable and let
@@ -333,16 +349,17 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 	a := v.App
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(680).Gap(12).Padding(20).Radius(6).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Width(680).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Text(c, "从模板新建").FontSize(16).Bold().TextColor(t.FG)
 			ui.Text(c, "选一个模板，表单会预先填好常用端口和指令。").FontSize(12).TextColor(t.Muted)
 			ui.Scroll(c).Children(func() {
 				ui.Column(c).Gap(6).Children(func() {
 					for _, tpl := range a.Tpl.List() {
 						tpl := tpl
-						ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 10).Radius(4).
-							Background(t.Surface2).Children(func() {
+						ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(10, 12).Radius(RadiusChip).
+							Background(t.Surface2).Border(1, t.Border).Children(func() {
 							ui.Text(c, tpl.Name).FontSize(13).Bold().TextColor(t.FG).Width(160)
 							ui.Text(c, tpl.Category).FontSize(11).TextColor(t.Muted).Width(70)
 							ui.Text(c, tpl.Description).FontSize(11).TextColor(t.FG2).Grow(1).SingleLine()
@@ -382,8 +399,9 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(420).Gap(12).Padding(20).Radius(6).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Width(420).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Text(c, q.Title).FontSize(15).Bold().TextColor(t.FG)
 			ui.Text(c, q.Body).FontSize(12).TextColor(t.FG2)
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
@@ -409,8 +427,9 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(760).Gap(12).Padding(20).Radius(6).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Width(760).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "配置快照").FontSize(15).Bold().TextColor(t.FG)
 				ui.Spacer(c)
@@ -456,6 +475,37 @@ func (v *View) toast(c *ui.Context, t Tokens) {
 	// not add it again.
 	c.After(5 * time.Second)
 	v.App.ClearStatusSoon(st.At)
+}
+
+// formPreviewLocal is the left side of the form's live forward path.
+func formPreviewLocal(f appt.FormValues) string {
+	port := strings.TrimSpace(f.ListenPort)
+	if port == "" {
+		if f.Protocol == appt.ProtocolChoices[3] {
+			port = "443"
+		} else if isWeb(f.Protocol) {
+			port = "80"
+		} else {
+			port = "?"
+		}
+	}
+	if name := strings.TrimSpace(f.ServerNames); name != "" {
+		return name + ":" + port
+	}
+	return "本机:" + port
+}
+
+// formPreviewUpstream is the right side of the form's live forward path.
+func formPreviewUpstream(f appt.FormValues) string {
+	host := strings.TrimSpace(f.UpstreamHost)
+	port := strings.TrimSpace(f.UpstreamPort)
+	if host == "" {
+		host = "?"
+	}
+	if port == "" {
+		port = "?"
+	}
+	return host + ":" + port
 }
 
 // formatTime renders a millisecond timestamp as a short local time.

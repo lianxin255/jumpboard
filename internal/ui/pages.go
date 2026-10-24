@@ -20,13 +20,13 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, logs, _, _, _, _, busy, _ := a.Snapshot()
 
-	ui.Column(c).Fill().Padding(20, 28).Gap(14).Children(func() {
+	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		v.actionRow(c, t)
 
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
-				ui.Text(c, "日志").FontSize(26).Bold().TextColor(t.FG)
-				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(12).TextColor(t.Muted)
+				ui.Text(c, "日志").FontSize(TitleSize).Bold().TextColor(t.FG)
+				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(SubtitleSz).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
 			ui.Segmented(c, &v.logTab, "操作日志", "访问日志").Label("日志类型").Width(220)
@@ -60,7 +60,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			}
 		})
 
-		ui.Column(c).Fill().Radius(4).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 			if v.logTab == 0 {
 				v.appLogList(c, t, logs)
 			} else {
@@ -125,7 +125,7 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 		ui.Row(c).Gap(10).Padding(8, 14).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
 			ui.Text(c, formatClock(e.Timestamp)).FontSize(11).TextColor(t.Muted).Width(70)
-			ui.Box(c).Width(52).Radius(4).Background(tint).Padding(2, 0).Children(func() {
+			ui.Box(c).Width(52).Radius(RadiusBadge).Background(tint).Padding(2, 0).Children(func() {
 				ui.Text(c, string(e.Level)).FontSize(10).Bold().TextColor(color)
 			})
 			ui.Text(c, e.Message).FontSize(12).TextColor(t.FG).SingleLine().Grow(1)
@@ -202,17 +202,21 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, snaps, _, _, dirty, busy, _ := a.Snapshot()
 
-	ui.Column(c).Fill().Padding(20, 28).Gap(14).Children(func() {
+	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		v.actionRow(c, t)
 
 		ui.Column(c).Gap(3).Children(func() {
-			ui.Text(c, "配置历史").FontSize(26).Bold().TextColor(t.FG)
+			ui.Text(c, "配置历史").FontSize(TitleSize).Bold().TextColor(t.FG)
 			ui.Text(c, "每次成功应用都会存一份快照，最多保留 50 份。回滚会把当时的规则恢复回来并立即生效。").
-				FontSize(12).TextColor(t.Muted).Wrap()
+				FontSize(SubtitleSz).TextColor(t.Muted).Wrap()
 		})
 		if dirty {
-			ui.Text(c, "有改动还没应用；表里的状态点会显示哪些规则还没生效。").
-				FontSize(11).TextColor(t.Warning)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
+				Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.32)).Children(func() {
+				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
+				ui.Text(c, "有改动还没应用；映射页的状态点会显示哪些规则还没生效。").
+					FontSize(11).TextColor(t.Warning)
+			})
 		}
 
 		if len(snaps) == 0 {
@@ -220,7 +224,7 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 			return
 		}
 
-		ui.Column(c).Fill().Radius(4).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 			ls := &v.historyList
 			ls.Key = func(i int) any { return snaps[i].ID }
 			ui.List(c, ls, len(snaps), func(i int) {
@@ -269,10 +273,10 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 		themeIdx = 2
 	}
 
-	ui.Column(c).Fill().Padding(20, 28).Gap(14).Children(func() {
+	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		ui.Column(c).Gap(3).Children(func() {
-			ui.Text(c, "设置").FontSize(26).Bold().TextColor(t.FG)
-			ui.Text(c, "外观、访问控制与数据管理").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "设置").FontSize(TitleSize).Bold().TextColor(t.FG)
+			ui.Text(c, "外观、访问控制与数据管理").FontSize(SubtitleSz).TextColor(t.Muted)
 		})
 
 		ui.Scroll(c).Children(func() {
@@ -385,7 +389,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 			// among the tools: wiping everything deserves to look
 			// different from exporting a backup.
 			ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
-				Padding(14, 16).Radius(8).
+				Padding(14, 16).Radius(RadiusPanel).
 				Background(t.Danger.Alpha(0.08)).Border(1, t.Danger.Alpha(0.45)).
 				Children(func() {
 					ui.Column(c).Gap(2).Grow(1).Children(func() {
@@ -411,7 +415,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 // card draws a titled panel of settings. The width lets two fit a row in
 // the window's default size, the way the design lays them out.
 func (v *View) card(c *ui.Context, t Tokens, title string, fn func()) {
-	ui.Column(c).Grow(1).MinWidth(320).MaxWidth(560).Gap(10).Padding(16).Radius(8).
+	ui.Column(c).Grow(1).MinWidth(320).MaxWidth(560).Gap(10).Padding(16).Radius(RadiusPanel).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Text(c, title).FontSize(13).Bold().TextColor(t.FG)
 		fn()
