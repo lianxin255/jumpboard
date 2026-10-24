@@ -26,7 +26,7 @@ func TestMappingLifecycle(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if !tt.HasText("还没有映射") {
+	if !tt.HasText("还没有转发规则") {
 		t.Fatalf("an empty app should say so: %v", tt.Texts())
 	}
 
@@ -35,7 +35,7 @@ func TestMappingLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("新建映射") || !tt.HasText("上游主机") {
+	if !tt.HasText("上游主机") {
 		t.Fatalf("the form did not open: %v", tt.Texts())
 	}
 	fillField(t, tt, "名称", "MySQL 内网")

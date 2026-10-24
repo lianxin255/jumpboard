@@ -1,6 +1,6 @@
-# NginxJump
+# JumpBoard
 
-内网跳板机的 nginx 管理工具：由内置 Go 引擎在一台机器上转发，用图形界面维护端口转发与反向代理规则，把内网的数据库、Web、SSH 等服务的端口暴露出去。
+内网跳板机的端口转发桌面工具（产品名 JumpBoard）：Go 自研转发引擎 + mygo 原生界面。不用 nginx、不用 Electron，维护 TCP/UDP 转发与 HTTP/HTTPS 反代。
 
 **Go 单二进制 + 原生界面**：没有 Electron，没有 Chromium，没有 Node，没有前端构建。界面由 [mygo](https://github.com/egoist/mygo) 用 GPU 直接绘制（macOS 用 Metal，Windows 用 Direct3D 11），中英文都支持，亮色/暗色两套主题。
 
@@ -48,8 +48,8 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 
 | 平台 | 文件 |
 |---|---|
-| macOS | `NginxJump.app`、`NginxJump 1.1.0.dmg` |
-| Windows | `NginxJump.exe`、`nginx/`、`icon.png` |
+| macOS | `JumpBoard.app`、`JumpBoard 1.2.0.dmg` |
+| Windows | `JumpBoard.exe`、`nginx/`、`icon.png` |
 
 ## 数据在哪
 
@@ -58,7 +58,7 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 | 场景 | 数据目录 |
 |---|---|
 | Windows 绿色版 | `<exe 目录>/data` |
-| macOS | `<NginxJump.app 的父目录>/data`（不写进 .app，升级不丢） |
+| macOS | `<JumpBoard.app 的父目录>/data`（不写进 .app，升级不丢） |
 | 开发 / 测试 | 工作目录下的 `data`，或 `NGJ_DATA_ROOT` |
 
 如果程序目录不可写（例如装在 `/Applications` 且当前用户不是管理员），会自动回落到用户目录，并在设置页显示实际位置。

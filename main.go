@@ -1,4 +1,4 @@
-// NginxJump keeps nginx forwarding rules for a list of services on the
+// JumpBoard keeps intranet forwarding rules for a list of services on the
 // internal network, and serves them itself, in this process.
 package main
 
@@ -61,7 +61,7 @@ func main() {
 
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:           "NginxJump",
+			Title:           "JumpBoard",
 			Width:           1200,
 			Height:          760,
 			MinWidth:        900,
@@ -126,7 +126,7 @@ func fail(title string, err error) {
 	msg := fmt.Sprintf("%s\n\n%v", title, err)
 	mygo.Dialog.Message(mygo.MessageOptions{
 		Type:    mygo.MessageError,
-		Message: "NginxJump 启动失败",
+		Message: "JumpBoard 启动失败",
 		Detail:  msg,
 	})
 	fmt.Fprintln(os.Stderr, msg)

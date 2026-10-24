@@ -1,4 +1,4 @@
-# NginxJump: build, test and package with mygo.
+# JumpBoard: build, test and package with mygo.
 #
 # `make test` runs everything: the unit tests, the UI end-to-end tests
 # (which need no window) and the real forwarding tests.

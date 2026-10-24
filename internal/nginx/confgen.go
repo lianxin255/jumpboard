@@ -271,7 +271,7 @@ func Generate(mappings []model.Mapping, opts GenOptions) string {
 
 	var lines []string
 	lines = append(lines,
-		"# 由 nginx-jump-gui 自动生成，请勿手动编辑",
+		"# 由 JumpBoard 自动生成，请勿手动编辑",
 		"# 生成时间: "+now.UTC().Format("2006-01-02T15:04:05.000Z"),
 		"worker_processes 1;",
 		"error_log logs/error.log warn;",

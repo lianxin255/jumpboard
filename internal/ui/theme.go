@@ -105,7 +105,7 @@ func theme(t Tokens) *ui.Theme {
 	th.Danger, th.Warning, th.Success = t.Danger, t.Warning, t.Success
 	th.Scrollbar = t.Muted
 	// The toolkit's own shape language: the native radius, not a square one.
-	th.Radius, th.Spacing = 6, 4
+	th.Radius, th.Spacing = 8, 6
 	th.FontSize = 13
 	if !t.Dark {
 		th.Inverse, th.InverseText = ui.Hex("#27272a"), ui.Hex("#f4f4f5")

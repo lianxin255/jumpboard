@@ -24,7 +24,7 @@ func (v *View) exportBackup() {
 		a.Fail("导出失败：%v", err)
 		return
 	}
-	name := "nginx-jump-backup-" + time.Now().Format("2006-01-02") + ".json"
+	name := "jumpboard-backup-" + time.Now().Format("2006-01-02") + ".json"
 	if a.SaveDialog == nil {
 		return
 	}

@@ -148,8 +148,10 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 		// The wordmark, not a square logo: the blue box beside red, amber
 		// and green read as a fourth window control. macOS puts the app
 		// name here, like any title bar; the icon lives in the Dock.
-		ui.Text(c, "NginxJump").FontSize(14).Bold().TextColor(t.FG)
-		ui.Text(c, "v1.1").FontSize(11).TextColor(t.Muted)
+		ui.Column(c).Gap(0).Children(func() {
+			ui.Text(c, "JumpBoard").FontSize(14).Bold().TextColor(t.FG)
+			ui.Text(c, "内网转发").FontSize(10).TextColor(t.Muted)
+		})
 
 		ui.Spacer(c)
 
@@ -266,7 +268,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Spinner(c).Label("正在处理")
 		}
 		if dirty {
-			ui.Text(c, "配置已改动").FontSize(11).TextColor(t.Warning)
+			ui.Text(c, "有未生效的改动").FontSize(11).TextColor(t.Warning)
 		}
 		// The check binds each port for a moment and resolves the
 		// upstreams: it answers "would applying work", without touching
@@ -313,34 +315,44 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
-				ui.Text(c, "端口映射").FontSize(26).Bold().TextColor(t.FG)
+				ui.Text(c, "转发规则").FontSize(24).Bold().TextColor(t.FG)
 				enabled := 0
 				for _, m := range mappings {
 					if m.Enabled {
 						enabled++
 					}
 				}
-				ui.Textf(c, "%d 条规则 · %d 启用 · %d 停用", len(mappings), enabled, len(mappings)-enabled).
-					FontSize(12).TextColor(t.Muted)
+				if len(mappings) == 0 {
+					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(12).TextColor(t.Muted)
+				} else {
+					ui.Textf(c, "本地端口对外 · %d 条规则 · %d 启用", len(mappings), enabled).
+						FontSize(12).TextColor(t.Muted)
+				}
 			})
 			ui.Spacer(c)
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
-				v.searchBox(c, t)
+			// Empty state keeps one clear CTA in the card below; the toolbar
+			// filter/search/new row only appears once there are rules. AI stays
+			// reachable on the empty screen so a first rule can still be drafted.
+			if len(mappings) > 0 {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
+					v.searchBox(c, t)
+					v.aiEntry(c, t)
+					if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
+						a.SetTemplatePicker(true)
+					}
+					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+						Tooltip("新建一条映射（⌘N）").Clicked() {
+						a.OpenForm(nil)
+					}
+				})
+			} else {
 				v.aiEntry(c, t)
-				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
-					a.SetTemplatePicker(true)
-				}
-				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
-					Tooltip("新建一条映射（⌘N）").Clicked() {
-					a.OpenForm(nil)
-				}
-			})
+			}
 		})
 
 		if len(mappings) == 0 {
-			v.emptyState(c, t, "还没有映射",
-				"按 ⌘N 新建，或者从模板开始：数据库、Redis、Web 站点的常用端口都填好了。")
+			v.mappingsEmpty(c, t, busy)
 			return
 		}
 
@@ -350,11 +362,11 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
 
-		ui.Column(c).Fill().Radius(4).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		ui.Column(c).Fill().Radius(10).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 			cols := []ui.TableColumn{
-				{Title: "规则 / 协议", Width: 240},
-				{Title: "转发关系"},
-				{Title: "健康检查", Width: 100},
+				{Title: "规则", Width: 240},
+				{Title: "本地 → 上游"},
+				{Title: "健康", Width: 100},
 				{Title: "启用", Width: 70},
 				{Title: "操作", Width: 210},
 			}
@@ -572,6 +584,32 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 					v.query = ""
 				}
 			}
+		})
+	})
+}
+
+// mappingsEmpty is the first-run card: one clear path to add a rule.
+func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	ui.Column(c).Fill().Center().Gap(14).Children(func() {
+		ui.Box(c).Width(440).Padding(28, 28).Radius(12).
+			Background(t.Surface).Border(1, t.Border).Children(func() {
+			ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "还没有转发规则").FontSize(18).Bold().TextColor(t.FG)
+				ui.Text(c, "例如把内网 MySQL、SSH、Web 转到这台机器的端口上。").
+					FontSize(13).TextColor(t.Muted)
+				ui.Text(c, "建好后点「应用配置」，立刻对外生效。").FontSize(13).TextColor(t.Muted)
+				ui.Row(c).Gap(10).Children(func() {
+					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+						Tooltip("新建一条映射（⌘N）").Clicked() {
+						a.OpenForm(nil)
+					}
+					if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
+						a.SetTemplatePicker(true)
+					}
+				})
+				ui.Text(c, "常用模板：SSH · RDP · MySQL · Redis · Web").FontSize(11).TextColor(t.Muted)
+			})
 		})
 	})
 }
