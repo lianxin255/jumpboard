@@ -67,13 +67,10 @@ func TestToggleMapping(t *testing.T) {
 	if err := tt.Click("启用-开关"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, tt, "the switch to land", func() bool {
+	waitFor(t, tt, "the switch and dirty mark", func() bool {
 		m, _ := a.Store.GetMapping(created.ID)
-		return !m.Enabled
+		return !m.Enabled && a.Dirty()
 	})
-	if !a.Dirty() {
-		t.Error("toggling a mapping changes the configuration, which is dirty")
-	}
 }
 
 // TestHealthCheckNow checks the status cell's click.

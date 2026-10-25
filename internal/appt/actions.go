@@ -306,6 +306,11 @@ func (a *App) DeleteMapping(id string) error {
 }
 
 // SetMappingEnabled turns one mapping on or off.
+//
+// Dirty is marked before the operation log write: the store change is
+// what makes the running configuration stale, and a waiter that only
+// watches Enabled must not observe the flip before Dirty is set
+// (Windows scheduling made that race fail TestToggleMapping).
 func (a *App) SetMappingEnabled(id string, on bool) error {
 	m, err := a.Store.GetMapping(id)
 	if err != nil {
@@ -314,12 +319,12 @@ func (a *App) SetMappingEnabled(id string, on bool) error {
 	if err := a.Store.SetMappingEnabled(id, on); err != nil {
 		return err
 	}
+	a.markDirty()
 	if on {
 		a.Log.Info("启用映射「%s」", m.Name)
 	} else {
 		a.Log.Info("停用映射「%s」", m.Name)
 	}
-	a.markDirty()
 	return nil
 }
 

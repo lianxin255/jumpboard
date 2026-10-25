@@ -108,8 +108,14 @@ func TestLogListScrollsToOlderRows(t *testing.T) {
 // place a broken engine gets noticed.
 func TestAccessLogReadErrorIsShown(t *testing.T) {
 	a := testApp(t)
-	// A directory where access.log would be: every read fails, and it is
-	// not IsNotExist.
+	// New() applies an empty rule set and keeps access.log open. Windows
+	// will not remove an open file, so release the engine handle first.
+	// Replacing the log with a directory is then a portable read error:
+	// TailFile rejects IsDir (a zero-size directory on Windows would
+	// otherwise look like an empty log).
+	if err := a.Eng.Stop(); err != nil {
+		t.Fatal(err)
+	}
 	logPath := filepath.Join(a.Paths.LogsDir, "access.log")
 	if err := os.Remove(logPath); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)

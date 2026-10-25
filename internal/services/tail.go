@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 )
 
@@ -25,6 +26,12 @@ func TailFile(path string, n int) ([]string, error) {
 	st, err := f.Stat()
 	if err != nil {
 		return nil, err
+	}
+	// A directory where a log file should be is a broken engine layout,
+	// not an empty log. On Windows a directory's Size is 0, so treating
+	// size==0 as empty would hide the error the log page must show.
+	if st.IsDir() {
+		return nil, fmt.Errorf("%s 是目录，不是日志文件", path)
 	}
 	size := st.Size()
 	if size == 0 {

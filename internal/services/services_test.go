@@ -99,6 +99,14 @@ func TestTailFile(t *testing.T) {
 	if got, err := TailFile(path, 0); err != nil || got != nil {
 		t.Errorf("zero lines should return nothing: %v %v", got, err)
 	}
+
+	dir := filepath.Join(t.TempDir(), "not-a-log")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := TailFile(dir, 5); err == nil || got != nil {
+		t.Errorf("a directory must not look like an empty log: %v %v", got, err)
+	}
 }
 
 func TestTemplatesCRUD(t *testing.T) {
