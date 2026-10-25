@@ -1,8 +1,5 @@
 {
   "recommendations": [
-    "dbaeumer.vscode-eslint",
-    "antfu.pnpm-catalog-lens",
-    "antfu.iconify",
-    "vue.volar"
+    "golang.go"
   ]
 }

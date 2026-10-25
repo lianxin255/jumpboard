@@ -1,33 +1,24 @@
 package ui
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo"
-
-	"github.com/lianxin255/jumpboard/internal/nginx"
 )
 
-// exportBackup asks where to save a backup and writes it.
+// exportBackup asks where to save a backup and writes what the app built.
 func (v *View) exportBackup() {
 	a := v.App
-	payload, err := a.Export()
+	data, n, err := a.ExportBackupJSON()
 	if err != nil {
 		a.Fail("导出失败：%v", err)
 		return
 	}
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		a.Fail("导出失败：%v", err)
-		return
-	}
-	name := "jumpboard-backup-" + time.Now().Format("2006-01-02") + ".json"
 	if a.SaveDialog == nil {
 		return
 	}
+	name := "jumpboard-backup-" + time.Now().Format("2006-01-02") + ".json"
 	path, err := a.SaveDialog(mygo.SaveDialogOptions{
 		Title:       "导出备份",
 		DefaultPath: filepath.Join(homeDir(), "Downloads", name),
@@ -36,11 +27,11 @@ func (v *View) exportBackup() {
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := a.WriteExportFile(path, data); err != nil {
 		a.Fail("写入失败：%v", err)
 		return
 	}
-	a.Info("已导出 %d 条映射到 %s", len(payload.Mappings), filepath.Base(path))
+	a.Info("已导出 %d 条映射到 %s", n, filepath.Base(path))
 }
 
 // importBackup asks for a file and replaces the data with it.
@@ -56,7 +47,7 @@ func (v *View) importBackup() {
 	if err != nil || len(paths) == 0 {
 		return
 	}
-	data, err := os.ReadFile(paths[0])
+	data, err := a.ReadImportFile(paths[0])
 	if err != nil {
 		a.Fail("读取失败：%v", err)
 		return
@@ -68,12 +59,11 @@ func (v *View) importBackup() {
 // wants to run them on a real nginx.
 func (v *View) exportNginx() {
 	a := v.App
-	spec, err := a.Spec()
+	conf, n, err := a.NginxExport()
 	if err != nil {
 		a.Fail("导出失败：%v", err)
 		return
 	}
-	conf := nginx.Generate(spec.Mappings, nginx.GenOptions{WhitelistIPs: spec.WhitelistIPs})
 	if a.SaveDialog == nil {
 		return
 	}
@@ -85,11 +75,11 @@ func (v *View) exportNginx() {
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, []byte(conf), 0o644); err != nil {
+	if err := a.WriteExportFile(path, []byte(conf)); err != nil {
 		a.Fail("写入失败：%v", err)
 		return
 	}
-	a.Info("已导出 %d 条规则的 nginx 配置", len(spec.Mappings))
+	a.Info("已导出 %d 条规则的 nginx 配置", n)
 }
 
 // homeDir returns the user's home, for the save dialog's default folder.

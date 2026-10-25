@@ -13,7 +13,7 @@
 | 界面代码 | Vue 4314 行 | Go 约 2600 行 |
 | 后端代码 | TypeScript 3356 行 | Go 约 3600 行 |
 
-旧版说明见 [docs/README-electron-legacy.md](docs/README-electron-legacy.md)。
+旧版说明见 [docs/README-electron-legacy.md](docs/README-electron-legacy.md)。Electron/Node 壳的源码已从仓库删除，不再参与构建；留下的说明索引在 [legacy/README.md](legacy/README.md)。
 
 ## 功能
 
