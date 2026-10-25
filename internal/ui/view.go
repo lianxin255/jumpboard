@@ -366,7 +366,9 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			if len(mappings) > 0 {
-				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
+				// No fixed width: the control sizes to its labels. A width
+				// narrower than the CJK labels overlapped the button beside it.
+				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
