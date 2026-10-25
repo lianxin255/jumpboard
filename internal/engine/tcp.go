@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TCP forwarder: one listener per mapping, a two-way copy per connection.

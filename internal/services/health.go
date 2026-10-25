@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/store"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // checkTimeout bounds one health check, so a hung upstream cannot stall the

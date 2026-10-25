@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/nginx"
+	"github.com/lianxin255/jumpboard/internal/nginx"
 )
 
 // exportBackup asks where to save a backup and writes it.

@@ -10,11 +10,11 @@ import (
 	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/paths"
-	"github.com/lianxin255/nginx-jump-gui/internal/services"
-	njui "github.com/lianxin255/nginx-jump-gui/internal/ui"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/paths"
+	"github.com/lianxin255/jumpboard/internal/services"
+	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
 // 出图脚本：真数据 + 真视图 + Tester，不依赖窗口。
@@ -23,8 +23,8 @@ func main() {
 	// that the toolkit's own strings (Search, Clear…) match what ships.
 	mygo.App.SetLanguages("zh-Hans", "en")
 	mygo.App.SetLocale("zh-Hans")
-	os.Setenv("NGJ_DATA_ROOT", "/tmp/shots-data")
-	os.Setenv("NGJ_RESOURCES", "../resources")
+	os.Setenv("JUMPBOARD_DATA_ROOT", "/tmp/shots-data")
+	os.Setenv("JUMPBOARD_RESOURCES", "../resources")
 	os.RemoveAll("/tmp/shots-data")
 
 	p, err := paths.Resolve()

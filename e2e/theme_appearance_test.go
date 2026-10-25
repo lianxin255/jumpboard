@@ -5,8 +5,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	njui "github.com/lianxin255/nginx-jump-gui/internal/ui"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
 // TestFollowSystemShowsTheDesktopAppearance checks that the "跟随系统"

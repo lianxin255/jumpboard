@@ -7,8 +7,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // timeAt converts milliseconds to a time, kept here so the views need no
@@ -356,16 +356,21 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 
 				v.aiCard(c, t)
 
-				v.card(c, t, "数据管理", func() {
+				v.card(c, t, "备份与快照", func() {
+					ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").
+						FontSize(11).TextColor(t.Muted).Wrap()
 					ui.Row(c).Gap(8).Children(func() {
-						if ui.Button(c, "导出备份").Clicked() {
+						if ui.PrimaryButton(c, "导出备份").Clicked() {
 							v.exportBackup()
 						}
 						if ui.Button(c, "导入备份").Clicked() {
 							v.importBackup()
 						}
+						if ui.Button(c, "配置历史").Clicked() {
+							a.SetPage(appt.PageHistory)
+						}
 					})
-					ui.Text(c, "导出不含密码；导入会全量替换现有映射。").
+					ui.Text(c, "导出不含密码；导入会全量替换现有映射与白名单。").
 						FontSize(11).TextColor(t.Muted).Wrap()
 					ui.Divider(c)
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -382,6 +387,26 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						ui.Text(c, "程序目录不可写，数据改存在用户目录。").
 							FontSize(10).TextColor(t.Warning)
 					}
+				})
+
+				v.card(c, t, "快捷键", func() {
+					rows := [][2]string{
+						{"⌘N", "新建映射"},
+						{"⌘F", "聚焦搜索"},
+						{"⌘R", "应用配置"},
+						{"Esc", "关闭当前对话框"},
+					}
+					for _, r := range rows {
+						r := r
+						ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+							ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
+								Border(1, t.Border).Children(func() {
+								ui.Text(c, r[0]).FontSize(11).Bold().TextColor(t.FG).Font("monospace")
+							})
+							ui.Text(c, r[1]).FontSize(12).TextColor(t.FG2)
+						})
+					}
+					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(11).TextColor(t.Muted)
 				})
 			})
 

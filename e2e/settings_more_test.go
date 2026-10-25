@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // streamRule is a plain TCP rule that applies cleanly without a live

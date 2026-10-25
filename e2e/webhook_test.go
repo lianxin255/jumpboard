@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestProxyHeadersAndStreaming checks two behaviors a proxy must get right:

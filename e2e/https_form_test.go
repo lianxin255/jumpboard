@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // chooseProtocol picks the protocol on the form's segmented control, the

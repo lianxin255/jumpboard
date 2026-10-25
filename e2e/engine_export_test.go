@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/nginx"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/nginx"
 )
 
 // TestExportWritesAnNginxConfig checks that the rules can be taken to a

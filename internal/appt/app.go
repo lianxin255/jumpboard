@@ -20,11 +20,11 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/engine"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/paths"
-	"github.com/lianxin255/nginx-jump-gui/internal/services"
-	"github.com/lianxin255/nginx-jump-gui/internal/store"
+	"github.com/lianxin255/jumpboard/internal/engine"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/paths"
+	"github.com/lianxin255/jumpboard/internal/services"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // Page is the page the window shows.

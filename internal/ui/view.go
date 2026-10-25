@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // View is the window's content: it draws the app from its state.
@@ -270,10 +270,15 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Spinner(c).Label("正在处理")
 		}
 		if dirty {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(4, 10).Radius(RadiusChip).
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(4, 10).Radius(RadiusChip).
 				Background(t.Warning.Alpha(0.14)).Border(1, t.Warning.Alpha(0.35)).Children(func() {
 				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
-				ui.Text(c, "未生效 · 点「应用配置」或 ⌘R").FontSize(11).TextColor(t.Warning)
+				ui.Text(c, "有改动还没对外生效").FontSize(11).TextColor(t.Warning)
+				if ui.Text(c, "立即应用").FontSize(11).Bold().TextColor(t.Warning).
+					Label("立即应用").Tooltip("应用配置（⌘R）").Disabled(busy).Clicked() {
+					a.RunBackground(a.Apply)
+				}
+				ui.Text(c, "或 ⌘R").FontSize(10).TextColor(t.Muted)
 			})
 		}
 		// The check binds each port for a moment and resolves the
@@ -362,6 +367,13 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			return
 		}
 
+		v.batchBar(c, t, filtered, busy)
+
+		if len(filtered) == 0 {
+			v.filterEmpty(c, t)
+			return
+		}
+
 		// The rows keep their state by ID as the list changes. No row is
 		// chosen: the table's highlight paints over the badges and status
 		// colors a row carries, and nothing here acts on a chosen row.
@@ -394,17 +406,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				case 4:
 					v.rowActions(c, t, m, busy)
 				}
-			}).Grow(1).Children(func() {
-				if len(filtered) == 0 {
-					hint := "没有匹配的规则"
-					if len(mappings) == 0 {
-						hint = ""
-					}
-					if hint != "" {
-						ui.Text(c, hint).FontSize(12).TextColor(t.Muted).Padding(14)
-					}
-				}
-			})
+			}).Grow(1)
 		})
 	})
 }
@@ -630,6 +632,81 @@ func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
 				ui.Text(c, hint).FontSize(12).TextColor(t.Muted)
+			})
+		})
+	})
+}
+
+
+// batchBar offers enable/disable for the rules currently on screen.
+func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy bool) {
+	a := v.App
+	var onIDs, offIDs []string
+	for _, m := range filtered {
+		if m.Enabled {
+			onIDs = append(onIDs, m.ID)
+		} else {
+			offIDs = append(offIDs, m.ID)
+		}
+	}
+	scope := "当前列表"
+	if v.query != "" || v.filter != 0 {
+		scope = "筛选结果"
+	}
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Textf(c, "%s %d 条 · 启用 %d · 停用 %d", scope, len(filtered), len(onIDs), len(offIDs)).
+			FontSize(11).TextColor(t.Muted)
+		ui.Spacer(c)
+		if len(offIDs) > 0 {
+			if ui.Button(c, "全部启用").FontSize(11).Disabled(busy).
+				Tooltip("启用当前列表中停用的规则，改完后需应用配置").Clicked() {
+				ids := append([]string(nil), offIDs...)
+				a.Ask(&appt.Confirm{
+					Title: "全部启用",
+					Body:  fmt.Sprintf("将启用 %s 中目前停用的 %d 条规则。", scope, len(ids)),
+					Label: "确认启用",
+					Run:   func() error { return a.SetMappingsEnabled(ids, true) },
+				})
+			}
+		}
+		if len(onIDs) > 0 {
+			if ui.Button(c, "全部停用").FontSize(11).Disabled(busy).
+				Tooltip("停用当前列表中启用的规则，改完后需应用配置").Clicked() {
+				ids := append([]string(nil), onIDs...)
+				a.Ask(&appt.Confirm{
+					Title: "全部停用",
+					Body:  fmt.Sprintf("将停用 %s 中目前启用的 %d 条规则。对外转发会在应用后失效。", scope, len(ids)),
+					Label: "确认停用", Destructive: true,
+					Run:   func() error { return a.SetMappingsEnabled(ids, false) },
+				})
+			}
+		}
+	})
+}
+
+// filterEmpty is the card shown when search/filter matches nothing.
+func (v *View) filterEmpty(c *ui.Context, t Tokens) {
+	ui.Column(c).Fill().Center().Gap(12).Children(func() {
+		ui.Box(c).Width(420).Padding(28, 24).Radius(RadiusPanel).
+			Background(t.Surface).Border(1, t.Border).Children(func() {
+			ui.Column(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "没有匹配的规则").FontSize(16).Bold().TextColor(t.FG)
+				hint := "试试别的关键词，或清掉筛选条件。"
+				if v.query != "" {
+					hint = fmt.Sprintf("没有名称、域名或端口匹配「%s」的规则。", v.query)
+				}
+				ui.Text(c, hint).FontSize(13).TextColor(t.Muted)
+				ui.Row(c).Gap(8).Children(func() {
+					if ui.PrimaryButton(c, "清除筛选").Clicked() {
+						v.query = ""
+						v.filter = 0
+					}
+					if v.filter != 0 {
+						if ui.Button(c, "显示全部").Clicked() {
+							v.filter = 0
+						}
+					}
+				})
 			})
 		})
 	})

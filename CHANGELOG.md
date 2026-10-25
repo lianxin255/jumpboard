@@ -58,5 +58,5 @@ Tauri 方案在 Windows 上遇到 WebView2 Runtime 缺失和 VCRUNTIME 依赖问
 - Windows 绿色版打包
 - 215 个测试
 
-[Unreleased]: https://github.com/lianxin255/nginx-jump-gui/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/lianxin255/nginx-jump-gui/releases/tag/v1.0.0
+[Unreleased]: https://github.com/lianxin255/jumpboard/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/lianxin255/jumpboard/releases/tag/v1.0.0

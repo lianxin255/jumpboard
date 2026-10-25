@@ -7,9 +7,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/store"
-	njui "github.com/lianxin255/nginx-jump-gui/internal/ui"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/store"
+	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
 // tester builds a Tester on the real view and app.

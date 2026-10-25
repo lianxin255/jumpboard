@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // Local is the engine that runs the rules itself, in this process.

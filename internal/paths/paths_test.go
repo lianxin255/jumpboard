@@ -36,6 +36,23 @@ func TestResolveUsesTheEnvRoot(t *testing.T) {
 	}
 }
 
+// TestResolvePrefersJumpboardEnv checks the new env name wins over the
+// legacy NGJ_DATA_ROOT alias.
+func TestResolvePrefersJumpboardEnv(t *testing.T) {
+	legacy := t.TempDir()
+	prefer := t.TempDir()
+	t.Setenv("NGJ_DATA_ROOT", legacy)
+	t.Setenv("JUMPBOARD_DATA_ROOT", prefer)
+
+	p, err := Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.DataDir != filepath.Join(prefer, "data") {
+		t.Errorf("DataDir = %q, want under JUMPBOARD_DATA_ROOT", p.DataDir)
+	}
+}
+
 // TestResolveIsIdempotent checks that a second run over an existing data
 // directory succeeds, which every launch does.
 func TestResolveIsIdempotent(t *testing.T) {

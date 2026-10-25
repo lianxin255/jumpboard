@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/nginx"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/nginx"
 )
 
 // context3s is the short deadline every probe in this file runs under.

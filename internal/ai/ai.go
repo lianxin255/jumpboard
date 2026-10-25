@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // Settings configure the client.

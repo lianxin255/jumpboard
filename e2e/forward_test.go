@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // The end-to-end tests below apply rules in the app and push real traffic

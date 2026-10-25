@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestCheckNamesEachProblem checks that the preflight names what would stop

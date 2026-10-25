@@ -1,4 +1,4 @@
-module github.com/lianxin255/nginx-jump-gui
+module github.com/lianxin255/jumpboard
 
 go 1.27.1
 

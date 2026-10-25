@@ -13,11 +13,11 @@ import (
 	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/ui" // the toolkit's own strings in Chinese
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/paths"
-	"github.com/lianxin255/nginx-jump-gui/internal/services"
-	njui "github.com/lianxin255/nginx-jump-gui/internal/ui"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/paths"
+	"github.com/lianxin255/jumpboard/internal/services"
+	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
 // builtin holds the templates shipped with the app.

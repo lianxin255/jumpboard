@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/nginx"
-	"github.com/lianxin255/nginx-jump-gui/internal/services"
-	"github.com/lianxin255/nginx-jump-gui/internal/store"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/nginx"
+	"github.com/lianxin255/jumpboard/internal/services"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // --- pages and dialogs, called from the frame (main thread) ---
@@ -324,6 +324,32 @@ func (a *App) SetMappingEnabled(id string, on bool) error {
 		a.Log.Info("启用映射「%s」", m.Name)
 	} else {
 		a.Log.Info("停用映射「%s」", m.Name)
+	}
+	return nil
+}
+
+// SetMappingsEnabled turns every listed mapping on or off in one pass.
+//
+// It stops on the first failure so a partial batch leaves a clear toast;
+// successful flips already mark the configuration dirty.
+func (a *App) SetMappingsEnabled(ids []string, on bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	n := 0
+	for _, id := range ids {
+		if err := a.SetMappingEnabled(id, on); err != nil {
+			if n > 0 {
+				a.markDirty()
+			}
+			return fmt.Errorf("已处理 %d 条，第 %d 条失败：%w", n, n+1, err)
+		}
+		n++
+	}
+	if on {
+		a.setStatus(fmt.Sprintf("已启用 %d 条规则", n), false)
+	} else {
+		a.setStatus(fmt.Sprintf("已停用 %d 条规则", n), false)
 	}
 	return nil
 }

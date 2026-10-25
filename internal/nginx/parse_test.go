@@ -3,7 +3,7 @@ package nginx
 import (
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestParseRoundTrip checks that the generator's output can be read back

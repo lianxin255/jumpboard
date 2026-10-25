@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // Status is the engine's state.

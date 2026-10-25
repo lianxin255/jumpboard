@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestCopyAddress checks that clicking a rule's port puts its public

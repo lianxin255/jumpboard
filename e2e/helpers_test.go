@@ -9,22 +9,22 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/paths"
-	"github.com/lianxin255/nginx-jump-gui/internal/services"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/paths"
+	"github.com/lianxin255/jumpboard/internal/services"
 )
 
 // testApp builds an app on a temporary data directory.
 //
-// NGJ_DATA_ROOT scopes the data, and the paths package honors it, so the
+// JUMPBOARD_DATA_ROOT scopes the data, and the paths package honors it, so the
 // test never touches the user's real data.
 func testApp(t *testing.T) *appt.App {
 	t.Helper()
 	root := t.TempDir()
-	t.Setenv("NGJ_DATA_ROOT", root)
+	t.Setenv("JUMPBOARD_DATA_ROOT", root)
 	// The system keychain needs a running app; a test reads no key.
-	t.Setenv("NGJ_NO_KEYCHAIN", "1")
+	t.Setenv("JUMPBOARD_NO_KEYCHAIN", "1")
 
 	p, err := paths.Resolve()
 	if err != nil {

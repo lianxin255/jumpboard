@@ -1,6 +1,3 @@
-// Package paths decides where the app keeps its data: next to the
-// executable for the green build, and beside the .app on macOS so that
-// upgrading never loses it.
 package paths
 
 import (
@@ -34,7 +31,8 @@ type Paths struct {
 //
 //	Windows        <dir of the .exe>/data
 //	macOS          <the .app's folder>/data
-//	go run, tests  <working directory>/data, or the value of NGJ_DATA_ROOT
+//	go run, tests  <working directory>/data, or JUMPBOARD_DATA_ROOT
+//	               (NGJ_DATA_ROOT still accepted for older scripts)
 func Resolve() (Paths, error) {
 	root, fallback, err := dataRoot()
 	if err != nil {
@@ -61,7 +59,7 @@ func Resolve() (Paths, error) {
 
 // dataRoot returns the folder that holds data/.
 func dataRoot() (root string, fallback bool, err error) {
-	if env := os.Getenv("NGJ_DATA_ROOT"); env != "" {
+	if env := dataRootEnv(); env != "" {
 		return env, false, nil
 	}
 	exe, exeErr := os.Executable()
@@ -101,6 +99,16 @@ func dataRoot() (root string, fallback bool, err error) {
 	return dir, true, nil
 }
 
+// dataRootEnv returns an explicit data root from the environment.
+// JUMPBOARD_DATA_ROOT is preferred; NGJ_DATA_ROOT remains for older
+// scripts and tests written before the rename.
+func dataRootEnv() string {
+	if v := os.Getenv("JUMPBOARD_DATA_ROOT"); v != "" {
+		return v
+	}
+	return os.Getenv("NGJ_DATA_ROOT")
+}
+
 // inGoBuildDir reports whether exe is a `go run`/`go test` temporary
 // binary, whose folder says nothing about the project.
 //
@@ -120,7 +128,7 @@ func inGoBuildDir(exe string) bool {
 
 // writable reports whether a file can be created in dir.
 func writable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".ngj-write-*")
+	f, err := os.CreateTemp(dir, ".jumpboard-write-*")
 	if err != nil {
 		return false
 	}

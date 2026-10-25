@@ -3,7 +3,7 @@ package e2e
 import (
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestCloneMapping checks the clone button: a copy appears, disabled, with

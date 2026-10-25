@@ -4,7 +4,7 @@ package ui
 import (
 	"github.com/egoist/mygo/ui"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/appt"
 )
 
 // Shape tokens keep panels, modals and chips consistent across pages.

@@ -9,9 +9,9 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/ai"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
-	"github.com/lianxin255/nginx-jump-gui/internal/store"
+	"github.com/lianxin255/jumpboard/internal/ai"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // aiSecretKey is the credential-store entry the API key lives in: the
@@ -55,12 +55,22 @@ func (a *App) HasAIKey() bool {
 	return err == nil && v != ""
 }
 
+// noKeychain reports whether the process must skip the system credential
+// store (tests, headless CI). JUMPBOARD_NO_KEYCHAIN is preferred;
+// NGJ_NO_KEYCHAIN remains for older scripts.
+func noKeychain() bool {
+	if os.Getenv("JUMPBOARD_NO_KEYCHAIN") == "1" {
+		return true
+	}
+	return os.Getenv("NGJ_NO_KEYCHAIN") == "1"
+}
+
 // SetAIKey stores the API key in the system credential store.
 //
 // The store is written from its own goroutine with a deadline, like the
 // read: a locked keychain would otherwise freeze the window.
 func (a *App) SetAIKey(key string) error {
-	if os.Getenv("NGJ_NO_KEYCHAIN") == "1" {
+	if noKeychain() {
 		return fmt.Errorf("当前环境没有系统凭据库，无法保存 API Key")
 	}
 	// The goroutine below outlives a timed-out caller: the credential
@@ -95,7 +105,7 @@ func (a *App) SetAIKey(key string) error {
 // is not worth a frozen window, so the key is read with a deadline and the
 // request goes out without one if it does not come back.
 func readSecret(key string) (string, error) {
-	if os.Getenv("NGJ_NO_KEYCHAIN") == "1" {
+	if noKeychain() {
 		return "", nil
 	}
 	type result struct {

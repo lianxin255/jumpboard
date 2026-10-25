@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestAccessLogIsWritten checks that both kinds of rule leave a line in

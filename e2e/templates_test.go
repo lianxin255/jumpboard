@@ -3,8 +3,8 @@ package e2e
 import (
 	"testing"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/appt"
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // TestTemplatePickerFillsTheForm opens the picker, picks MySQL, and checks

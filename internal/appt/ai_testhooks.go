@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lianxin255/nginx-jump-gui/internal/model"
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // The methods below exist for the end-to-end tests: they run the AI path
