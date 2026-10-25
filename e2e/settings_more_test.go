@@ -101,6 +101,46 @@ func TestSnapshotViewDialog(t *testing.T) {
 	}
 }
 
+// TestExportActionsBuildTheFiles checks the app, not the view, owns the
+// export: it builds the backup and the nginx config, and it writes the
+// bytes to the path the dialog returned.
+func TestExportActionsBuildTheFiles(t *testing.T) {
+	a := testApp(t)
+	if _, err := a.Store.CreateMapping(streamRule(t, "导出动作的站")); err != nil {
+		t.Fatal(err)
+	}
+
+	data, n, err := a.ExportBackupJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !strings.Contains(string(data), "导出动作的站") {
+		t.Fatalf("backup = %d mappings, %s", n, data)
+	}
+	backup := filepath.Join(t.TempDir(), "backup.json")
+	if err := a.WriteExportFile(backup, data); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := a.ReadImportFile(backup); err != nil || string(got) != string(data) {
+		t.Fatalf("reading the backup back: %v %q", err, got)
+	}
+
+	conf, rules, err := a.NginxExport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rules != 1 || !strings.Contains(conf, "server {") {
+		t.Fatalf("nginx export = %d rules:\n%s", rules, conf)
+	}
+	out := filepath.Join(t.TempDir(), "out.conf")
+	if err := a.WriteExportFile(out, []byte(conf)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(out); err != nil || string(got) != conf {
+		t.Fatalf("the written config: %v %q", err, got)
+	}
+}
+
 // TestExportNginxButton walks the settings button: the save dialog answers
 // with a path, and the file holds the rules.
 func TestExportNginxButton(t *testing.T) {

@@ -1,6 +1,7 @@
 package appt
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -560,6 +561,41 @@ func (a *App) ToggleWhitelist(id int64, on bool) error {
 // Example shows how an export looks: the app keeps the format compatible
 // with the Electron build's backups.
 func (a *App) Export() (services.Payload, error) { return services.Export(a.Store) }
+
+// ExportBackupJSON is the backup the UI saves. The dialog stays in the UI;
+// the payload and its formatting live here.
+func (a *App) ExportBackupJSON() ([]byte, int, error) {
+	payload, err := a.Export()
+	if err != nil {
+		return nil, 0, err
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return nil, 0, err
+	}
+	return data, len(payload.Mappings), nil
+}
+
+// WriteExportFile writes bytes the user chose a path for.
+func (a *App) WriteExportFile(path string, data []byte) error {
+	return os.WriteFile(path, data, 0o644)
+}
+
+// ReadImportFile reads a backup the user chose.
+func (a *App) ReadImportFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+// NginxExport is the current rules as a standard nginx.conf, for someone
+// who wants to run them on a real nginx.
+func (a *App) NginxExport() (string, int, error) {
+	spec, err := a.Spec()
+	if err != nil {
+		return "", 0, err
+	}
+	conf := nginx.Generate(spec.Mappings, nginx.GenOptions{WhitelistIPs: spec.WhitelistIPs})
+	return conf, len(spec.Mappings), nil
+}
 
 // Import replaces the data with a backup.
 func (a *App) Import(data []byte) error {
