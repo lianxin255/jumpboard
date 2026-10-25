@@ -54,6 +54,12 @@ func main() {
 	// The native file dialogs too.
 	app.SaveDialog = mygo.Dialog.Save
 	app.OpenDialog = mygo.Dialog.Open
+	// The sidebar's material follows the toolkit's theme source, which
+	// otherwise stays on the desktop's appearance. The saved choice has
+	// to be in place before the window exists, or its first frame shows
+	// the desktop's material. Later changes go through the same call.
+	njui.ApplyAppearance(app.Theme())
+	app.OnTheme = njui.ApplyAppearance
 
 	// The engine is started here, before the window appears, so that a
 	// failure is known when the first frame draws.

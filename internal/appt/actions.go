@@ -121,10 +121,14 @@ func (a *App) ResolveConfirm(ok bool) {
 // Theme returns the chosen appearance.
 func (a *App) Theme() ThemeChoice { return a.theme }
 
-// SetTheme stores the appearance and applies it at once.
+// SetTheme stores the appearance and applies it at once, to the widgets on
+// the next frame and to the window's material now.
 func (a *App) SetTheme(t ThemeChoice) {
 	a.theme = t
 	_ = a.Store.SetSetting(store.SettingTheme, string(t))
+	if a.OnTheme != nil {
+		a.OnTheme(t)
+	}
 	a.notify()
 }
 

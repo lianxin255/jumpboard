@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
@@ -119,6 +120,23 @@ func Light() Tokens {
 		AmberText: ui.Hex("#8A5416"), AmberSoft: ui.Hex("#FFF8EE"), AmberLine: ui.Hex("#F3D7A6"),
 		TCP: ui.Hex("#3B82F6"), UDP: ui.Hex("#7C6BF2"),
 		HTTP: ui.Hex("#0E9F8E"), HTTPS: ui.Hex("#D97706"),
+	}
+}
+
+// ApplyAppearance tells the toolkit which appearance the window's material
+// should follow. The sidebar draws nothing of its own where the window has
+// a material (macOS vibrancy, Windows 11 Mica), so that material is the
+// sidebar's color, and it only changes with the toolkit's theme source.
+// The widgets follow the tokens either way; without this, a light choice
+// on a dark desktop leaves the rail in the desktop's dark material.
+func ApplyAppearance(choice appt.ThemeChoice) {
+	switch choice {
+	case appt.ThemeLight:
+		mygo.Theme.SetSource(mygo.ThemeLight)
+	case appt.ThemeDark:
+		mygo.Theme.SetSource(mygo.ThemeDark)
+	default:
+		mygo.Theme.SetSource(mygo.ThemeSystem)
 	}
 }
 

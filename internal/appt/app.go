@@ -67,6 +67,9 @@ type App struct {
 
 	// OnChange asks the window for a frame. Set by the UI.
 	OnChange func()
+	// OnTheme applies the appearance to the window's material, which the
+	// sidebar shows through. Set by the UI; nil in tests.
+	OnTheme func(ThemeChoice)
 	// Clipboard puts text on the system clipboard. main.go points it at
 	// mygo's clipboard, which needs the running app; a test leaves it nil
 	// and reads Copied instead.
