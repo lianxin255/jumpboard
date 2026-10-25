@@ -408,7 +408,10 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 				if ui.Button(c, "取消").Clicked() {
 					v.App.ResolveConfirm(false)
 				}
-				btn := ui.PrimaryButton(c, q.Label)
+				// The label names the confirmation apart from the button
+				// that opened it: both say 清空 or 回滚, and a test
+				// clicking the first match would hit the opener.
+				btn := ui.PrimaryButton(c, q.Label).Label("确认" + q.Label)
 				if q.Destructive {
 					btn.Background(t.Danger)
 				}

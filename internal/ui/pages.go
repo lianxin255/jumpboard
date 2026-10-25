@@ -240,7 +240,9 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 						s := sn
 						a.SetSnapshotView(&s)
 					}
-					if ui.Button(c, "回滚").FontSize(11).Disabled(busy).Clicked() {
+					// The label names the row: every row says 回滚, and a
+					// test has to reach one snapshot rather than the first.
+					if ui.Button(c, "回滚").FontSize(11).Label("回滚 " + sn.ID).Disabled(busy).Clicked() {
 						s := sn
 						a.Ask(&appt.Confirm{
 							Title: "回滚配置",

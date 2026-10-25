@@ -13,7 +13,7 @@
     "build": "pnpm run -r build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node scripts/build-desktop.mjs --current --dir && vitest run --config vitest.e2e.config.ts",
+    "test:e2e": "go test ./e2e/ -count=1",
     "build:desktop:dir": "node scripts/build-desktop.mjs --current --dir",
     "test:server": "vitest run --project server",
     "test:web": "vitest run --project web",
