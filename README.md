@@ -115,6 +115,8 @@ make cover         # 覆盖率
 
 **界面测试用 `ui.Tester` 而不是真实窗口**：屏幕锁定时真实窗口不出帧（`Update` 和 `CapturePage` 都无效），依赖它的测试会静默失败。
 
+Windows 上 Mica 材质不等于设计稿里的精确 Sidebar token；若要对齐像素级侧栏色需另决策。当前保持开启 Mica，不关闭。
+
 ### 转发引擎
 
 规则由 `internal/engine` 在本进程里执行：
