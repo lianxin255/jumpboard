@@ -19,7 +19,7 @@ test-race:
 	$(GO) test ./... -race -count=1
 
 test-ui:
-	$(GO) test ./e2e/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLogs|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestKeyboard|TestToast|TestCopyAddress' -count=1 -v
+	$(GO) test ./e2e/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLogs|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestKeyboard|TestToast|TestCopyAddress|TestEngineSwitch|TestAppLogClear|TestAccessLogClear|TestHistoryRollback|TestDataRoundTrip' -count=1 -v
 
 test-engine:
 	$(GO) test ./internal/engine/ ./e2e/ -run 'TestTCP|TestUDP|TestHTTP|TestTLS|TestWhitelist|TestApply|TestCheck|TestSnapshot|TestQuit|TestProxy|TestMinimal|TestCustom|TestStop|TestRuleState' -count=1 -v

@@ -29,9 +29,11 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(SubtitleSz).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
-			ui.Segmented(c, &v.logTab, "操作日志", "访问日志").Label("日志类型").Width(220)
+			// No fixed width: the control sizes to its labels. Width(220)
+			// was tighter than the CJK labels and clipped them.
+			ui.Segmented(c, &v.logTab, "操作日志", "访问日志").Label("日志类型")
 			if v.logTab == 0 {
-				ui.Segmented(c, &v.logLevel, "全部", "错误", "警告", "信息").Label("级别").Width(300)
+				ui.Segmented(c, &v.logLevel, "全部", "错误", "警告", "信息").Label("级别")
 			}
 		})
 
@@ -240,7 +242,9 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 						s := sn
 						a.SetSnapshotView(&s)
 					}
-					if ui.Button(c, "回滚").FontSize(11).Disabled(busy).Clicked() {
+					// The label names the row: every row says 回滚, and a
+					// test has to reach one snapshot rather than the first.
+					if ui.Button(c, "回滚").FontSize(11).Label("回滚 " + sn.ID).Disabled(busy).Clicked() {
 						s := sn
 						a.Ask(&appt.Confirm{
 							Title: "回滚配置",

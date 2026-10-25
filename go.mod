@@ -1,9 +1,9 @@
 module github.com/lianxin255/jumpboard
 
-go 1.27.1
+go 1.27.3
 
 require (
-	github.com/egoist/mygo v0.6.3
+	github.com/egoist/mygo v0.6.4
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )

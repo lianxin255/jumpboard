@@ -85,9 +85,21 @@ func (v *View) draw(c *ui.Context) {
 	t := TokensFor(v.App.Theme(), systemDark)
 	c.SetTheme(theme(t))
 
-	ui.Column(c).Fill().Background(t.Base).Children(func() {
-		v.topbar(c, t)
-		v.body(c, t)
+	// The sidebar material shows wherever nothing is painted. The content
+	// column always paints, so the frost stays in the rail. Without a
+	// material the rail paints its own frost color and the layout is the
+	// same.
+	if c.Vibrancy() {
+		c.Root().Background(ui.Transparent)
+	} else {
+		c.Root().Background(t.Canvas)
+	}
+
+	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
+		v.sidebar(c, t)
+		ui.Column(c).Grow(1).MinWidth(0).Background(t.Canvas).Children(func() {
+			v.body(c, t)
+		})
 	})
 	v.dialogs(c, t)
 	v.toast(c, t)
@@ -114,66 +126,66 @@ func (v *View) shortcuts(c *ui.Context) {
 	})
 }
 
-// topbar draws the header: the app's name, the pages, the engine state and
-// the buttons that act on it.
-//
-// The pages are tabs with an underline on the chosen one, centered in the
-// bar, the way the design asks: the segmented pill made the navigation
-// shout when the page title below already says where you are.
-//
-// The bar is the window's title bar: the window is created with
-// TitleBarHiddenInset, so this row reaches the top of the window, pads
-// itself clear of the traffic lights, and drags the window from anywhere
-// that is not a control.
-func (v *View) topbar(c *ui.Context, t Tokens) {
+// sidebar is the frosted rail: brand, pages, and the engine. It draws no
+// background when the window has a material, so the frost shows through;
+// otherwise it paints the sidebar color. The pages keep the names the
+// tests click: 映射, 日志, 历史, 设置.
+func (v *View) sidebar(c *ui.Context, t Tokens) {
 	a := v.App
-	_, _, _, _, engine, dirty, busy, _ := a.Snapshot()
+	_, _, _, _, engine, _, busy, _ := a.Snapshot()
 	page := int(a.Page())
 	bar := c.TitleBar()
 
-	left := bar.Left + 14
-	if bar.Left == 0 {
-		left = 24
+	side := ui.Column(c).Width(SidebarW).Shrink(0)
+	if c.Vibrancy() {
+		side.Background(ui.Transparent)
+	} else {
+		side.Background(t.Sidebar)
 	}
-	right := bar.Right + 14
-	if bar.Right == 0 {
-		right = 24
-	}
+	side.BorderWidth(0, 1, 0, 0).BorderColor(t.Hair).Children(func() {
+		// Room for the traffic lights, then the brand. Dragging the brand
+		// moves the window; the nav items below do not.
+		top := bar.Height
+		if top < 16 {
+			top = 16
+		}
+		ui.Box(c).Height(top).Shrink(0).FillWidth().DragWindow()
 
-	ui.Row(c).FillWidth().Height(56).Padding(0, right, 0, left).
-		Background(t.Topbar).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).
-		AlignItems(ui.Center).Gap(10).DragWindow().Children(func() {
-
-		// The wordmark, not a square logo: the blue box beside red, amber
-		// and green read as a fourth window control. macOS puts the app
-		// name here, like any title bar; the icon lives in the Dock.
-		ui.Column(c).Gap(0).Children(func() {
-			ui.Text(c, "JumpBoard").FontSize(14).Bold().TextColor(t.FG)
-			ui.Text(c, "内网转发").FontSize(10).TextColor(t.Muted)
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 16, 16).DragWindow().Children(func() {
+			ui.Box(c).Size(30, 30).Radius(8).
+				Background(t.Accent).Children(func() {
+				ui.Column(c).Fill().Center().Children(func() {
+					ui.Text(c, "跳").FontSize(16).Bold().TextColor(t.AccentText)
+				})
+			})
+			ui.Column(c).Gap(0).Children(func() {
+				ui.Text(c, "JumpBoard").FontSize(14).Bold().TextColor(t.FG)
+				ui.Text(c, "内网端口转发").FontSize(10).TextColor(t.Muted)
+			})
 		})
-
-		ui.Spacer(c)
 
 		labels := []string{"映射", "日志", "历史", "设置"}
 		tabs := ui.TabsBase(c, &page, len(labels))
-		tabs.List.Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
 			for i, label := range labels {
 				on := i == page
-				tabs.Tab(i).Padding(18, 14).Children(func() {
-					ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						text := ui.Text(c, label).FontSize(13)
-						if on {
-							text.Bold().TextColor(t.FG)
-						} else {
-							text.TextColor(t.Muted)
-						}
-						bar := ui.Color{}
-						if on {
-							bar = t.Accent
-						}
-						ui.Box(c).Size(22, 2).Radius(2).Background(bar)
-					})
+				tab := tabs.Tab(i).FillWidth().Height(34).Radius(9).Padding(0, 10).
+					AlignItems(ui.Center).Gap(10)
+				if on {
+					tab.Background(t.Accent.Alpha(0.08))
+				}
+				tab.Children(func() {
+					mark := ui.Color{}
+					if on {
+						mark = t.Accent
+					}
+					ui.Box(c).Size(3, 14).Radius(2).Background(mark)
+					text := ui.Text(c, label).FontSize(13)
+					if on {
+						text.Bold().TextColor(t.Accent)
+					} else {
+						text.TextColor(t.FG2)
+					}
 				})
 			}
 		})
@@ -183,20 +195,30 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 
 		ui.Spacer(c)
 
-		// The engine state: a dot, a word, and the ability to start and
-		// stop it. A dirty configuration shows as a hint next to the
-		// apply button in the page body.
-		dot := t.Success
-		label := "运行中"
-		if engine != "running" {
-			dot, label = t.Muted, "已停止"
-		}
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		v.engineCard(c, t, engine, busy)
+	})
+}
+
+// engineCard sits at the foot of the rail: a dot, the engine word, and
+// start or stop. The words stay the ones the tests click.
+func (v *View) engineCard(c *ui.Context, t Tokens, engine string, busy bool) {
+	a := v.App
+	dot := t.Success
+	label := "运行中"
+	if engine != "running" {
+		dot, label = t.Muted, "已停止"
+	}
+	ui.Column(c).Gap(8).Padding(12, 14, 16, 14).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 10).Radius(RadiusChip).
+			Background(t.Chip).Border(1, t.Border).Children(func() {
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
-			ui.Text(c, label).FontSize(12).TextColor(dot)
+			ui.Text(c, label).FontSize(12).Bold().TextColor(t.FG).Grow(1)
+			if engine == "running" {
+				ui.Text(c, a.Eng.Mode()).FontSize(10).TextColor(t.Meta)
+			}
 		})
 		if engine == "running" {
-			if ui.Button(c, "停止").Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
+			if ui.Button(c, "停止").FillWidth().Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
 				a.Ask(&appt.Confirm{
 					Title: "停止引擎",
 					Body:  "停止后所有转发规则立即失效，外部无法访问。",
@@ -204,15 +226,8 @@ func (v *View) topbar(c *ui.Context, t Tokens) {
 					Run: a.StopEngine,
 				})
 			}
-		} else {
-			if ui.PrimaryButton(c, "启动").Disabled(busy).Clicked() {
-				a.RunBackground(a.StartEngine)
-			}
-		}
-		if dirty {
-			// Amber chip with dark ink: readable on both light and dark bases.
-			ui.Badge(c, "未应用").Background(t.Warning).TextColor(ui.Hex("#18181b")).
-				Tooltip("改动还没对外生效，点「应用配置」或按 ⌘R")
+		} else if ui.PrimaryButton(c, "启动").FillWidth().Disabled(busy).Clicked() {
+			a.RunBackground(a.StartEngine)
 		}
 	})
 }
@@ -235,7 +250,7 @@ func (v *View) body(c *ui.Context, t Tokens) {
 // configuration.
 func (v *View) actionRow(c *ui.Context, t Tokens) {
 	a := v.App
-	_, _, _, _, engine, dirty, busy, _ := a.Snapshot()
+	_, _, _, _, _, dirty, busy, _ := a.Snapshot()
 	rules := a.RuleStatus()
 	listening, conns := 0, int64(0)
 	for _, r := range rules {
@@ -246,40 +261,13 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 	}
 
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		// One pill for the engine, one for what it is doing: two borders
-		// around two short phrases read as clutter.
-		dot := t.Success
-		if engine != "running" {
-			dot = t.Muted
-		}
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(5, 10).Radius(RadiusBadge).
-			Background(t.Surface3).Border(1, t.Border).Children(func() {
-			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
-			ui.Text(c, a.Eng.Mode()).FontSize(12).TextColor(t.FG2)
-			ui.Text(c, "·").FontSize(12).TextColor(t.Muted)
-			ui.Text(c, engineLabel(engine)).FontSize(12).TextColor(dot)
-		})
 		if len(rules) > 0 {
-			ui.Row(c).Gap(4).Padding(5, 10).Radius(RadiusBadge).Background(t.Surface3).Border(1, t.Border).Children(func() {
-				ui.Textf(c, "监听 %d/%d 条 · 累计 %d 连接", listening, len(rules), conns).
-					FontSize(12).TextColor(t.FG2)
-			})
+			ui.Textf(c, "监听 %d/%d · %d 连接", listening, len(rules), conns).
+				FontSize(12).TextColor(t.Meta)
 		}
 		ui.Spacer(c)
 		if busy {
 			ui.Spinner(c).Label("正在处理")
-		}
-		if dirty {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(4, 10).Radius(RadiusChip).
-				Background(t.Warning.Alpha(0.14)).Border(1, t.Warning.Alpha(0.35)).Children(func() {
-				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
-				ui.Text(c, "有改动还没对外生效").FontSize(11).TextColor(t.Warning)
-				if ui.Text(c, "立即应用").FontSize(11).Bold().TextColor(t.Warning).
-					Label("立即应用").Tooltip("应用配置（⌘R）").Disabled(busy).Clicked() {
-					a.RunBackground(a.Apply)
-				}
-				ui.Text(c, "或 ⌘R").FontSize(10).TextColor(t.Muted)
-			})
 		}
 		// The check binds each port for a moment and resolves the
 		// upstreams: it answers "would applying work", without touching
@@ -293,6 +281,9 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			a.RunBackground(a.Apply)
 		}
 	})
+	if dirty {
+		v.pendingBar(c, t, busy)
+	}
 	if msg := a.ApplyError(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
 			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
@@ -305,6 +296,28 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
 		})
 	}
+}
+
+// pendingBar is the amber strip for a configuration that has not been
+// applied yet. It stays in the page flow so a short window does not cover
+// the rows, and it says 未应用 because that is the word the tests look for.
+func (v *View) pendingBar(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+		ui.Row(c).Grow(1).MaxWidth(840).Height(52).Gap(12).AlignItems(ui.Center).
+			Padding(0, 10, 0, 16).Radius(RadiusFloat).
+			Background(t.AmberSoft).Border(1, t.AmberLine).Children(func() {
+			ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
+			ui.Column(c).Gap(1).Grow(1).Children(func() {
+				ui.Text(c, "有未生效的改动").FontSize(13).Bold().TextColor(t.AmberText)
+				ui.Text(c, "未应用 · 重新加载后对外生效").FontSize(11).TextColor(t.AmberText)
+			})
+			if ui.PrimaryButton(c, "立即应用").Disabled(busy).
+				Tooltip("应用配置（⌘R）").Clicked() {
+				a.RunBackground(a.Apply)
+			}
+		})
+	})
 }
 
 func engineLabel(s string) string {
@@ -320,47 +333,50 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	mappings, _, _, _, _, _, busy, _ := a.Snapshot()
 
 	filtered := filterMappings(mappings, v.query, v.filter)
+	enabled := 0
+	for _, m := range mappings {
+		if m.Enabled {
+			enabled++
+		}
+	}
 
-	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		v.actionRow(c, t)
-
-		ui.Row(c).AlignItems(ui.End).Children(func() {
-			ui.Column(c).Gap(3).Children(func() {
+	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Gap(2).Children(func() {
 				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)
-				enabled := 0
-				for _, m := range mappings {
-					if m.Enabled {
-						enabled++
-					}
-				}
 				if len(mappings) == 0 {
-					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(12).TextColor(t.Muted)
+					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(12).TextColor(t.Meta)
 				} else {
-					ui.Textf(c, "本地端口对外 · %d 条规则 · %d 启用", len(mappings), enabled).
-						FontSize(12).TextColor(t.Muted)
+					ui.Textf(c, "%d 条规则 · %d 启用 · %d 停用", len(mappings), enabled, len(mappings)-enabled).
+						FontSize(12).TextColor(t.Meta)
 				}
 			})
 			ui.Spacer(c)
-			// Empty state keeps one clear CTA in the card below; the toolbar
-			// filter/search/new row only appears once there are rules. AI stays
-			// reachable on the empty screen so a first rule can still be drafted.
+			// Search and the primary action sit on the title row. Filter,
+			// templates and AI stay one row down so the title is not a toolbar.
 			if len(mappings) > 0 {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Width(190)
 					v.searchBox(c, t)
-					v.aiEntry(c, t)
-					if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
-						a.SetTemplatePicker(true)
-					}
 					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
 						Tooltip("新建一条映射（⌘N）").Clicked() {
 						a.OpenForm(nil)
 					}
 				})
-			} else {
-				v.aiEntry(c, t)
 			}
 		})
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if len(mappings) > 0 {
+				// No fixed width: the control sizes to its labels. A width
+				// narrower than the CJK labels overlapped the button beside it.
+				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
+				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
+					a.SetTemplatePicker(true)
+				}
+			}
+			v.aiEntry(c, t)
+			ui.Spacer(c)
+		})
+		v.actionRow(c, t)
 
 		if len(mappings) == 0 {
 			v.mappingsEmpty(c, t, busy)
@@ -380,13 +396,14 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
 
-		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		ui.Column(c).Fill().Children(func() {
 			cols := []ui.TableColumn{
-				{Title: "规则", Width: 240},
-				{Title: "本地 → 上游"},
-				{Title: "健康", Width: 110},
-				{Title: "启用", Width: 70},
-				{Title: "操作", Width: 210},
+				{Title: "规则", Width: 200},
+				{Title: "协议", Width: 72},
+				{Title: "转发关系"},
+				{Title: "健康", Width: 100},
+				{Title: "启用", Width: 64},
+				{Title: "修改", Width: 200},
 			}
 			ui.Table(c, &v.table, cols, len(filtered), func(row, col int) {
 				m := filtered[row]
@@ -394,16 +411,18 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				case 0:
 					v.nameCell(c, t, m)
 				case 1:
-					v.forwardCell(c, t, m)
+					v.protoCell(c, t, m)
 				case 2:
-					v.healthCell(c, t, m)
+					v.forwardCell(c, t, m)
 				case 3:
+					v.healthCell(c, t, m)
+				case 4:
 					on := m.Enabled
 					if ui.Switch(c, &on).Label("启用-" + m.Name).Changed() {
 						id := m.ID
 						a.RunBackground(func() error { return a.SetMappingEnabled(id, on) })
 					}
-				case 4:
+				case 5:
 					v.rowActions(c, t, m, busy)
 				}
 			}).Grow(1)
@@ -411,56 +430,59 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	})
 }
 
-// nameCell shows the protocol badge and the mapping's name.
-//
-// The badge is a filled chip, and the live state is a dot on the line
-// under the name: the row's second line already says the protocol, so
-// repeating it was noise, and a dot beside the name competed with it.
-func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
-	color := t.TCP
-	switch m.Protocol {
+// protoColor is the tint of a protocol chip.
+func protoColor(t Tokens, p model.Protocol) ui.Color {
+	switch p {
 	case model.UDP:
-		color = t.UDP
+		return t.UDP
 	case model.HTTP:
-		color = t.HTTP
+		return t.HTTP
 	case model.HTTPS:
-		color = t.HTTPS
+		return t.HTTPS
+	default:
+		return t.TCP
 	}
+}
+
+// protoCell is the protocol chip: a pale fill and ink of the same hue.
+func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
+	color := protoColor(t, m.Protocol)
+	ui.Box(c).Padding(3, 8).Radius(RadiusBadge).
+		Background(color.Alpha(0.12)).Children(func() {
+		ui.Text(c, m.Protocol.Label()).FontSize(11).Bold().TextColor(color)
+	})
+}
+
+// nameCell shows the mapping's name and the host under it. The protocol
+// has its own column, so it is not repeated here.
+func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 	listening, problem := v.App.RuleState(m.ID)
-	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Padding(3, 8).Radius(RadiusBadge).
-			Background(color.Alpha(0.14)).Border(1, color.Alpha(0.25)).Children(func() {
-			ui.Text(c, m.Protocol.Label()).FontSize(10).Bold().TextColor(color)
-		})
-		ui.Column(c).Gap(2).Children(func() {
-			ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine()
-			sub := displayHost(m)
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				// The dot says whether the rule is listening right now. It
-				// is only drawn once the engine has been applied to: before
-				// that, "not listening" is the expected state, not news.
+	ui.Column(c).Gap(2).Children(func() {
+		ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine()
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			// The dot says whether the rule is listening right now. It is
+			// only drawn once the engine has been applied to: before that,
+			// "not listening" is the expected state, not news.
+			if v.App.EngineApplied() {
 				dot := t.Muted
 				hint := ""
-				if v.App.EngineApplied() {
-					switch {
-					case !m.Enabled:
-						hint = "已停用"
-					case listening:
-						dot, hint = t.Success, "监听中"
-					case problem == "" || problem == "未应用":
-						hint = "改动还没应用"
-					default:
-						dot, hint = t.Danger, problem
-					}
-					ui.Box(c).Size(6, 6).Radius(3).Background(dot).Tooltip(hint)
+				switch {
+				case !m.Enabled:
+					hint = "已停用"
+				case listening:
+					dot, hint = t.Success, "监听中"
+				case problem == "" || problem == "未应用":
+					hint = "改动还没应用"
+				default:
+					dot, hint = t.Danger, problem
 				}
-				ui.Text(c, sub).FontSize(11).TextColor(t.Muted).SingleLine()
-				// A rule that cannot listen says why in the row itself:
-				// a tooltip is no help when the port is already taken.
-				if v.App.EngineApplied() && m.Enabled && !listening && problem != "" && problem != "未应用" {
-					ui.Text(c, problem).FontSize(10).TextColor(t.Danger).SingleLine()
-				}
-			})
+				ui.Box(c).Size(6, 6).Radius(3).Background(dot).Tooltip(hint)
+			}
+			ui.Text(c, displayHost(m)).FontSize(11).TextColor(t.Meta).SingleLine()
+			// A rule that cannot listen says why in the row itself.
+			if v.App.EngineApplied() && m.Enabled && !listening && problem != "" && problem != "未应用" {
+				ui.Text(c, problem).FontSize(10).TextColor(t.Danger).SingleLine()
+			}
 		})
 	})
 }
@@ -477,26 +499,24 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 	}
 	info := v.App.RuleInfo(m.ID)
 	a := v.App
-	localLabel := fmt.Sprintf("本机:%d", port)
+	localLabel := fmt.Sprintf("127.0.0.1:%d", port)
 	if m.ServerNames != "" {
 		localLabel = fmt.Sprintf("%s:%d", m.ServerNames, port)
 	}
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "本地").FontSize(10).TextColor(t.Muted).
-			Padding(2, 6).Radius(RadiusTiny).Background(t.Surface3)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		// The address is what someone shares, so a click puts it on the
 		// clipboard rather than making them select the text by hand.
-		if ui.Text(c, localLabel).FontSize(12).Bold().TextColor(t.Accent).
+		if ui.Text(c, localLabel).Font("monospace").FontSize(12).TextColor(t.FG2).
 			Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
-			Padding(2, 6).Radius(RadiusBadge).Background(t.Accent.Alpha(0.10)).Clicked() {
+			Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
 			mm := m
 			a.RunBackground(func() error { return a.CopyAddress(mm) })
 		}
-		ui.Text(c, "→").FontSize(12).TextColor(t.Muted)
-		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).FontSize(12).TextColor(t.FG2).
+		ui.Text(c, "→").FontSize(12).TextColor(t.Meta)
+		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(12).TextColor(t.FG2).
 			Tooltip("上游目标")
 		if info.Connections > 0 {
-			ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Muted).
+			ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
 				Tooltip("这条规则累计转发的连接数")
 		}
 		if info.Active > 0 {
@@ -513,33 +533,33 @@ func displayHost(m model.Mapping) string {
 	return m.UpstreamHost
 }
 
-// healthCell shows the last check's outcome as a status chip.
+// healthCell shows the last check's outcome as a pill.
 func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if !m.HealthCheckEnabled {
-		ui.Box(c).Padding(3, 8).Radius(RadiusBadge).Background(t.Surface3).Children(func() {
-			ui.Text(c, "○ 未启用").FontSize(11).TextColor(t.Muted)
+		ui.Box(c).Padding(3, 8).Radius(RadiusPill).Background(t.Chip).Children(func() {
+			ui.Text(c, "未启用").FontSize(11).TextColor(t.Meta)
 		})
 		return
 	}
 	// The label carries the mapping's name: several rows can show the same
-	// status, and a control has to say which one it acts on.
+	// status, and a control has to say which one it acts on. The pill is
+	// one text — the dot is a glyph — so the whole thing is clickable.
 	label := "检查-" + m.Name
-	word, color, tip := "○ 未检查", t.Muted, "点一下检查"
+	word, color, fill, tip := "○ 未检查", t.Meta, t.Chip, "点一下检查"
 	switch m.HealthStatus {
 	case model.HealthHealthy:
-		word, color, tip = "● 健康", t.Success, "点一下重新检查"
+		word, color, fill, tip = "● 健康", t.Success, t.SuccessSoft, "点一下重新检查"
 	case model.HealthUnhealthy:
-		word, color, tip = "● 不可达", t.Danger, "点一下重新检查"
+		word, color, fill, tip = "● 异常", t.Danger, t.DangerSoft, "点一下重新检查"
 	}
 	if ui.Text(c, word).FontSize(11).Bold().TextColor(color).Label(label).
-		Tooltip(tip).Padding(3, 8).Radius(RadiusBadge).
-		Background(color.Alpha(0.14)).Clicked() {
+		Tooltip(tip).Padding(3, 10).Radius(RadiusPill).
+		Background(fill).Clicked() {
 		mm := m
 		v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
 	}
 }
 
-// rowActions draws the per-row buttons.
 func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 	a := v.App
 	id := m.ID
@@ -570,20 +590,20 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 // takes the caret. (The toolkit's SearchField hides its input inside a
 // wrapper that neither Handle.Focus nor AutoFocus can reach.)
 func (v *View) searchBox(c *ui.Context, t Tokens) {
-	ui.Box(c).Width(220).Padding(0, 10).Radius(RadiusChip).
-		Background(t.Surface).Border(1, t.Border).Children(func() {
+	ui.Box(c).Width(240).Padding(0, 10).Radius(RadiusButton).
+		Background(t.Chip).Border(1, t.Border).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "⌕").FontSize(13).TextColor(t.Muted)
+			ui.Text(c, "⌕").FontSize(13).TextColor(t.Meta)
 			// The key goes on the context before the input is built: a
 			// TextInput owns its buffer in state, so its identity has to
 			// be fixed up front, not changed afterwards.
 			ic := c.Key("search-" + strconv.Itoa(v.searchBorn))
-			ui.TextInput(ic, &v.query).Placeholder("搜索规则").Grow(1).
+			ui.TextInput(ic, &v.query).Placeholder("搜索规则 / 端口 / IP").Grow(1).
 				Label("搜索规则").
 				Tooltip("按名称、域名、端口搜索（⌘F）").
 				AutoFocus()
 			if v.query != "" {
-				if ui.Text(c, "×").FontSize(12).TextColor(t.Muted).
+				if ui.Text(c, "×").FontSize(12).TextColor(t.Meta).
 					Label("清空搜索").Clicked() {
 					v.query = ""
 				}
@@ -637,7 +657,6 @@ func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	})
 }
 
-
 // batchBar offers enable/disable for the rules currently on screen.
 func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy bool) {
 	a := v.App
@@ -677,7 +696,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 					Title: "全部停用",
 					Body:  fmt.Sprintf("将停用 %s 中目前启用的 %d 条规则。对外转发会在应用后失效。", scope, len(ids)),
 					Label: "确认停用", Destructive: true,
-					Run:   func() error { return a.SetMappingsEnabled(ids, false) },
+					Run: func() error { return a.SetMappingsEnabled(ids, false) },
 				})
 			}
 		}
