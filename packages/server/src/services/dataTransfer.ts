@@ -1,6 +1,6 @@
 import type { ConfigSnapshot, Host, LogEntry, Mapping } from '@ngj/shared/types'
 import { isValidPort, isValidProtocol, isValidProxyMode, isValidProxyPassUrl } from '@ngj/shared/validation'
-import { getDb } from '../db/connection'
+import { getDb, withTransaction } from '../db/connection'
 
 const EXPORT_VERSION = 2
 
@@ -178,7 +178,7 @@ export function importData(payload: any): ImportResult {
   hostsSkipped = payload.hosts!.length - hosts.filter(Boolean).length
   mappingsSkipped = payload.mappings!.length - mappings.length
 
-  db.transaction(() => {
+  withTransaction(db, () => {
     // 清空所有业务表（导入是全量替换语义）。按外键依赖顺序删。
     db.prepare('DELETE FROM app_logs').run()
     db.prepare('DELETE FROM config_snapshots').run()
@@ -220,7 +220,7 @@ export function importData(payload: any): ImportResult {
         logsImported++
       }
     }
-  })()
+  })
   return { hostsImported, mappingsImported, snapshotsImported, logsImported, hostsSkipped, mappingsSkipped }
 }
 

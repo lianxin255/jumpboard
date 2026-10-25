@@ -4,6 +4,7 @@ import https from 'node:https'
 import { createConnection } from 'node:net'
 import { getDefaultHost } from '../db/hostRepo'
 import { listEnabledMappings, updateHealthStatus } from '../db/mappingRepo'
+import { getActiveHostId } from '../nginx/engineRegistry'
 import { logger } from './logger'
 
 const CHECK_TIMEOUT_MS = 3000
@@ -57,10 +58,11 @@ export function checkMapping(m: Mapping): Promise<HealthStatus> {
 
 /** 轮询所有 enabled + healthCheckEnabled 的映射（并行，提速避免串行阻塞） */
 async function runOnce(): Promise<void> {
-  const host = getDefaultHost()
-  if (!host)
+  // 与活动引擎保持一致（用户当前在管理的主机），无活动引擎时退回默认主机
+  const hostId = getActiveHostId() ?? getDefaultHost()?.id
+  if (!hostId)
     return
-  const mappings = listEnabledMappings(host.id).filter(m => m.healthCheckEnabled === 1)
+  const mappings = listEnabledMappings(hostId).filter(m => m.healthCheckEnabled === 1)
   const now = Date.now()
   // 并行探活：串行时每条最多 3s，映射多会导致一轮远超间隔；并行则一轮≈最慢的一条
   await Promise.all(mappings.map(async (m) => {
@@ -70,7 +72,7 @@ async function runOnce(): Promise<void> {
     }
     catch (e: any) {
       updateHealthStatus(m.id, 'unknown', now)
-      logger.warn(host.id, 'app', `健康检查异常 ${m.name}: ${e?.message ?? e}`)
+      logger.warn(hostId, 'app', `健康检查异常 ${m.name}: ${e?.message ?? e}`)
     }
   }))
 }

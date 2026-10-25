@@ -7,34 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — 重构为 Tauri monorepo（antfu 规范）
+### Changed — 从 Tauri 迁移回 Electron + IPC 架构
 
-- **Tauri 2 Rust 壳**：替代 Electron，spawn Node sidecar（`server.cjs`）+ 托盘 + 单实例锁
-- **pnpm monorepo**：`packages/{shared,server}` + `apps/{web,desktop}`，pnpm workspace catalogs
-- **IPC → HTTP**：前端从 `ipcRenderer.invoke` 改为 `fetch` 调 `127.0.0.1:47831`，路由 1:1 映射
-- **esbuild 单文件 sidecar**：`server.cjs` 自包含，app 内零 node_modules
-- **密码加密迁移**：Electron safeStorage → AES-256-GCM（scryptSync 从 `NGJ_SECRET` 派生密钥）
-- **e2e 集成测试**：真实启动 sidecar + nginx，验证完整生命周期（11 个测试）
-- **antfu eslint 规范**：`@antfu/eslint-config`，同目录测试约定
-- **Windows 绿色版打包**：`fetch-node.sh` 下载 win32 Node、`fetch-better-sqlite3.sh` 下载 prebuilt
+Tauri 方案在 Windows 上遇到 WebView2 Runtime 缺失和 VCRUNTIME 依赖问题，决定切回 Electron。
+
+- **Electron 33 壳**：替代 Tauri 2 Rust 壳，自带 Chromium + Node 运行时，Windows 开箱即用
+- **IPC 架构**：替代 HTTP sidecar，`@electron-toolkit/typed-ipc` + `contextBridge` 实现类型安全的 main↔renderer 通信
+- **electron-vite**：三进程统一 Vite 构建（main / preload / renderer），HMR 热重载
+- **前端合并**：`apps/web/` 合并到 `apps/desktop/src/renderer/`，单一应用包
+- **routes.ts → ipc.ts**：`buildRoutes()` 路由表改为 `registerIpcHandlers(ipcMain)`，45 个 handler
+- **http.ts → ipc.ts**：前端 API 客户端从 `fetch(127.0.0.1:PORT)` 改为 `window.electronAPI.invoke(API.XXX)`
+- **paths.ts 恢复**：`NGJ_RESOURCES_DIR` 环境变量 → Electron `app.getPath('exe')` + `PORTABLE_EXECUTABLE_DIR` + `process.resourcesPath`
+- **crypto.ts 恢复**：AES-256-GCM only → `safeStorage`（OS keychain）优先 + AES fallback
+- **db/connection.ts 简化**：移除 esbuild/nativeBinding 显式加载逻辑，plain `new Database(path)`
+- **prebuild-install 替代 electron-rebuild**：下载目标平台 Electron ABI 预编译二进制，解决 pnpm store 污染问题
+- **pnpm deploy --legacy**：创建扁平化 staging 目录，解决 pnpm 符号链接 + electron-builder asar 不兼容
+
+### Added
+
+- **scripts/build-desktop.mjs**：打包编排脚本（electron-vite build → pnpm deploy → prebuild-install → electron-builder）
+- **electron-builder.config.cjs**：portable (win) + dmg (mac) + asarUnpack + extraResources
+- **@electron-toolkit/preload**：contextBridge 标准暴露
+- **@electron-toolkit/typed-ipc**：双向类型检查 IPC
 
 ### Fixed
 
-- `bundledNginxDir` 路径：`resources/bundled/nginx` → `resources/nginx`（匹配 tauri.conf resources 映射）
-- `localEngine.test()`：补 `ensureDirSync` 确保 logs/temp/conf 目录存在（nginx -t 需写日志和 pid 文件）
-- `localEngine.reload()`：`child.kill('SIGHUP')` → `process.kill(pid, 'SIGHUP')`（Node child.kill 会把 `child.killed` 置 true 导致 status 误报 stopped）
-- `confGenerator` stream 块：补 `log_format stream` 定义（stream 模块无默认 log_format，nginx -t 报错）
-- `index.ts send()`：字符串响应也 `JSON.stringify`（engine status 返回原始文本但 content-type 是 application/json）
-- `templateRepo.getBuiltinDir()`：`resources/bundled/templates` → `resources/templates/builtin`
-- Tauri 2 Rust API 适配：`#[tauri::main]` 宏移除、`single_instance::new` → `::init`、`app.exit()` → `app.handle().exit()`
+- **pnpm store 污染**：electron-rebuild 从 cwd 向上搜索 lockfile 定位 projectRoot（`getProjectRootPath`），从 STAGE 运行时仍找到 monorepo 根的 `pnpm-lock.yaml`，扫描根 `node_modules` 里的 pnpm 符号链接（指向 store），重建时覆盖 store 里的 `.node` 文件。改用 `prebuild-install` 直接下载预编译二进制，完全隔离。
+- **Windows 交叉编译架构**：electron-builder `--dir` 默认跟随主机架构（arm64），显式传 `--x64` 确保产出 x64
+- **cpu-features 编译失败**：Python 3.12+ 移除 distutils，`npmRebuild: false` 跳过（ssh2 有 try-catch fallback）
 
-### Changed
+### Removed
 
-- 项目结构：单仓 Electron → pnpm monorepo + Tauri 壳
-- `paths.ts`：`process.resourcesPath`（Electron）→ `NGJ_RESOURCES_DIR` 环境变量（Tauri 注入）
-- `package.json`：根包 scripts 统一管理（dev/build/test/lint/typecheck/tauri）
-- `tsconfig.json`：antfu 标准 + `@ngj/*` 路径别名
-- `vitest.config.ts`：单扁平配置（vitest 1.6.1 projects 模式有 DataCloneError bug）
+- Tauri 全部文件（Cargo.toml / main.rs / tauri.conf.json / capabilities / .cargo）
+- `apps/web/`（合并到 `apps/desktop/src/renderer/`）
+- `packages/server/src/index.ts`（HTTP server）+ `e2e.test.ts`（HTTP sidecar 专属）
+- 旧脚本：`cross-build-win.sh` / `fetch-node.sh` / `fetch-better-sqlite3.sh` / `build-app.mjs` / `make-greenzip.mjs`
 
 ## [1.0.0] — 2026-08-11
 
@@ -51,5 +58,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows 绿色版打包
 - 215 个测试
 
-[Unreleased]: https://github.com/lianxin255/nginx-jump-gui/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/lianxin255/nginx-jump-gui/releases/tag/v1.0.0
+[Unreleased]: https://github.com/lianxin255/jumpboard/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/lianxin255/jumpboard/releases/tag/v1.0.0

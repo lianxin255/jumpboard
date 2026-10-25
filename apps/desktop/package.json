@@ -1,0 +1,40 @@
+{
+  "name": "@ngj/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "内网跳板机 nginx 管理软件 · Electron 桌面壳",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "catalog:dev",
+    "@electron-toolkit/typed-ipc": "catalog:dev",
+    "@electron-toolkit/utils": "catalog:dev",
+    "@ngj/server": "workspace:*",
+    "@ngj/shared": "workspace:*",
+    "dayjs": "catalog:frontend",
+    "fs-extra": "catalog:prod",
+    "pinia": "catalog:frontend",
+    "ssh2": "catalog:prod",
+    "vue": "catalog:frontend",
+    "yaml": "catalog:prod"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "catalog:dev",
+    "@types/fs-extra": "catalog:dev",
+    "@types/ssh2": "catalog:dev",
+    "@vitejs/plugin-vue": "catalog:dev",
+    "electron": "catalog:dev",
+    "electron-builder": "catalog:dev",
+    "electron-vite": "catalog:dev",
+    "typescript": "catalog:dev",
+    "vite": "catalog:dev",
+    "vue-tsc": "catalog:dev"
+  }
+}

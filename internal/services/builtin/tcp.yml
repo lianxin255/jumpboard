@@ -1,0 +1,13 @@
+id: tcp
+name: TCP 转发
+icon: network
+category: 网络层
+description: 通用 TCP 端口转发，适用于任意 TCP 服务
+mapping:
+  protocol: tcp
+  listenPort: null
+  upstreamHost: null
+  upstreamPort: null
+extraDirectives: |
+  proxy_timeout 1h;
+  proxy_connect_timeout 60s;

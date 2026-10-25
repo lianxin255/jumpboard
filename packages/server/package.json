@@ -4,24 +4,23 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/ipc.ts",
     "./*": "./src/*"
   },
   "scripts": {
-    "dev": "node --watch src/index.ts",
-    "start": "node src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@ngj/shared": "workspace:*",
-    "better-sqlite3": "catalog:prod",
     "fs-extra": "catalog:prod",
     "ssh2": "catalog:prod",
     "yaml": "catalog:prod"
   },
+  "peerDependencies": {
+    "electron": "catalog:dev"
+  },
   "devDependencies": {
     "@ngj/shared": "workspace:*",
-    "@types/better-sqlite3": "catalog:dev",
     "@types/fs-extra": "catalog:dev",
     "@types/ssh2": "catalog:dev",
     "typescript": "catalog:dev"

@@ -1,0 +1,17 @@
+id: websocket
+name: WebSocket
+icon: bolt
+category: Web
+description: WebSocket 反代，带 Upgrade/Connection 头
+mapping:
+  protocol: http
+  listenPort: null
+  serverNames: null
+  listenPath: /ws
+  upstreamHost: null
+  upstreamPort: null
+extraDirectives: |
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 3600s;

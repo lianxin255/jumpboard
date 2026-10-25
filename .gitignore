@@ -12,6 +12,7 @@ data/
 .verify-*.ts
 target/
 apps/desktop/gen/
+apps/desktop/.stage/
 *.node
 .eslintcache
 .cache
@@ -20,3 +21,6 @@ apps/desktop/gen/
 .temp
 coverage
 temp
+coverage.out
+cov.out
+.zcode/

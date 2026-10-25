@@ -29,7 +29,7 @@ function rowToEntry(r: WhitelistRow): WhitelistEntry {
 
 /** 列出所有白名单 IP */
 export function listWhitelist(): WhitelistEntry[] {
-  const rows = getDb().prepare('SELECT * FROM ip_whitelist ORDER BY created_at').all() as WhitelistRow[]
+  const rows = getDb().prepare('SELECT * FROM ip_whitelist ORDER BY created_at').all() as unknown as WhitelistRow[]
   return rows.map(rowToEntry)
 }
 
@@ -66,7 +66,7 @@ export function toggleWhitelist(id: string, enabled: number): void {
 
 /** 白名单功能是否启用（开启后只允许白名单 IP 访问，关闭=全部允许） */
 export function isWhitelistEnabled(): boolean {
-  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('whitelist_enabled') as { value: string } | undefined
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('whitelist_enabled') as unknown as { value: string } | undefined
   return row?.value === '1'
 }
 

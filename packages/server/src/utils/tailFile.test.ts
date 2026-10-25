@@ -60,4 +60,10 @@ describe('tailFile', () => {
     writeFileSync(f, 'a\nb\nc') // 无尾换行
     expect(tailFile(f, 10)).toEqual(['a', 'b', 'c'])
   })
+
+  it('行尾 \\r\\n（Windows 日志）：剥离行尾 \\r', () => {
+    const f = join(dir, 'crlf.log')
+    writeFileSync(f, 'a\r\nb\r\nc\r\n')
+    expect(tailFile(f, 10)).toEqual(['a', 'b', 'c'])
+  })
 })

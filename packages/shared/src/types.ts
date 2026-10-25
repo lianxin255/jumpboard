@@ -117,7 +117,6 @@ export const API = {
   TEMPLATE_DELETE_CUSTOM: '/api/template/delete-custom',
   // Log
   LOG_LIST: '/api/log/list',
-  LOG_ADD: '/api/log/add',
   LOG_CLEAR: '/api/log/clear',
   NGINX_LOG_TAIL: '/api/nginx-log/tail',
   NGINX_LOG_CLEAR: '/api/nginx-log/clear',

@@ -4,6 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { toFwdSlash } from '@ngj/shared/paths'
 import { ensureDirSync, outputFileSync, pathExistsSync, readFileSync } from 'fs-extra'
+import { killTree, waitForChildExit } from './processKill'
 
 export class LocalNginxEngine implements NginxEngine {
   readonly engineKind = 'local' as const
@@ -132,18 +133,21 @@ export class LocalNginxEngine implements NginxEngine {
     const pid = c.pid
 
     if (process.platform === 'win32') {
+      if (pid == null) {
+        // spawn 失败的残留对象：无 pid 可杀，直接清引用
+        if (this.child === c)
+          this.child = null
+        return
+      }
       // Windows 上 nginx 的进程模型 + Node child_process 有两个已知问题：
       // 1. nginx master 启动的 worker 进程，master 被杀后会变孤儿（nginx trac #2394）
       // 2. Node 的 child.kill() 只杀直接子进程（master），杀不到 worker
       // 唯一可靠方案：taskkill /PID <pid> /T /F —— /T 杀整个进程树（master+worker），/F 强制
-      await new Promise<void>((resolve) => {
-        execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => {
-          // 不管 taskkill 返回什么，都等待子进程退出
-          resolve()
-        })
-      })
+      await killTree(pid)
       // taskkill 后给一点时间让进程真正退出
-      await this.waitForExit(c, 3000)
+      await waitForChildExit(c, 3000)
+      if (this.child === c)
+        this.child = null
     }
     else {
       // Unix: SIGTERM 优雅停止，3 秒后 SIGKILL 兜底
@@ -188,27 +192,6 @@ export class LocalNginxEngine implements NginxEngine {
     return new Promise((resolve) => {
       execFile(this.cfg.nginxPath, ['-p', toFwdSlash(this.cfg.prefixDir), '-c', 'conf/nginx.conf', '-s', signal], () => resolve(), // 不管成功失败都 resolve，reload/stop 的结果靠后续状态判断
       )
-    })
-  }
-
-  /** 等待子进程退出，超时后强 kill 兜底 */
-  private async waitForExit(c: ChildProcess, timeoutMs: number): Promise<void> {
-    return new Promise((resolve) => {
-      let done = false
-      const finish = () => {
-        if (!done) {
-          done = true; if (this.child === c)
-            this.child = null; resolve()
-        }
-      }
-      const t = setTimeout(() => {
-        if (this.child === c) {
-          try { c.kill('SIGKILL') }
-          catch { /* ignore */ }
-        }
-        finish()
-      }, timeoutMs)
-      c.once('exit', () => { clearTimeout(t); finish() })
     })
   }
 

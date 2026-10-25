@@ -82,6 +82,15 @@ describe('safeApplyConf', () => {
     expect(r.output).toContain('nginx -t crashed')
   })
 
+  it('skipReload（停止态应用）：只写入+校验，不 reload 也不回滚', async () => {
+    const eng = makeEngine()
+    const r = await safeApplyConf(eng, 'NEW_CONF', { skipReload: true })
+    expect(r.ok).toBe(true)
+    expect(eng.writeConf).toHaveBeenCalledTimes(1)
+    expect(eng.writeConf).toHaveBeenCalledWith('NEW_CONF')
+    expect(eng.reload).not.toHaveBeenCalled()
+  })
+
   it('并发调用串行化：两次 safeApplyConf 不交错（互斥锁）', async () => {
     // 用执行顺序标记验证串行：第一次 reload 期间第二次不应开始
     const order: string[] = []

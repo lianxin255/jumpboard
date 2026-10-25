@@ -1,160 +1,137 @@
-# NginxJump
+# JumpBoard
 
-> 内网跳板机 nginx 管理软件 · Tauri 桌面壳 + Node sidecar 后端
+内网跳板机的端口转发桌面工具（产品名 JumpBoard）：Go 自研转发引擎 + mygo 原生界面。不用 nginx、不用 Electron，维护 TCP/UDP 转发与 HTTP/HTTPS 反代。
 
-[![Test](https://img.shields.io/badge/tests-187%20passed-brightgreen)](#测试)
-[![Lint](https://img.shields.io/badge/lint-0%20errors-brightgreen)](#测试)
-[![License](https://img.shields.io/badge/license-MIT-blue)](#license)
+**Go 单二进制 + 原生界面**：没有 Electron，没有 Chromium，没有 Node，没有前端构建。界面由 [mygo](https://github.com/egoist/mygo) 用 GPU 直接绘制（macOS 用 Metal，Windows 用 Direct3D 11），中英文都支持，亮色/暗色两套主题。
 
-NginxJump 是一个面向 Windows 的 **nginx 跳板机管理工具**。在内网一台 Windows 机器上运行内置 nginx，通过 GUI 手动维护端口映射规则（TCP/UDP 端口转发 + HTTP/HTTPS 反向代理），将内网服务端口暴露给当前网络可达的外部机器访问。绿色版：单文件夹、免安装、退出无痕。
+| | 旧版（Electron） | 现在 |
+|---|---|---|
+| 体积 | 160 MB 目录 | mac 34 MB（含 Intel + Apple silicon）/ Windows 17 MB |
+| 运行时 | Node + Chromium | 无 |
+| 转发内核 | 内置 nginx 二进制 | **Go 自己实现**，不需要任何外部程序 |
+| 平台 | mac arm64 / win x64 | mac 通用 / win x64 |
+| 界面代码 | Vue 4314 行 | Go 约 2600 行 |
+| 后端代码 | TypeScript 3356 行 | Go 约 3600 行 |
 
-## 特性
+旧版说明见 [docs/README-electron-legacy.md](docs/README-electron-legacy.md)。
 
-- **TCP/UDP 端口转发** + **HTTP/HTTPS 反向代理** 一站式管理
-- **内置 nginx**：双击即用，无需额外安装
-- **绿色便携**：单文件夹分发，不写注册表、不进 AppData
-- **退出无痕**：关闭应用立即停止 nginx，不留残留进程
-- **远程管理**：SSH 连接管理其他主机上的 nginx 实例
-- **配置快照与回滚**：每次应用配置自动存快照，支持一键回滚
-- **健康检查**：定时探测映射目标可达性
-- **白名单**：IP 访问控制（allow/deny）
-- **数据导入导出**：完整备份/迁移配置
-- **安全审计**：导入数据消毒，防 reloadCmd 注入 / nginxPath 篡改 / conf 注入
+## 功能
 
-## 架构
-
-```
-apps/desktop (Tauri 2 Rust 壳)
-  ├─ spawn Node sidecar + 托盘 + 单实例锁
-  └─ WebviewWindow 指向 127.0.0.1:PORT
-packages/server (Node 后端)
-  ├─ HTTP server (node:http) + 静态文件托管
-  ├─ nginx 进程管理 + 配置生成 + 快照
-  └─ esbuild 打成单文件 server.cjs（零 node_modules）
-packages/shared (类型 + 纯函数)
-  └─ 类型定义 + 校验 + 路径工具
-apps/web (Vue 3 前端)
-  └─ Pinia stores + 组件 + HTTP API 客户端
-```
-
-**工作原理**：Tauri Rust 壳启动时 spawn 一个 Node 子进程（打包后的 `server.cjs`），通过环境变量注入数据目录、资源目录、端口等。Node sidecar 提供 HTTP API + 静态文件托管，前端通过 `fetch` 调用 `127.0.0.1:PORT` 上的 API。退出时 Rust 壳杀掉 sidecar，sidecar 收到 SIGTERM 后优雅停止 nginx。
+- **TCP / UDP 端口转发**与 **HTTP / HTTPS 反向代理**
+- **自带转发引擎**：TCP/UDP 转发与 HTTP/HTTPS 反代都由 Go 直接实现，不依赖 nginx，也不用另装任何东西；退出即关端口
+- **绿色便携**：数据在程序旁的 `data/` 目录，拷走即用
+- **配置快照与回滚**：每次成功应用存一份，可回看、可回滚
+- **健康检查**：定时探测上游可达性，表格里直接看状态
+- **IP 白名单**：allow/deny 注入到每个 server 块；开着但没配置 IP 时拒绝应用，不会把自己锁在外面
+- **模板**：内置 13 个（MySQL / Redis / MongoDB / PostgreSQL / MQTT / RDP / SSH / WebSocket / Web…），可自建
+- **导入导出**：备份全量配置；导入时逐条消毒，恶意备份无法注入 nginx 指令
+- **亮色 / 暗色主题**：默认跟随系统
+- **AI 配置**（可选）：用一句话描述要开的映射，模型给出草稿，你确认后才会保存
 
 ## 快速开始
 
-### 前置要求
+需要 Go 1.27 或更新版本。
 
-- Node.js >= 22
-- pnpm >= 9
-- Rust（可选，仅打包桌面应用需要）
-
-### 开发
-
-```bash
-pnpm install
-
-# 本地开发：web + server 分别启动
-pnpm dev:web    # Vite dev server (http://localhost:5173)
-pnpm dev:server # Node sidecar (http://127.0.0.1:47831)
-
-# 测试
-pnpm test           # 全部（单元 + e2e）
-pnpm test:server    # 仅后端
-pnpm test:web       # 仅前端
-
-# 代码检查
-pnpm lint
-pnpm typecheck
+```sh
+make build      # 产出 mac 通用包与 Windows exe
+make test       # 单元 + 界面 e2e + 真实转发测试（Go 引擎直连）
+make shots      # 无窗口渲染所有页面截图（亮/暗）
 ```
 
-> e2e 测试需要先构建 sidecar bundle：`pnpm app:build:resources`
+单平台：
 
-### 打包（Windows 绿色版）
-
-```bash
-pnpm app:build
+```sh
+go tool mygo build -platform darwin/universal   # 或 windows/amd64
 ```
 
-产出在 `release/` 目录，包含：
-- `NginxJump.exe` — Tauri 壳
-- 内嵌 Node 运行时 + nginx + better-sqlite3 原生模块 + 前端静态文件
+产物在 `build/<platform>/`：
 
-### macOS 交叉编译 Windows 绿色版
+| 平台 | 文件 |
+|---|---|
+| macOS | `JumpBoard.app`、`JumpBoard 1.2.0.dmg` |
+| Windows | `JumpBoard.exe`、`nginx/`、`icon.png` |
 
-macOS 上可以通过 `cargo-xwin` + `llvm` 交叉编译 Windows exe，无需 Windows 机器：
+## 数据在哪
 
-```bash
-# ① 前置（一次性）
-brew install llvm
-cargo install cargo-xwin
-rustup target add x86_64-pc-windows-msvc
+数据跟着程序走，方便整个目录拷贝迁移：
 
-# ② 预下载构建素材（Node + better-sqlite3）
-pnpm app:build:resources
+| 场景 | 数据目录 |
+|---|---|
+| Windows 绿色版 | `<exe 目录>/data` |
+| macOS | `<JumpBoard.app 的父目录>/data`（不写进 .app，升级不丢） |
+| 开发 / 测试 | 工作目录下的 `data`，或 `NGJ_DATA_ROOT` |
 
-# ③ 交叉编译 + 打绿色版文件夹
-pnpm app:build:win
-# 产出 release/NginxJump/ 文件夹，直接拷到 Windows 双击运行
-```
+如果程序目录不可写（例如装在 `/Applications` 且当前用户不是管理员），会自动回落到用户目录，并在设置页显示实际位置。
 
-### 内网离线打包
-
-nginx.exe 已内置在 `resources/nginx/`（4.5MB，随仓库走）。Node 运行时和 better-sqlite3 原生模块需要在有网环境预下载一次，之后内网机器可离线打包：
-
-```bash
-# ① 有网的机器上预下载 Windows 依赖（不触发 tauri build）
-pnpm app:build:resources
-# 产出：
-#   build/node/node.exe           — Node.js win-x64 运行时（~77MB）
-#   build/app/better_sqlite3.node  — better-sqlite3 原生模块（~1.8MB）
-#   build/app/server.cjs           — esbuild 打包的后端（~430KB）
-#   build/app/templates/builtin/    — 内置模板
-
-# ② 把整个项目目录（含 build/）拷到内网 Windows 机器
-
-# ③ 内网机器上离线打包（跳过所有网络下载）
-pnpm app:build:offline
-```
-
-> `--offline` 模式下如果缺少预构建文件，会报清晰错误提示，不会尝试联网下载。
-
-## 项目结构
+目录内容：
 
 ```
-nginx-jump-gui/
-├── packages/
-│   ├── shared/          # @ngj/shared — 类型 + 校验 + 路径
-│   └── server/          # @ngj/server — HTTP API + nginx 管理 + DB
-├── apps/
-│   ├── web/             # @ngj/web — Vue 3 前端
-│   └── desktop/         # Tauri 2 Rust 壳
-├── resources/
-│   └── nginx/           # 内置 nginx 二进制 + mime.types
-├── scripts/
-│   ├── build-app.mjs    # esbuild + web build + tauri build
-│   ├── fetch-node.sh    # 下载 win32 Node 运行时
-│   └── fetch-better-sqlite3.sh
-└── docs/                # 设计文档 + 开发计划
+data/
+├── data.db              SQLite：映射、快照、日志、白名单、设置
+├── logs/access.log      引擎写的访问日志
+├── nginx-conf/nginx.conf  当前规则对应的标准配置（可导出到真 nginx）
+└── templates/custom/    自定义模板
 ```
 
-## 测试
+旧版（Electron）的 `data/data.db` 可以直接被读取，schema 完全一致，无需迁移。
 
-- **187 个测试全部通过**（176 单元 + 11 端到端）
-- e2e 测试启动真实的 esbuild bundle `server.cjs`，通过 HTTP 验证完整 nginx 生命周期：
-  host seed → mapping CRUD → engine test/start/reload/status → snapshot rollback → whitelist → data export → SIGTERM 退出无残留
-- 测试框架：vitest（antfu 同目录测试约定）
-- Lint：`@antfu/eslint-config`
-- 类型检查：tsc + vue-tsc
+## AI 配置（可选）
 
-## 技术栈
+在 **设置 → AI 配置** 里填接口地址（任何 OpenAI 兼容的服务，包括本地网关）、模型名和 API Key。
 
-| 层 | 技术 |
-|----|------|
-| 桌面壳 | Tauri 2 (Rust) |
-| 后端 | Node.js 22 + node:http + better-sqlite3 + ssh2 |
-| 前端 | Vue 3 + Pinia + Vite |
-| 构建 | esbuild (server) + Vite (web) + Tauri CLI (desktop) |
-| 测试 | vitest |
-| 规范 | @antfu/eslint-config |
+- Key 存在系统凭据库（macOS 钥匙串 / Windows 凭据管理器），**不进数据库、不进导出文件**
+- 只在你说「AI 建映射」时，把你输入的那句话发出去；当前映射列表不会被上传
+- **AI 只生成草稿**：草稿填进普通表单，保存时走和手填完全一样的校验；应用时引擎先校验端口与上游可达性，失败不影响正在跑的规则
+- 没配置时，映射页不会出现 AI 入口
+
+## 开发
+
+```
+main.go                     启动、单实例、退出钩子
+internal/model/             纯类型与校验（端口、IP/CIDR、proxy_pass、注入字符）
+internal/store/             SQLite：schema 与原 Electron 版一致 + 各表读写
+internal/engine/            转发引擎：TCP/UDP 转发、HTTP/HTTPS 反代、白名单、访问日志
+internal/nginx/             nginx.conf 生成与解析（导出、快照回滚），含 golden 测试
+internal/services/          健康检查、日志尾部读取、模板、导入导出、操作日志
+internal/appt/              应用状态与动作：界面与数据之间的那一层
+internal/ui/                mygo 原生界面：4 个页面 + 弹层 + 亮暗主题 + AI 面板
+internal/ai/                OpenAI 兼容客户端 + 草稿校验
+e2e/                        端到端测试（界面 / 真实转发 / AI / 数据）
+cmd/shots/                  无窗口渲染截图
+resources/                  应用图标
+```
+
+### 测试
+
+四层，都能单独跑：
+
+```sh
+make test          # 全部
+make test-ui       # 界面 e2e（用 ui.Tester，不需要窗口，锁屏也能跑）
+make test-engine   # 真实转发：TCP/UDP/HTTP/HTTPS、端口冲突、回滚、退出清理
+make test-race     # 全量竞态检测
+make cover         # 覆盖率
+```
+
+**界面测试用 `ui.Tester` 而不是真实窗口**：屏幕锁定时真实窗口不出帧（`Update` 和 `CapturePage` 都无效），依赖它的测试会静默失败。
+
+### 转发引擎
+
+规则由 `internal/engine` 在本进程里执行：
+
+| 规则 | 实现 |
+|---|---|
+| TCP 转发 | `net.Listen` + 双向 `io.Copy`，半关闭透传 |
+| UDP 转发 | 每个客户端地址一个上游 socket，按空闲超时回收 |
+| HTTP / HTTPS 反代 | `httputil.ReverseProxy`，`FlushInterval=-1` 即 nginx 的 `proxy_buffering off` |
+| HTTPS | `crypto/tls`，按 SNI 选证书，支持通配符 |
+| server_name / location | 按 Host 精确或通配匹配，按路径前缀最长匹配，未知 Host 落到默认规则 |
+| IP 白名单 | CIDR 匹配，未命中返回 403 |
+| 访问日志 | `data/logs/access.log` |
+
+带来的好处：应用一次是**事务性的**（先开新端口，全部成功才关旧的），没有配置文件、没有 `nginx -t`、没有回滚逻辑，退出时端口立刻释放。
+
+**与 nginx 的兼容**：映射依然可以写成一份标准 `nginx.conf`——每次应用都会写到 `data/nginx-conf/nginx.conf`，设置页也能导出到你选的位置；快照回滚读的就是这份文件。映射的 `额外指令` 里，引擎看得懂的（`proxy_timeout`、`proxy_read_timeout`、`proxy_connect_timeout`、`proxy_http_version`、`proxy_buffering`、`proxy_set_header`）会生效，其余的会在应用时以警告列出，而不是悄悄忽略。
 
 ## License
 

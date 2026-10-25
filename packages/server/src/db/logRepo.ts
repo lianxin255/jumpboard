@@ -36,8 +36,8 @@ export function listLogs(hostId: string | null, limit: number): LogEntry[] {
     ? `SELECT * FROM app_logs WHERE host_id = ? ORDER BY timestamp DESC, rowid DESC LIMIT ?`
     : `SELECT * FROM app_logs ORDER BY timestamp DESC, rowid DESC LIMIT ?`
   const rows = hostId
-    ? getDb().prepare(sql).all(hostId, limit) as LogRow[]
-    : getDb().prepare(sql).all(limit) as LogRow[]
+    ? getDb().prepare(sql).all(hostId, limit) as unknown as LogRow[]
+    : getDb().prepare(sql).all(limit) as unknown as LogRow[]
   return rows.map(rowToLog)
 }
 
@@ -46,8 +46,8 @@ export function listLogsByLevel(hostId: string | null, level: LogLevel, limit: n
     ? `SELECT * FROM app_logs WHERE host_id = ? AND level = ? ORDER BY timestamp DESC LIMIT ?`
     : `SELECT * FROM app_logs WHERE level = ? ORDER BY timestamp DESC LIMIT ?`
   const rows = hostId
-    ? getDb().prepare(sql).all(hostId, level, limit) as LogRow[]
-    : getDb().prepare(sql).all(level, limit) as LogRow[]
+    ? getDb().prepare(sql).all(hostId, level, limit) as unknown as LogRow[]
+    : getDb().prepare(sql).all(level, limit) as unknown as LogRow[]
   return rows.map(rowToLog)
 }
 
@@ -66,7 +66,7 @@ export function trimLogs(keepCount: number): number {
   const result = db.prepare(`DELETE FROM app_logs WHERE rowid NOT IN (
     SELECT rowid FROM app_logs ORDER BY timestamp DESC, rowid DESC LIMIT ?
   )`).run(keepCount)
-  return result.changes
+  return Number(result.changes)
 }
 
 /** 清空全部操作日志 */

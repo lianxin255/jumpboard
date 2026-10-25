@@ -1,0 +1,12 @@
+id: website
+name: 网站反代 (HTTP)
+icon: globe
+category: Web
+description: HTTP 反向代理，带域名和转发头
+mapping:
+  protocol: http
+  listenPort: 80
+  serverNames: null
+  listenPath: /
+  upstreamHost: null
+  upstreamPort: null

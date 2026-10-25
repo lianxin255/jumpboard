@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b9cf8"/><stop offset="0.55" stop-color="#2f6fe4"/><stop offset="1" stop-color="#1b46c2"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0b2a6b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#gloss)"/>
+  <g filter="url(#soft)">
+    <rect x="196" y="452" width="176" height="120" rx="40" fill="#ffffff"/>
+    <rect x="652" y="452" width="176" height="120" rx="40" fill="#ffffff"/>
+    <rect x="398" y="482" width="150" height="60" rx="30" fill="#ffffff"/>
+    <polygon points="548,422 656,512 548,602" fill="#ffffff"/>
+  </g>
+</svg>
