@@ -103,6 +103,52 @@ func TestSettings(t *testing.T) {
 	}
 }
 
+func TestSnapshotsSameMillisecondStayNewestFirst(t *testing.T) {
+	s := open(t)
+	frozen := int64(1_700_000_000_000)
+	prev := nowMillis
+	nowMillis = func() int64 { return frozen }
+	t.Cleanup(func() { nowMillis = prev })
+
+	for _, content := range []string{"v1", "v2", "v3"} {
+		if err := s.AddSnapshot(content, "reload"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := s.ListSnapshots(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, sn := range list {
+		got = append(got, sn.Content)
+	}
+	want := []string{"v3", "v2", "v1"}
+	if len(got) != len(want) {
+		t.Fatalf("list = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("same-millisecond order = %v, want newest first %v", got, want)
+		}
+	}
+
+	if err := s.TrimSnapshots(2); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := s.ListSnapshots(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kept) != 2 || kept[0].Content != "v3" || kept[1].Content != "v2" {
+		var contents []string
+		for _, sn := range kept {
+			contents = append(contents, sn.Content)
+		}
+		t.Fatalf("trim kept %v, want newest [v3 v2]", contents)
+	}
+}
+
 func TestSnapshotsTrim(t *testing.T) {
 	s := open(t)
 	for i := 0; i < 5; i++ {

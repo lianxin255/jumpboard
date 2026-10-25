@@ -113,7 +113,7 @@ func (s *Store) AddSnapshot(content, reason string) error {
 // ListSnapshots returns the newest snapshots.
 func (s *Store) ListSnapshots(limit int) ([]model.Snapshot, error) {
 	rows, err := s.db.Query(`SELECT id, content, reason, created_at FROM config_snapshots
-		ORDER BY created_at DESC LIMIT ?`, limit)
+		ORDER BY created_at DESC, rowid DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (s *Store) TrimSnapshots(keep int) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	_, err := s.db.Exec(`DELETE FROM config_snapshots WHERE id NOT IN (
-		SELECT id FROM config_snapshots ORDER BY created_at DESC LIMIT ?)`, keep)
+		SELECT id FROM config_snapshots ORDER BY created_at DESC, rowid DESC LIMIT ?)`, keep)
 	return err
 }
 

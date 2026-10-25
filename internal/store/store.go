@@ -185,5 +185,6 @@ CREATE TABLE IF NOT EXISTS app_settings (
 // ErrNotFound is returned when a row does not exist.
 var ErrNotFound = errors.New("not found")
 
-// nowMillis is the timestamp the app stores everywhere.
-func nowMillis() int64 { return time.Now().UnixMilli() }
+// nowMillis is the timestamp the app stores everywhere. Tests replace it to
+// force several rows into the same millisecond.
+var nowMillis = func() int64 { return time.Now().UnixMilli() }
