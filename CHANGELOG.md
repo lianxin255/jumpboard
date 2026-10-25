@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — 从 Tauri 迁移回 Electron + IPC 架构
+### Removed — Electron / Node 壳
+
+主产品是 Go + mygo。Electron 桌面壳、`packages/server`、`packages/shared`、根 `package.json`、pnpm 工作区以及对应的 CI（`unit-test.yml`、`autofix.yml`）已从仓库删除，构建只走 `go tool mygo` / `go run .`。旧版说明留在 `docs/README-electron-legacy.md`，索引见 `legacy/README.md`。
+
+### Changed — 从 Tauri 迁移回 Electron + IPC 架构（历史记录，壳已删除）
 
 Tauri 方案在 Windows 上遇到 WebView2 Runtime 缺失和 VCRUNTIME 依赖问题，决定切回 Electron。
 
