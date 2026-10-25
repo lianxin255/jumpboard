@@ -62,19 +62,22 @@ func main() {
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           "JumpBoard",
-			Width:           1200,
-			Height:          760,
-			MinWidth:        900,
-			MinHeight:       600,
-			BackgroundColor: "light-dark(#ffffff, #18181b)",
+			Width:           1280,
+			Height:          800,
+			MinWidth:        960,
+			MinHeight:       640,
+			BackgroundColor: "light-dark(#FBFCFE, #14161c)",
 			StateKey:        "main",
 			// Immersive: the view reaches the top of the window and draws
-			// its own bar; the traffic lights float over it. The frame
-			// reads c.TitleBar() to keep clear of the controls.
+			// its own bar; the traffic lights float over the sidebar. The
+			// frame reads c.TitleBar() to keep clear of the controls.
 			TitleBarStyle: mygo.TitleBarHiddenInset,
-			// Centred in the 56 DIP bar the view draws: the default sits a
-			// few DIPs higher, which reads as misaligned beside the text.
-			TrafficLightPosition: &mygo.Point{X: 20, Y: 22},
+			// The sidebar material shows wherever the view draws no
+			// background (macOS, Windows 11 22H2). Elsewhere the sidebar
+			// paints its own frost color; the layout does not change.
+			Vibrancy: mygo.VibrancySidebar,
+			// Centred beside the brand mark, clear of the traffic lights.
+			TrafficLightPosition: &mygo.Point{X: 16, Y: 20},
 			Content:              ui.View(njui.NewView(app)),
 		})
 		app.OnChange = func() { win.Update(func() {}) }
