@@ -90,7 +90,7 @@ func TestInGoBuildDir(t *testing.T) {
 	if exe, err := os.Executable(); err == nil && !inGoBuildDir(exe) {
 		t.Logf("%s is not in a go-build directory", exe)
 	}
-	if inGoBuildDir("/usr/local/bin/nginxjump") {
+	if inGoBuildDir("/usr/local/bin/jumpboard") {
 		t.Error("an installed binary should not be")
 	}
 }

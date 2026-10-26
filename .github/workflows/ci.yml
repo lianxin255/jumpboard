@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor/mygo-go]
+    branches: [main]
   pull_request:
 
 permissions:
