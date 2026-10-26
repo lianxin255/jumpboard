@@ -190,6 +190,54 @@ func TestWhitelistAndWipe(t *testing.T) {
 	}
 }
 
+// TestMappingGroupRoundtrip checks the optional group label through every
+// write path: created with one, updated to another, and created without
+// one — which must read back as the empty string, not NULL.
+func TestMappingGroupRoundtrip(t *testing.T) {
+	s := open(t)
+	created, err := s.CreateMapping(model.Mapping{
+		Name: "mysql", Group: "数据库", Protocol: model.TCP, ListenPort: 9000,
+		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.ListMappings()
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list: %v %v", list, err)
+	}
+	if list[0].Group != "数据库" {
+		t.Fatalf("group after create: %q", list[0].Group)
+	}
+
+	created.Group = "内网"
+	if err := s.UpdateMapping(created); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetMapping(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Group != "内网" {
+		t.Fatalf("group after update: %q", got.Group)
+	}
+
+	bare, err := s.CreateMapping(model.Mapping{
+		Name: "bare", Protocol: model.TCP, ListenPort: 9001,
+		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bareGot, err := s.GetMapping(bare.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bareGot.Group != "" {
+		t.Fatalf("mapping without a group read back %q, want \"\"", bareGot.Group)
+	}
+}
+
 func TestMigrationsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "data.db")
@@ -199,5 +247,21 @@ func TestMigrationsIdempotent(t *testing.T) {
 			t.Fatalf("open %d: %v", i, err)
 		}
 		s.Close()
+	}
+	// A reopened database must still carry every column migrate adds —
+	// including group_name, which only the ALTER path ever creates.
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	cols, err := s.tableColumns("mappings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"proxy_mode", "health_check_expected_status", "group_name"} {
+		if !cols[name] {
+			t.Errorf("mappings.%s missing after reopen", name)
+		}
 	}
 }

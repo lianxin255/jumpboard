@@ -108,18 +108,19 @@ type Draft struct {
 // address, or a directive. Everything except the explanation is run
 // through the app's sanitizers, and a field that fails is dropped rather
 // than passed on. A proxy mode the app does not know falls back to the
-// standard one, and a group the schema has no field for is ignored; both
-// are said so in the explanation, so what the form shows never quietly
-// differs from what the model said.
+// standard one, said so in the explanation, so what the form shows never
+// quietly differs from what the model said. The group is a free-text
+// label, so it is trimmed and kept the way the name is.
 func (d Draft) Mapping() (model.Mapping, string, error) {
 	proto := model.Protocol(strings.ToLower(strings.TrimSpace(d.Protocol)))
 	if !proto.Valid() {
 		return model.Mapping{}, "", fmt.Errorf("模型给出的协议 %q 不受支持", d.Protocol)
 	}
 	mode, modeNote := coerceProxyMode(d.ProxyMode)
-	explanation := joinNotes(d.Explanation, modeNote, dropGroup(d.Group))
+	explanation := joinNotes(d.Explanation, modeNote)
 	m := model.Mapping{
 		Name:            strings.TrimSpace(d.Name),
+		Group:           strings.TrimSpace(d.Group),
 		Protocol:        proto,
 		Enabled:         true,
 		ListenPort:      d.ListenPort,
@@ -308,16 +309,6 @@ func coerceProxyMode(s string) (model.ProxyMode, string) {
 		return mode, ""
 	}
 	return model.ProxyStandard, fmt.Sprintf("代理模式 %q 不受支持，已按 标准反代 处理", v)
-}
-
-// dropGroup explains that a group field was ignored: the app's schema has
-// no such grouping, so the value goes nowhere rather than into a field
-// that would silently drop it later.
-func dropGroup(group string) string {
-	if strings.TrimSpace(group) == "" {
-		return ""
-	}
-	return fmt.Sprintf("已忽略不支持的分组字段 %q", group)
 }
 
 // joinNotes appends the per-field notes to the model's explanation, so the
