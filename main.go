@@ -15,6 +15,7 @@ import (
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/native"
 	"github.com/lianxin255/jumpboard/internal/paths"
 	"github.com/lianxin255/jumpboard/internal/services"
 	njui "github.com/lianxin255/jumpboard/internal/ui"
@@ -24,6 +25,12 @@ import (
 //
 //go:embed internal/services/builtin/*.yml
 var builtin embed.FS
+
+// appIcon is the app's mark, for the tray on platforms without template
+// icons.
+//
+//go:embed resources/icon.png
+var appIcon []byte
 
 func main() {
 	// The toolkit's controls, menus and dialogs say their strings in the
@@ -51,6 +58,9 @@ func main() {
 	// The clipboard needs the running app, so it is wired here rather than
 	// inside the app's own code.
 	app.Clipboard = mygo.Clipboard.WriteText
+	// The desktop notifier too: it silently does nothing until the app is
+	// packaged, so the behaviour holds in development and in tests.
+	app.Notify = native.Notify
 	// The native file dialogs too.
 	app.SaveDialog = mygo.Dialog.Save
 	app.OpenDialog = mygo.Dialog.Open
@@ -93,13 +103,17 @@ func main() {
 		// window asks for a frame, and the frame reads the new state.
 		app.Check.Start()
 
+		// The tray, the close-to-tray behaviour and the global shortcut.
+		// Dock.Setup installs its own quit hooks; the engine shutdown
+		// below runs after them through the same OnBeforeQuit list.
+		native.Setup(app, win, appIcon)
+
 		// Quitting must not leave nginx behind: stop it before the
-		// process exits, and close the database after.
+		// process exits, and close the database after. Closing the window
+		// no longer quits — it hides into the tray — so the real quit
+		// paths are the tray's 退出 and Cmd+Q.
 		mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 			app.Close()
-		})
-		win.OnClosed(func() {
-			mygo.App.Quit()
 		})
 	})
 

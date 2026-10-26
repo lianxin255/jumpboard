@@ -1,0 +1,180 @@
+// Package native is the desktop integration: the tray icon, the
+// close-to-tray behaviour, the global shortcut and the desktop notifier.
+//
+// All of it needs the running mygo app, so it is wired from main.go's
+// WhenReady and never from a test: the app package holds the behaviour
+// behind hooks (App.Notify, App.OnChange) and this package only binds
+// those hooks to the desktop. A machine — or a CI run — that never calls
+// Setup simply has no tray, which is the graceful degradation.
+package native
+
+import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"log"
+	"runtime"
+
+	"github.com/egoist/mygo"
+
+	"github.com/lianxin255/jumpboard/internal/appt"
+)
+
+// toggleShortcut shows and hides the main window from anywhere. It is a
+// constant rather than a setting for now: one binding the user can rely
+// on beats a configurable one that collides with something else. mygo's
+// API takes any accelerator string, so making it a setting later is a
+// store key plus an Unregister/Register pair.
+const toggleShortcut = "CmdOrCtrl+Shift+J"
+
+// Notify posts a desktop notification.
+//
+// Notifications need a packaged app (mygo build): in development the
+// system has no bundle to attribute them to, and on macOS the user may
+// have denied them outright. Either way the app's own record — the toast,
+// the log — already holds the event, so the failure is logged and
+// swallowed rather than shown.
+func Notify(title, body string) {
+	if !mygo.NotificationsSupported() {
+		return
+	}
+	if err := mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body}).Show(); err != nil {
+		log.Printf("通知未送达（%v）：%s - %s", err, title, body)
+	}
+}
+
+// Dock is the tray integration once Setup has run.
+type Dock struct {
+	win      *mygo.Window
+	tray     *mygo.Tray
+	quitting bool
+}
+
+// Setup binds the app to the desktop: a tray icon, closing the window
+// into the tray instead of quitting, and a global show/hide shortcut. It
+// runs inside WhenReady, where the mygo app exists. appIcon is the app's
+// full-colour mark (resources/icon.png): the menu bar gets a black
+// template of its own, the taskbar gets the mark itself.
+//
+// The tray is the app's second surface: with the window closed, it can
+// still show the window, apply the rules, open settings and quit. If the
+// desktop refuses the tray — the platform has none, or the icon was
+// rejected — the window keeps its ordinary close-and-quit behaviour and
+// the shortcut keeps working, so the app degrades to what it was.
+func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
+	d := &Dock{win: win}
+
+	// macOS re-tints a template icon for its bar; everywhere else a black
+	// glyph would vanish on a dark taskbar, so the coloured mark goes
+	// as-is and the system scales it.
+	icon, template := trayIcon(), true
+	if runtime.GOOS != "darwin" && len(appIcon) > 0 {
+		icon, template = appIcon, false
+	}
+	if tray, err := mygo.NewTray(mygo.TrayOptions{
+		Icon:           icon,
+		IconIsTemplate: template,
+		ToolTip:        "JumpBoard",
+		Menu: mygo.NewMenu([]*mygo.MenuItem{
+			{Label: "显示主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { d.Show() }},
+			{Label: "隐藏主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { win.Hide() }},
+			mygo.Separator(),
+			{Label: "应用配置", Click: func(*mygo.MenuItem, *mygo.Window) {
+				// Apply binds ports; the menu must not wait for it.
+				a.RunBackground(a.Apply)
+			}},
+			{Label: "打开设置", Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.SetPage(appt.PageSettings)
+				d.Show()
+			}},
+			mygo.Separator(),
+			{Role: mygo.RoleQuit},
+		}),
+	}); err != nil {
+		log.Printf("托盘不可用：%v", err)
+	} else {
+		d.tray = tray
+	}
+
+	if err := mygo.GlobalShortcut.Register(toggleShortcut, func() { d.Toggle() }); err != nil {
+		// Most often the combination is taken; the tray still toggles the
+		// window, so this is a note rather than a failure.
+		log.Printf("全局快捷键 %s 注册失败：%v", toggleShortcut, err)
+	}
+
+	// Closing the window parks it in the tray: the rules keep forwarding
+	// and the tray menu brings it back. A real quit — the tray's 退出,
+	// Cmd+Q — sets the flag first so the close passes through.
+	win.OnClose(func(e *mygo.CloseEvent) {
+		if !d.quitting {
+			e.PreventDefault()
+			win.Hide()
+		}
+	})
+
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true })
+	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		// Give the shortcut back before the process goes; the tray dies
+		// with it either way, but a leaked hotkey would outlive the app
+		// in the system's table on some platforms.
+		mygo.GlobalShortcut.UnregisterAll()
+		if d.tray != nil {
+			d.tray.Destroy()
+		}
+	})
+	return d
+}
+
+// Show brings the window back. Setup only ever hides the window — the
+// tray parks it rather than destroying it — so a destroyed window here
+// means something outside this package closed it for good; there is
+// nothing to show and the call is a no-op.
+func (d *Dock) Show() {
+	if d.win.IsDestroyed() {
+		return
+	}
+	d.win.Show()
+	d.win.Focus()
+}
+
+// Toggle hides a visible window and shows a hidden one.
+func (d *Dock) Toggle() {
+	if d.win.IsDestroyed() {
+		return
+	}
+	if d.win.IsVisible() {
+		d.win.Hide()
+		return
+	}
+	d.Show()
+}
+
+// trayIcon draws the 32x32 template image the menu bar shows: the app
+// mark — two pads and the hop between them — in solid black, which macOS
+// re-tints for light and dark bars. A template icon over the full-colour
+// resources/icon.png, which was drawn for the Dock's size and would read
+// as a muddy 16-pixel blob up there.
+func trayIcon() []byte {
+	const size = 32
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	black := color.NRGBA{A: 255}
+	// Set with a rect helper so the pads read as rounded at this size.
+	fill := func(x0, y0, x1, y1 int) {
+		for y := y0; y <= y1; y++ {
+			for x := x0; x <= x1; x++ {
+				img.SetNRGBA(x, y, black)
+			}
+		}
+	}
+	// Left pad, right pad, and the hop: a shaft with a head, leaning up.
+	fill(3, 13, 8, 18)
+	fill(23, 13, 28, 18)
+	fill(10, 15, 18, 16)
+	for i := 0; i < 5; i++ {
+		fill(18+i, 13-i, 19+i, 14-i)
+	}
+	var b bytes.Buffer
+	_ = png.Encode(&b, img)
+	return b.Bytes()
+}
