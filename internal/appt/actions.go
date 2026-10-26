@@ -409,6 +409,10 @@ func (a *App) Apply() error {
 
 	spec, err := a.spec()
 	if err != nil {
+		// A rule set that cannot even be built — the whitelist refusing
+		// to run with no addresses — is as much a failed apply as an
+		// engine error, and just as invisible with the window closed.
+		a.notifyUser("JumpBoard", "应用规则失败："+truncateNotice(err.Error(), 120))
 		return err
 	}
 	res, err := a.Eng.Apply(spec)
@@ -418,6 +422,10 @@ func (a *App) Apply() error {
 		a.mu.Unlock()
 		a.Log.Error("应用规则失败: %v", err)
 		a.refreshEngine()
+		// The window may be closed in the tray when an apply fails — the
+		// tray menu can run one too — so the failure is a notification,
+		// not just a toast.
+		a.notifyUser("JumpBoard", "应用规则失败："+truncateNotice(err.Error(), 120))
 		return err
 	}
 
@@ -437,6 +445,10 @@ func (a *App) Apply() error {
 		a.setStatus("没有启用的映射，所有监听已关闭", false)
 	} else {
 		a.setStatus(fmt.Sprintf("已应用 %d 条映射", len(spec.Mappings)), false)
+		// Worth a notification only when something is listening: an empty
+		// rule set is a shutdown, and the tray menu's 应用配置 is the path
+		// that runs without the window.
+		a.notifyUser("JumpBoard", fmt.Sprintf("已应用 %d 条映射", len(spec.Mappings)))
 	}
 	a.Log.Info("规则已应用：%d 条映射", len(spec.Mappings))
 
@@ -452,6 +464,16 @@ func (a *App) Apply() error {
 	a.dirty = false
 	a.mu.Unlock()
 	return nil
+}
+
+// truncateNotice keeps a notification's body to one banner's worth: the
+// full error stays in the log and the window either way.
+func truncateNotice(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 // ApplyError returns why the last apply failed, for the detail line the

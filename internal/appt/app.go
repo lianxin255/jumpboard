@@ -15,6 +15,7 @@ package appt
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +81,11 @@ type App struct {
 	// treats a nil hook as a dialog the user canceled.
 	SaveDialog func(mygo.SaveDialogOptions) (string, error)
 	OpenDialog func(mygo.OpenDialogOptions) ([]string, error)
+	// Notify posts a desktop notification, for what is worth knowing
+	// while the window sits closed in the tray: a rule set that failed to
+	// apply, a service that stopped answering. main.go points it at the
+	// native notifier; a test leaves it nil and nothing is sent.
+	Notify func(title, body string)
 
 	mu sync.Mutex
 	// data below is read by the frame and written from goroutines.
@@ -177,8 +183,9 @@ func New(p paths.Paths) (*App, error) {
 	a.engine = string(a.Eng.Status())
 	a.mu.Unlock()
 
-	a.Check.OnResult = func(changed []model.Mapping) {
+	a.Check.OnResult = func(changed []services.HealthChange) {
 		_ = a.Reload()
+		a.notifyHealthChanges(changed)
 	}
 	_ = st.TrimLogs(10000)
 	return a, nil
@@ -253,6 +260,39 @@ func (a *App) notify() {
 	if a.OnChange != nil {
 		a.OnChange()
 	}
+}
+
+// notifyUser posts a desktop notification. The hook is nil in tests, and
+// the notifier itself stays silent on a desktop that has none, so this is
+// always safe to call.
+func (a *App) notifyUser(title, body string) {
+	if a.Notify != nil {
+		a.Notify(title, body)
+	}
+}
+
+// notifyHealthChanges tells the user about mappings that were healthy and
+// stopped answering — the one health transition that is news. A mapping
+// that was never checked turning unhealthy is the first look, not a
+// change, and recovery is visible in the table when the window opens.
+// One notification names them all: a switch that drops half the rules
+// should not fire half a dozen banners.
+func (a *App) notifyHealthChanges(changed []services.HealthChange) {
+	var down []string
+	for _, ch := range changed {
+		if ch.From == model.HealthHealthy && ch.To == model.HealthUnhealthy {
+			down = append(down, ch.Mapping.Name)
+		}
+	}
+	if len(down) == 0 {
+		return
+	}
+	a.Log.Warn("健康检查失败：%s", strings.Join(down, "、"))
+	if len(down) == 1 {
+		a.notifyUser("JumpBoard", fmt.Sprintf("「%s」健康检查失败，上游没有响应", down[0]))
+		return
+	}
+	a.notifyUser("JumpBoard", fmt.Sprintf("%d 条映射健康检查失败：%s", len(down), strings.Join(down, "、")))
 }
 
 // setStatus shows a toast.

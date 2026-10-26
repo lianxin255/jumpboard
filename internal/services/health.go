@@ -75,6 +75,15 @@ func CheckMapping(m model.Mapping) model.HealthStatus {
 		m.HealthCheckTargetPath, m.HealthCheckExpectedCode, m.Protocol == model.HTTPS)
 }
 
+// HealthChange is one mapping whose health status moved, with where it
+// came from: a rule that was fine and stopped answering is news, while
+// one that was never checked turning unhealthy is the first look.
+type HealthChange struct {
+	Mapping model.Mapping
+	From    model.HealthStatus
+	To      model.HealthStatus
+}
+
 // Checker runs the health checks on a timer and reports each result.
 type Checker struct {
 	store *store.Store
@@ -87,7 +96,7 @@ type Checker struct {
 	done chan struct{}
 	// OnResult is called from the loop's goroutine after each pass, with
 	// the mappings that changed status.
-	OnResult func(changed []model.Mapping)
+	OnResult func(changed []HealthChange)
 	// Interval is how often a pass runs; 30 seconds when zero.
 	Interval time.Duration
 }
@@ -98,7 +107,7 @@ func NewChecker(s *store.Store) *Checker {
 }
 
 // RunOnce checks every mapping that has checks turned on.
-func (c *Checker) RunOnce() []model.Mapping {
+func (c *Checker) RunOnce() []HealthChange {
 	mappings, err := c.store.ListEnabledMappings()
 	if err != nil {
 		return nil
@@ -106,7 +115,7 @@ func (c *Checker) RunOnce() []model.Mapping {
 	var (
 		wg      sync.WaitGroup
 		mu      sync.Mutex
-		changed []model.Mapping
+		changed []HealthChange
 	)
 	now := time.Now().UnixMilli()
 	for _, m := range mappings {
@@ -116,12 +125,13 @@ func (c *Checker) RunOnce() []model.Mapping {
 		wg.Add(1)
 		go func(m model.Mapping) {
 			defer wg.Done()
+			from := m.HealthStatus
 			status := CheckMapping(m)
 			_ = c.store.SetMappingHealth(m.ID, status, now)
-			if status != m.HealthStatus {
+			if status != from {
 				m.HealthStatus, m.LastCheckedAt = status, now
 				mu.Lock()
-				changed = append(changed, m)
+				changed = append(changed, HealthChange{Mapping: m, From: from, To: status})
 				mu.Unlock()
 			}
 		}(m)
