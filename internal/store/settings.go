@@ -18,6 +18,9 @@ const (
 	// interpretations use; "" means the main model. Mapping drafts always
 	// use the main model.
 	SettingAIDiagModel = "ai_diag_model"
+	// SettingHotkey is the global show/hide accelerator; "" means the
+	// default binding.
+	SettingHotkey = "hotkey"
 )
 
 // Setting returns a value, or def when it is unset.

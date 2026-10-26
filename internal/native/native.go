@@ -21,13 +21,6 @@ import (
 	"github.com/lianxin255/jumpboard/internal/appt"
 )
 
-// toggleShortcut shows and hides the main window from anywhere. It is a
-// constant rather than a setting for now: one binding the user can rely
-// on beats a configurable one that collides with something else. mygo's
-// API takes any accelerator string, so making it a setting later is a
-// store key plus an Unregister/Register pair.
-const toggleShortcut = "CmdOrCtrl+Shift+J"
-
 // Notify posts a desktop notification.
 //
 // Notifications need a packaged app (mygo build): in development the
@@ -124,11 +117,20 @@ func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
 		}
 	}
 
-	if err := mygo.GlobalShortcut.Register(toggleShortcut, func() { d.Toggle() }); err != nil {
+	// The global show/hide shortcut is a setting the settings card can
+	// change while the app runs; appt holds the stored value and this
+	// package holds the registration. Register the stored accelerator —
+	// appt.Hotkey defaults to the binding the app has always had — and
+	// hand the card the swap through appt.ApplyHotkey, so a change fails
+	// loudly in the card (the combination may be taken) without the app
+	// package importing this one.
+	acc := a.Hotkey()
+	if err := mygo.GlobalShortcut.Register(acc, func() { d.Toggle() }); err != nil {
 		// Most often the combination is taken; the tray still toggles the
 		// window, so this is a note rather than a failure.
-		log.Printf("全局快捷键 %s 注册失败：%v", toggleShortcut, err)
+		log.Printf("全局快捷键 %s 注册失败：%v", acc, err)
 	}
+	appt.ApplyHotkey = d.setHotkey
 
 	// Closing the window parks it in the tray: the rules keep forwarding
 	// and the tray menu brings it back. A real quit — the tray's 退出,
@@ -175,6 +177,25 @@ func (d *Dock) Toggle() {
 		return
 	}
 	d.Show()
+}
+
+// setHotkey rebinds the global show/hide shortcut, as the settings card
+// asks through appt.ApplyHotkey.
+//
+// The new binding is registered before the old one is given up, so a
+// refusal — the combination is taken, the string is not an accelerator —
+// leaves the working binding untouched and needs no rollback; the caller
+// (App.SetHotkey) reverts the stored setting on the error. Unregistering
+// first would leave a span with no binding at all, and a span where the
+// old one is gone but the new one never came. Unregister of an
+// accelerator that was never registered — the stored value was garbage
+// and Setup's Register failed — is a no-op, which is exactly right.
+func (d *Dock) setHotkey(oldAcc, newAcc string) error {
+	if err := mygo.GlobalShortcut.Register(newAcc, func() { d.Toggle() }); err != nil {
+		return err
+	}
+	mygo.GlobalShortcut.Unregister(oldAcc)
+	return nil
 }
 
 // trayIcon draws the 32x32 template image the menu bar shows: the app

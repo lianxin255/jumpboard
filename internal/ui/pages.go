@@ -280,6 +280,32 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 	})
 }
 
+// hotkeyDraft is what the shortcut card holds between frames: the
+// accelerator typed into its field, and why the last save was refused.
+type hotkeyDraft struct {
+	text string
+	err  string
+}
+
+// hotkeyCards holds every app's shortcut-card draft.
+//
+// The natural home is a View field, like v.whitelistIP, but the View
+// struct is declared in view.go and this slice leaves that file alone.
+// Keyed by the app, a fresh view — the tests build one per app — starts
+// from a clean card, exactly as a View field would. Frames run on one
+// thread, so the map needs no lock.
+var hotkeyCards = map[*appt.App]*hotkeyDraft{}
+
+// hotkeyCard returns the shortcut card's draft for the app.
+func hotkeyCard(a *appt.App) *hotkeyDraft {
+	d, ok := hotkeyCards[a]
+	if !ok {
+		d = &hotkeyDraft{}
+		hotkeyCards[a] = d
+	}
+	return d
+}
+
 // settingsPage holds the appearance, the access control and the data tools.
 func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	a := v.App
@@ -415,6 +441,39 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				})
 
 				v.card(c, t, "快捷键", func() {
+					// The global binding is a setting; the in-app
+					// shortcuts below it are not — they are wired in the
+					// view and stay as they are. The current accelerator
+					// is read from the store each frame: frames are drawn
+					// on demand, and the card must say what is stored, not
+					// what it remembers.
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
+							Border(1, t.Border).Children(func() {
+							ui.Text(c, a.Hotkey()).FontSize(11).Bold().TextColor(t.FG).Font("monospace")
+						})
+						ui.Text(c, "全局显示/隐藏主窗口").FontSize(12).TextColor(t.FG2)
+					})
+					// A typed accelerator, not a key recorder: the string
+					// is validated by trying to register it, which is what
+					// the save reports.
+					d := hotkeyCard(a)
+					ui.Row(c).Gap(6).Children(func() {
+						ui.TextInput(c, &d.text).Placeholder("CmdOrCtrl+Shift+Alt+K").Grow(1).
+							Label("新快捷键").
+							Tooltip("输入组合键文本（本版不录制按键）：修饰键写 CmdOrCtrl、Ctrl、Alt 或 Shift，用 + 连接，末尾是主键（字母、数字或 F1-F24 等功能键），例如 CmdOrCtrl+Shift+Alt+K。保存时尝试注册，组合被占用或格式不对会提示。")
+						if ui.Button(c, "保存快捷键").Clicked() {
+							if err := a.SetHotkey(d.text); err != nil {
+								d.err = err.Error()
+							} else {
+								d.text, d.err = "", ""
+							}
+						}
+					})
+					if d.err != "" {
+						ui.Text(c, d.err).FontSize(11).TextColor(t.Danger).Wrap()
+					}
+					ui.Divider(c)
 					rows := [][2]string{
 						{"⌘N", "新建映射"},
 						{"⌘F", "聚焦搜索"},
