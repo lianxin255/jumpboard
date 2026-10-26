@@ -62,7 +62,7 @@ func (a *App) DiagnoseFailure(kind string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	adv, err := a.aiClient().Diagnose(ctx, in)
+	adv, err := a.diagClient().Diagnose(ctx, in)
 
 	a.mu.Lock()
 	a.diagBusy = false

@@ -1,41 +1,39 @@
 package ui
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
 
-	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/appt"
 )
-
-// markdownState is the renderer's cache, kept across frames.
-type markdownState = markdown.Options
 
 // aiState is the AI panel's own state.
 //
 // open and prompt are the main thread's: only a frame or an action a frame
-// ran touches them. busy, err, reply and draft are written by the request
+// ran touches them. busy, err, note and drafts are written by the request
 // goroutine and read by every frame, so they live behind mu, and the frame
 // takes one snapshot instead of holding the lock while it draws.
 type aiState struct {
 	open   bool
 	prompt string
 
-	mu    sync.Mutex
+	mu sync.Mutex
 	busy  bool
 	err   string
-	reply string
-	// draft is the mapping the model proposed, waiting for the user.
-	draft *model.Mapping
+	// note says what was dropped or capped, in plain text.
+	note string
+	// drafts are the mappings the model proposed, waiting for the user.
+	drafts []appt.AIDraft
 }
 
 // snapshot reads what the goroutine may have changed.
-func (s *aiState) snapshot() (busy bool, errMsg, reply string, draft *model.Mapping) {
+func (s *aiState) snapshot() (busy bool, errMsg, note string, drafts []appt.AIDraft) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.busy, s.err, s.reply, s.draft
+	return s.busy, s.err, s.note, s.drafts
 }
 
 // aiDialog draws the AI panel when it is open.
@@ -43,8 +41,7 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 	if !v.ai.open {
 		return
 	}
-	a := v.App
-	busy, errMsg, reply, draft := v.ai.snapshot()
+	busy, errMsg, note, drafts := v.ai.snapshot()
 	open := true
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(620).Gap(12).Padding(20).Radius(RadiusModal).
@@ -58,7 +55,7 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 
 			ui.Row(c).Gap(8).Children(func() {
 				if ui.TextInput(c, &v.ai.prompt).
-					Placeholder("把内网 MySQL 192.168.1.10:3306 暴露到 9000").
+					Placeholder("把内网 MySQL 和 Redis 分别暴露到 9000/9001").
 					Grow(1).Label("描述").Submitted() {
 					v.runAI()
 				}
@@ -87,34 +84,18 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 			if errMsg != "" {
 				ui.Text(c, errMsg).FontSize(12).TextColor(t.Danger)
 			}
-			if reply != "" {
-				ui.Scroll(c).Children(func() {
-					markdown.View(c, reply, &v.md)
-				}).MaxHeight(200)
+			if note != "" {
+				ui.Text(c, note).FontSize(11).TextColor(t.Muted).Wrap()
 			}
-			if d := draft; d != nil {
-				ui.Column(c).Gap(6).Padding(10).Radius(RadiusChip).
-					Background(t.Surface3).Border(1, t.Border).Children(func() {
-					ui.Text(c, "草稿").FontSize(11).Bold().TextColor(t.Muted)
-					ui.Textf(c, "%s · %s · 监听 %d → %s:%d",
-						d.Name, d.Protocol.Label(), d.ListenPort, d.UpstreamHost, d.UpstreamPort).
-						FontSize(12).TextColor(t.FG)
-					if d.ExtraDirectives != "" {
-						ui.Text(c, d.ExtraDirectives).Font("monospace").FontSize(11).TextColor(t.Muted)
-					}
-				})
+			if len(drafts) > 0 {
+				ui.Textf(c, "草稿（%d 条）", len(drafts)).FontSize(11).Bold().TextColor(t.Muted)
+				for i, d := range drafts {
+					v.draftCard(c, t, i, d)
+				}
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if ui.Button(c, "关闭").Clicked() {
 					v.ai.open = false
-				}
-				if draft != nil {
-					if ui.Button(c, "在表单里改").Clicked() || ui.PrimaryButton(c, "采用草稿").Clicked() {
-						m := *draft
-						v.ai.open = false
-						a.OpenNewFormFrom(m)
-						a.Info("草稿已填入表单，确认后保存")
-					}
 				}
 			})
 		})
@@ -124,7 +105,60 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 	}
 }
 
-// runAI asks the model for a draft from the user's sentence.
+// draftCard draws one proposed mapping with its two actions. 采用 takes
+// the card out of the list and opens the ordinary form prefilled — saving
+// still goes through the validation a hand-typed mapping takes — and
+// 丢弃 removes just this card, leaving the others for their own decision.
+func (v *View) draftCard(c *ui.Context, t Tokens, i int, d appt.AIDraft) {
+	a := v.App
+	m := d.Mapping
+	listen := "待定"
+	if m.ListenPort != 0 {
+		listen = strconv.Itoa(m.ListenPort)
+	}
+	ui.Column(c).Gap(6).Padding(10).Radius(RadiusChip).
+		Background(t.Surface3).Border(1, t.Border).Children(func() {
+		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
+			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
+			FontSize(12).TextColor(t.FG)
+		if d.Explanation != "" {
+			ui.Text(c, d.Explanation).FontSize(11).TextColor(t.Muted).Wrap()
+		}
+		if m.ExtraDirectives != "" {
+			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(11).TextColor(t.Muted)
+		}
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "丢弃").Clicked() {
+				v.dropDraft(i)
+			}
+			if ui.PrimaryButton(c, "采用").Clicked() {
+				v.dropDraft(i)
+				v.ai.open = false
+				a.OpenNewFormFrom(m)
+				a.Info("草稿已填入表单，确认后保存")
+			}
+		})
+	})
+}
+
+// dropDraft removes one card's draft; the rest stay until the user
+// decides about them too. The slice is rebuilt rather than shifted in
+// place — the frame holds a snapshot that shares the backing array, and a
+// shift would redraw its tail as duplicates for one frame. An index the
+// list has outgrown is a no-op: another click may have already removed it.
+func (v *View) dropDraft(i int) {
+	v.ai.mu.Lock()
+	if i >= 0 && i < len(v.ai.drafts) {
+		next := make([]appt.AIDraft, 0, len(v.ai.drafts)-1)
+		next = append(next, v.ai.drafts[:i]...)
+		next = append(next, v.ai.drafts[i+1:]...)
+		v.ai.drafts = next
+	}
+	v.ai.mu.Unlock()
+	v.App.Change()
+}
+
+// runAI asks the model for drafts from the user's sentence.
 func (v *View) runAI() {
 	busy, _, _, _ := v.ai.snapshot()
 	if v.ai.prompt == "" || busy {
@@ -132,19 +166,19 @@ func (v *View) runAI() {
 	}
 	a := v.App
 	v.ai.mu.Lock()
-	v.ai.busy, v.ai.err, v.ai.reply, v.ai.draft = true, "", "", nil
+	v.ai.busy, v.ai.err, v.ai.note, v.ai.drafts = true, "", "", nil
 	v.ai.mu.Unlock()
 	prompt := v.ai.prompt
 
 	go func() {
-		reply, draft, err := a.AskAI(prompt)
+		note, drafts, err := a.AskAIMulti(prompt)
 		v.ai.mu.Lock()
 		v.ai.busy = false
-		v.ai.reply = reply
+		v.ai.note = note
 		if err != nil {
 			v.ai.err = err.Error()
 		} else {
-			v.ai.draft = draft
+			v.ai.drafts = drafts
 		}
 		v.ai.mu.Unlock()
 		a.Change()
@@ -156,7 +190,7 @@ func (v *View) aiEntry(c *ui.Context, t Tokens) {
 	if !v.App.AIReady() {
 		return
 	}
-	if ui.Button(c, "✨ AI 建映射").Tooltip("用一句话描述，由模型生成草稿").Clicked() {
+	if ui.Button(c, "✨ AI 建映射").Tooltip("用一句话描述，可一次生成多条草稿").Clicked() {
 		v.ai.open = true
 	}
 }

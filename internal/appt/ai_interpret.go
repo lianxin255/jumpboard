@@ -144,7 +144,7 @@ func (a *App) interpret(kind, name, content, source string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	out, err := a.aiClient().Interpret(ctx, in)
+	out, err := a.diagClient().Interpret(ctx, in)
 
 	a.mu.Lock()
 	a.interpretBusy = false

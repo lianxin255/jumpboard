@@ -47,7 +47,6 @@ type View struct {
 	nameLoaded    bool
 
 	ai aiState
-	md markdownState
 
 	// Last status shown as a toast, so that it is not added every frame.
 	shownStatusAt   time.Time
@@ -63,9 +62,12 @@ type View struct {
 	aiSettingsLoaded bool
 	aiBaseURL        string
 	aiModel          string
-	aiKey            string
-	aiKeySet         bool
-	aiMu             sync.Mutex
+	// aiDiagModel is the optional 诊断/解读模型 field; empty means the
+	// main model, which is what its placeholder says.
+	aiDiagModel string
+	aiKey       string
+	aiKeySet    bool
+	aiMu        sync.Mutex
 	aiModels         []string
 	aiFetching       bool
 	aiListErr        string

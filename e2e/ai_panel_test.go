@@ -21,14 +21,23 @@ func TestAIPanelWalkthrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	// The card explains what each kind of model is for, and offers the
+	// optional diagnosis model beside the main one.
+	if !tt.HasText("fast 类模型") {
+		t.Errorf("the model advice line is missing: %v", tt.Texts())
+	}
 	fillField(t, tt, "接口地址", srv.URL)
 	fillField(t, tt, "模型", "test-model")
+	fillField(t, tt, "诊断/解读模型", "diag-model")
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if !a.AIReady() {
 		t.Fatal("the AI should be ready after the card is saved")
+	}
+	if a.AIDiagModel() != "diag-model" {
+		t.Fatalf("the diagnosis model should round-trip, got %q", a.AIDiagModel())
 	}
 
 	// Back on the mappings page, the entry appears and opens the panel.
@@ -48,13 +57,15 @@ func TestAIPanelWalkthrough(t *testing.T) {
 	if err := tt.Click("生成"); err != nil {
 		t.Fatal(err)
 	}
+	// The fake answers the single-draft shape; the panel takes it as a
+	// list of one.
 	waitFor(t, tt, "the draft card", func() bool {
-		return tt.HasText("草稿") && tt.HasText("面板里的 MySQL")
+		return tt.HasText("草稿（1 条）") && tt.HasText("面板里的 MySQL")
 	})
 
 	// Adopting the draft fills the ordinary form, and saving goes through
 	// the same validation as a typed mapping.
-	if err := tt.Click("采用草稿"); err != nil {
+	if err := tt.Click("采用"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -93,7 +104,7 @@ func TestAIPanelShowsAnError(t *testing.T) {
 	}
 	waitFor(t, tt, "the error text", func() bool { return tt.HasText("JSON") })
 	// The adopt button only renders when a draft came back.
-	if tt.HasText("采用草稿") {
+	if tt.HasText("采用") {
 		t.Errorf("no draft card should show: %v", tt.Texts())
 	}
 	if list, _ := a.Store.ListMappings(); len(list) != 0 {

@@ -459,6 +459,21 @@ func (c *Client) postChat(ctx context.Context, system, user string) (string, err
 	return extractJSON(r.Choices[0].Message.Content), nil
 }
 
+// ForModel returns a client that names another model: a shallow copy
+// sharing the endpoint, the key, the timeout and the redirect guard, so
+// a per-purpose model costs nothing but the name on the wire. An empty
+// name — or the client's own — is the client itself, which is how a
+// settings field left blank means "same model".
+func (c *Client) ForModel(m string) *Client {
+	m = strings.TrimSpace(m)
+	if m == "" || m == c.settings.Model {
+		return c
+	}
+	twin := *c
+	twin.settings.Model = m
+	return &twin
+}
+
 // Draft asks the model for a mapping from a sentence.
 func (c *Client) Draft(ctx context.Context, sentence string) (Draft, error) {
 	content, err := c.postChat(ctx, systemPrompt, sentence)
@@ -472,8 +487,126 @@ func (c *Client) Draft(ctx context.Context, sentence string) (Draft, error) {
 	return d, nil
 }
 
-// extractJSON pulls the object out of a reply that may still wrap it in a
-// code fence, which some gateways do despite the format request.
+// maxDrafts caps how many drafts one sentence may become. Five rules to
+// review from one sentence is already a lot; more than that is noise.
+const maxDrafts = 5
+
+// multiDraftPrompt asks for several drafts at once. The field rules are
+// the single draft's, plus the one that keeps a sentence naming two
+// services from becoming ten drafts.
+func multiDraftPrompt(n int) string {
+	return fmt.Sprintf(`You turn one Chinese or English sentence into several nginx forwarding rules.
+
+The app forwards a port on this machine to a service on the internal
+network. Input may be Chinese ("把内网 MySQL 和 Redis 分别暴露到 9000/9001") or English.
+
+Rules:
+- One draft per distinct service the sentence names. Do not split one
+  service into several drafts, and do not add a service it did not name.
+- At most %d drafts, ordered the way the sentence names them.
+- protocol is "tcp" for databases, SSH, RDP and raw ports, "udp" for DNS and
+  other datagram protocols, "http" or "https" only for web services.
+- listenPort is the port on THIS machine; upstreamPort is the service's.
+  If the user does not say a listen port, choose a sensible one above 8000.
+- Never invent an IP address the user did not give. If the upstream is
+  missing, use "" and say so in that draft's explanation.
+- extraDirectives: only plain directives such as "proxy_timeout 1h;".
+  Never write a server block, a brace, or anything that could contain one.
+- Each draft's explanation says, in Chinese, what you understood and what
+  is missing.
+
+Reply with the JSON object only, exactly this shape:
+{"drafts":[{"name":"内网 MySQL","protocol":"tcp","listenPort":9000,"serverNames":"","listenPath":"/","upstreamHost":"192.168.1.10","upstreamPort":3306,"proxyMode":"standard","extraDirectives":"","explanation":"把内网 MySQL 暴露到 9000"}]}`, n)
+}
+
+// DraftMulti asks the model for several drafts from one sentence — at
+// most n, and never more than maxDrafts. A reply with more is cut after
+// the first n, which the prompt asks to be the ones the sentence named
+// first. Every draft is as untrusted as a single one: the caller runs it
+// through Draft.Mapping's sanitizers before the user ever sees a form.
+func (c *Client) DraftMulti(ctx context.Context, sentence string, n int) ([]Draft, error) {
+	if n <= 0 || n > maxDrafts {
+		n = maxDrafts
+	}
+	content, err := c.postChat(ctx, multiDraftPrompt(n), sentence)
+	if err != nil {
+		return nil, err
+	}
+	drafts, err := parseDrafts(content)
+	if err != nil {
+		return nil, err
+	}
+	if len(drafts) > n {
+		drafts = drafts[:n]
+	}
+	return drafts, nil
+}
+
+// draftsAliases lists the names a model gives the array the multi-draft
+// prompt asks for. The prompt says "drafts"; the first alias holding a
+// usable array wins, the way a draft's own fields fall through theirs.
+var draftsAliases = []string{"drafts", "draft", "mappings", "rules"}
+
+// parseDrafts reads the multi-draft reply in whichever shape it arrived:
+// the asked-for {"drafts":[...]}, a bare array, or — a model that
+// answered the single-draft shape — one bare draft object, accepted as a
+// list of one rather than reported as a broken reply. An item that is
+// not an object, or an object none of whose fields survived, is dropped;
+// an empty result is an error the caller shows.
+func parseDrafts(content string) ([]Draft, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(content), &fields); err == nil {
+		for _, a := range draftsAliases {
+			if raw, ok := fields[a]; ok {
+				if list := decodeDraftList(raw); len(list) > 0 {
+					return list, nil
+				}
+			}
+		}
+		if d := decodeDraft([]byte(content)); d != nil {
+			return []Draft{*d}, nil
+		}
+		return nil, errors.New("模型没有返回任何可用的草稿")
+	}
+	if list := decodeDraftList([]byte(content)); len(list) > 0 {
+		return list, nil
+	}
+	return nil, fmt.Errorf("模型返回的不是预期的 JSON")
+}
+
+// decodeDraftList reads the reply's array: each item is decoded as
+// leniently as a single draft, and one broken item drops alone instead of
+// voiding its neighbors.
+func decodeDraftList(raw []byte) []Draft {
+	var items []json.RawMessage
+	if json.Unmarshal(raw, &items) != nil {
+		return nil
+	}
+	var out []Draft
+	for _, item := range items {
+		if d := decodeDraft(item); d != nil {
+			out = append(out, *d)
+		}
+	}
+	return out
+}
+
+// decodeDraft reads one item, nil when it is not an object at all or
+// holds no field that survived decoding.
+func decodeDraft(raw []byte) *Draft {
+	var d Draft
+	if json.Unmarshal(raw, &d) != nil {
+		return nil
+	}
+	if d == (Draft{}) {
+		return nil
+	}
+	return &d
+}
+
+// extractJSON pulls the object — or, for the multi-draft reply, the
+// array — out of a reply that may still wrap it in a code fence, which
+// some gateways do despite the format request.
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "```") {
@@ -484,6 +617,13 @@ func extractJSON(s string) string {
 			s = s[:i]
 		}
 		s = strings.TrimSpace(s)
+	}
+	// The reply's first and last meaningful characters name its shape:
+	// the object {...}, or the multi-draft array [...]. A reply that
+	// opens with a bracket but does not close with one — a "[1]" citation
+	// in front of the object — belongs to the object branch below.
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		return s
 	}
 	if i, j := strings.Index(s, "{"), strings.LastIndex(s, "}"); i >= 0 && j > i {
 		return s[i : j+1]

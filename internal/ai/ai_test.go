@@ -132,6 +132,14 @@ func TestExtractJSON(t *testing.T) {
 		{`{"a":1}`, `{"a":1}`},
 		{"```json\n{\"a\":1}\n```", `{"a":1}`},
 		{"here it is: {\"a\":1} thanks", `{"a":1}`},
+		// The multi-draft shape: a bare array stays whole instead of being
+		// cut down to its first object.
+		{`[{"a":1},{"b":2}]`, `[{"a":1},{"b":2}]`},
+		{"```json\n[{\"a\":1}]\n```", `[{"a":1}]`},
+		// But a bracket inside an object reply's prose is not the reply:
+		// the object branch still wins, at position 0 or later.
+		{"诊断[1] 如下：{\"a\":1}", `{"a":1}`},
+		{"[1] 根据要求：{\"a\":1}", `{"a":1}`},
 	} {
 		if got := extractJSON(c.in); got != c.want {
 			t.Errorf("extractJSON(%q) = %q, want %q", c.in, got, c.want)
