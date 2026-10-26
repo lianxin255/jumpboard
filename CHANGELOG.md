@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — 本批（P1+P2）
+
+- **流量计数**：映射表每条规则显示累计 ↓/↑ 字节数（TCP/UDP/HTTP 三路，按规则归集）
+- **吞吐曲线**：规则详情弹层显示近 60 秒的吞吐折线与当前速率
+- **分组**：映射可归入一个短标签；表格 chip、分组过滤、表单输入与建议
+- **快照 diff**：快照弹层改为与当前配置的统一 diff 视图（+N/−N 摘要），弹层内回滚需确认
+- **发布流水线**：`v*` tag 自动构建 macOS/Windows 产物并挂到 draft release（未签名，见 `docs/release-and-updates.md`）
+
+### Fixed — 本批
+
+- 回滚不再清空全部快照历史；回滚前先把当前配置存为一条 `rollback` 快照，二次回滚可撤销第一次
+
+## [1.2.0] — 2026-10-26
+
+（以下为 1.0.0 之后、mygo 原生化重构的内容，随 1.2.0 号码入库）
+
 ### Removed — Electron / Node 壳
 
 主产品是 Go + mygo。Electron 桌面壳、`packages/server`、`packages/shared`、根 `package.json`、pnpm 工作区以及对应的 CI（`unit-test.yml`、`autofix.yml`）已从仓库删除，构建只走 `go tool mygo` / `go run .`。旧版说明留在 `docs/README-electron-legacy.md`，索引见 `legacy/README.md`。
