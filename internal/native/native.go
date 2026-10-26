@@ -44,10 +44,13 @@ func Notify(title, body string) {
 	}
 }
 
-// Dock is the tray integration once Setup has run.
+// Dock is the tray integration once Setup has run: the tray with its
+// menu, the flyout panel a left click opens, and the window they steer.
 type Dock struct {
+	app      *appt.App
 	win      *mygo.Window
 	tray     *mygo.Tray
+	panel    *mygo.Window // the open flyout, or nil
 	quitting bool
 }
 
@@ -63,7 +66,7 @@ type Dock struct {
 // rejected — the window keeps its ordinary close-and-quit behaviour and
 // the shortcut keeps working, so the app degrades to what it was.
 func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
-	d := &Dock{win: win}
+	d := &Dock{app: a, win: win}
 
 	// macOS re-tints a template icon for its bar; everywhere else a black
 	// glyph would vanish on a dark taskbar, so the coloured mark goes
@@ -72,29 +75,53 @@ func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
 	if runtime.GOOS != "darwin" && len(appIcon) > 0 {
 		icon, template = appIcon, false
 	}
+	// The menu is the fallback surface: quick, native, and the only one
+	// Linux has. Its first item opens the panel everywhere, so the
+	// browsing surface is reachable from the keyboard and from a tray
+	// that reports no clicks.
+	menu := mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "打开面板", Click: func(*mygo.MenuItem, *mygo.Window) { d.toggleFlyout() }},
+		{Label: "显示主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { d.Show() }},
+		{Label: "隐藏主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { win.Hide() }},
+		mygo.Separator(),
+		{Label: "应用配置", Click: func(*mygo.MenuItem, *mygo.Window) {
+			// Apply binds ports; the menu must not wait for it.
+			a.RunBackground(a.Apply)
+		}},
+		{Label: "打开设置", Click: func(*mygo.MenuItem, *mygo.Window) {
+			a.SetPage(appt.PageSettings)
+			d.Show()
+		}},
+		mygo.Separator(),
+		{Role: mygo.RoleQuit},
+	})
 	if tray, err := mygo.NewTray(mygo.TrayOptions{
 		Icon:           icon,
 		IconIsTemplate: template,
 		ToolTip:        "JumpBoard",
-		Menu: mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "显示主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { d.Show() }},
-			{Label: "隐藏主窗口", Click: func(*mygo.MenuItem, *mygo.Window) { win.Hide() }},
-			mygo.Separator(),
-			{Label: "应用配置", Click: func(*mygo.MenuItem, *mygo.Window) {
-				// Apply binds ports; the menu must not wait for it.
-				a.RunBackground(a.Apply)
-			}},
-			{Label: "打开设置", Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.SetPage(appt.PageSettings)
-				d.Show()
-			}},
-			mygo.Separator(),
-			{Role: mygo.RoleQuit},
-		}),
 	}); err != nil {
 		log.Printf("托盘不可用：%v", err)
 	} else {
 		d.tray = tray
+		// Left click browses — the panel holds the state and the recent
+		// rules — and right click opens the menu, where quitting lives.
+		// AppIndicator-based Linux trays tell nothing of clicks, so there
+		// the menu is permanent instead.
+		if runtime.GOOS == "linux" {
+			tray.SetMenu(menu)
+		} else {
+			tray.OnClick(d.toggleFlyout)
+			tray.OnRightClick(func() {
+				if d.panel != nil {
+					d.panel.Close()
+				}
+				// The menu for this popup only, so clicks keep toggling
+				// the panel.
+				tray.SetMenu(menu)
+				defer tray.SetMenu(nil)
+				tray.PopUpMenu()
+			})
+		}
 	}
 
 	if err := mygo.GlobalShortcut.Register(toggleShortcut, func() { d.Toggle() }); err != nil {
