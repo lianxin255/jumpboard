@@ -106,7 +106,12 @@ func main() {
 		// The tray, the close-to-tray behaviour and the global shortcut.
 		// Dock.Setup installs its own quit hooks; the engine shutdown
 		// below runs after them through the same OnBeforeQuit list.
-		native.Setup(app, win, appIcon)
+		dock := native.Setup(app, win, appIcon)
+
+		// The menu bar the dock's window owns: Chinese labels where the
+		// app writes its own items, the system's own menus where macOS
+		// needs them untouched.
+		native.SetupAppMenu(dock)
 
 		// Quitting must not leave nginx behind: stop it before the
 		// process exits, and close the database after. Closing the window
