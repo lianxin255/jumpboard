@@ -134,6 +134,7 @@ func (a *App) interpret(kind, name, content, source string) error {
 		return fmt.Errorf("解读还在进行中")
 	}
 	a.interpretBusy, a.interpretErr, a.interpretation = true, "", nil
+	a.interpretStreaming = false
 	a.interpretTarget, a.interpretSource = name, source
 	a.mu.Unlock()
 
@@ -142,17 +143,41 @@ func (a *App) interpret(kind, name, content, source string) error {
 		in.ConfSummary, in.Notes = confSummaryOf(content)
 	}
 
+	// The card shows the reply as it arrives: each fragment extends the
+	// text the card reads, under the same lock that guards the state.
+	// Fragments that reached the card before a mid-stream failure stay —
+	// the error lands beside the partial text, not over it.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	out, err := a.diagClient().Interpret(ctx, in)
+	out, err := a.diagClient().Interpret(ctx, in, func(frag string) {
+		a.mu.Lock()
+		a.interpretStreaming = true
+		if a.interpretation == nil {
+			a.interpretation = &ai.Interpretation{Text: frag}
+		} else {
+			a.interpretation.Text += frag
+		}
+		// Fragments are the card's content already: the busy state ends
+		// with the first one, so the card reads text, not a spinner.
+		a.interpretBusy = false
+		a.mu.Unlock()
+		a.notify()
+	})
 
 	a.mu.Lock()
-	a.interpretBusy = false
+	a.interpretBusy, a.interpretStreaming = false, false
 	a.interpretTarget, a.interpretSource = name, source
 	if err != nil {
-		a.interpretErr, a.interpretation = err.Error(), nil
+		a.interpretErr = err.Error()
+		if out.Text == "" {
+			a.interpretation = nil
+		}
 	} else {
-		a.interpretErr, a.interpretation = "", &out
+		a.interpretErr = ""
+		// The streamed text built the card; the finished interpretation
+		// replaces it, so the card reads the final document and not a
+		// half-written one.
+		a.interpretation = &out
 	}
 	a.mu.Unlock()
 	if err != nil {
@@ -242,4 +267,13 @@ func (a *App) setConfImport(imp ConfImport) {
 	a.confImport = &imp
 	a.mu.Unlock()
 	a.notify()
+}
+
+// InterpretStreaming reports whether fragments of the current
+// interpretation are arriving right now: the card streams its render while
+// they are, and lays the finished document out once they stop.
+func (a *App) InterpretStreaming() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.interpretStreaming && a.interpretBusy
 }

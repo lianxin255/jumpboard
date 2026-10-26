@@ -312,6 +312,28 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
 		})
 	}
+	if a.ConfChanged() {
+		v.confChangedBar(c, t, busy)
+	}
+}
+
+// confChangedBar reports that the exported configuration was edited outside
+// the app. It offers to merge the file in — the same path a dropped .conf
+// takes — or to leave it alone. It never reloads on its own: the file and
+// the rules disagree, and the person decides which one is right.
+func (v *View) confChangedBar(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Padding(8, 12).
+		Radius(RadiusChip).
+		Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
+		ui.Text(c, "配置文件被外部修改").FontSize(12).TextColor(t.Warning).Grow(1)
+		if ui.Button(c, "导入合并").FontSize(11).Disabled(busy).Clicked() {
+			a.RunBackground(a.ImportChangedConf)
+		}
+		if ui.Button(c, "忽略").FontSize(11).Clicked() {
+			a.DismissConfChange()
+		}
+	})
 }
 
 // pendingBar is the amber strip for a configuration that has not been

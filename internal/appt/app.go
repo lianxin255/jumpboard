@@ -135,11 +135,12 @@ type App struct {
 	// interpretTarget names the file, interpretSource says which entry
 	// asked ("import", "logs" or "panel"), so the card draws where the
 	// question came from.
-	interpretBusy   bool
-	interpretErr    string
-	interpretation  *ai.Interpretation
-	interpretTarget string
-	interpretSource string
+	interpretBusy      bool
+	interpretStreaming bool
+	interpretErr       string
+	interpretation     *ai.Interpretation
+	interpretTarget    string
+	interpretSource    string
 	// confImport remembers the last dropped .conf that merged in, so the
 	// mappings page can offer to interpret it after the import.
 	confImport *ConfImport

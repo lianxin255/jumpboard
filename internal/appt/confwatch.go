@@ -1,6 +1,7 @@
 package appt
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -138,6 +139,21 @@ func (w *confWatch) Stop() {
 	}
 }
 
+// PollConfForTest looks at the file once, the way the poll loop does, for
+// the tests. The loop's own two-second tick is too slow for one.
+func (a *App) PollConfForTest() {
+	if a.conf == nil {
+		return
+	}
+	fi, err := os.Stat(a.conf.path)
+	if err != nil {
+		return
+	}
+	if a.conf.record(fi, time.Now()) {
+		a.notify()
+	}
+}
+
 // ConfChanged reports whether the exported configuration was edited
 // outside the app and nobody has answered it yet.
 func (a *App) ConfChanged() bool {
@@ -145,6 +161,18 @@ func (a *App) ConfChanged() bool {
 		return false
 	}
 	return a.conf.pending()
+}
+
+// ImportChangedConf merges the externally edited configuration in as new
+// mappings, the way a dropped .conf does, and marks the change answered.
+func (a *App) ImportChangedConf() error {
+	defer a.DismissConfChange()
+	data, err := os.ReadFile(filepath.Join(a.Paths.ExportDir, "nginx.conf"))
+	if err != nil {
+		return fmt.Errorf("读取被修改的配置失败：%v", err)
+	}
+	_, err = a.ImportNginxConf(data)
+	return err
 }
 
 // DismissConfChange marks the external edit answered without importing it.
