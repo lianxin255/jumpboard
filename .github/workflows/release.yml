@@ -61,10 +61,19 @@ jobs:
           fi
       - name: Build
         run: go tool mygo build -platform ${{ matrix.platform }}
-      - name: Checksums
+      # A release asset is a file; the macOS bundle is a directory. ditto
+      # zips it the way macOS unpacks bundles (resource forks, symlinks and
+      # the ad hoc signature intact), and the directory itself leaves the
+      # build folder so the upload below never meets it.
+      - name: Bundle and checksums
         shell: bash
         run: |
           cd "${{ matrix.dir }}"
+          if ls -d *.app >/dev/null 2>&1; then
+            app=$(ls -d *.app | head -1)
+            ditto -c -k --keepParent "$app" "${app%.app}-macos.zip"
+            rm -rf "$app"
+          fi
           if command -v shasum >/dev/null; then
             shasum -a 256 * > SHA256SUMS
           else
