@@ -49,7 +49,7 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 | 平台 | 文件 |
 |---|---|
 | macOS | `JumpBoard.app`、`JumpBoard 1.2.0.dmg` |
-| Windows | `JumpBoard.exe`、`nginx/`、`icon.png` |
+| Windows | `JumpBoard.exe`、`icon.png`、`icon.svg` |
 
 ## 数据在哪
 
@@ -59,7 +59,7 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 |---|---|
 | Windows 绿色版 | `<exe 目录>/data` |
 | macOS | `<JumpBoard.app 的父目录>/data`（不写进 .app，升级不丢） |
-| 开发 / 测试 | 工作目录下的 `data`，或 `NGJ_DATA_ROOT` |
+| 开发 / 测试 | 工作目录下的 `data`；设了 `JUMPBOARD_DATA_ROOT` 则用它（`NGJ_DATA_ROOT` 仅兼容旧脚本） |
 
 如果程序目录不可写（例如装在 `/Applications` 且当前用户不是管理员），会自动回落到用户目录，并在设置页显示实际位置。
 
