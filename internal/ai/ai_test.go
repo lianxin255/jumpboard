@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/lianxin255/jumpboard/internal/model"
 )
 
 // fakeLLM answers like an OpenAI compatible endpoint, without a network.
@@ -211,4 +213,174 @@ func TestModelsReportsErrors(t *testing.T) {
 			t.Fatal("a body that is not JSON should be an error")
 		}
 	})
+}
+
+// TestNormalizeBase pins the one place every request URL is built from:
+// with or without /v1, trailing slashes, case, or a pasted /v1/v1, the
+// same root comes out and "/v1/..." is appended exactly once.
+func TestNormalizeBase(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"http://127.0.0.1:3425", "http://127.0.0.1:3425"},
+		{"http://127.0.0.1:3425/", "http://127.0.0.1:3425"},
+		{"http://127.0.0.1:3425/v1", "http://127.0.0.1:3425"},
+		{"http://127.0.0.1:3425/v1/", "http://127.0.0.1:3425"},
+		{"http://127.0.0.1:3425/V1", "http://127.0.0.1:3425"},
+		{"http://127.0.0.1:3425/v1/v1", "http://127.0.0.1:3425"},
+		{"https://api.example.com/api/v1/", "https://api.example.com/api"},
+		{"  http://127.0.0.1:3425/v1  ", "http://127.0.0.1:3425"},
+		{"http://host/v10", "http://host/v10"},
+		{"", ""},
+		{"/v1", ""},
+	} {
+		if got := normalizeBase(tc.in); got != tc.want {
+			t.Errorf("normalizeBase(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestDraftAcceptsBothBaseForms walks the bug itself: a base typed with a
+// trailing /v1 used to make Draft post to /v1/v1/chat/completions and 404,
+// while Models trimmed the same base. Both spellings must reach the same
+// endpoint now.
+func TestDraftAcceptsBothBaseForms(t *testing.T) {
+	for name, base := range map[string]string{
+		"plain":      "",
+		"with v1":    "/v1",
+		"with slash": "/",
+		"v1 + slash": "/v1/",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotPath string
+			srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				w.Write(chatReply(`{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80}`))
+			})
+			c := New(Settings{BaseURL: srv.URL + base, Model: "t"})
+			if _, err := c.Draft(context.Background(), "x"); err != nil {
+				t.Fatal(err)
+			}
+			if gotPath != "/v1/chat/completions" {
+				t.Errorf("path = %q, want /v1/chat/completions", gotPath)
+			}
+		})
+	}
+}
+
+// TestDraftToleratesLooseFieldShapes checks the shapes a model actually
+// sends: ports quoted as strings, extraDirectives as a list, enum aliases
+// and casings, a group field the schema does not have. None of them may
+// void the draft; what cannot be mapped is dropped with a note.
+func TestDraftToleratesLooseFieldShapes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		reply string
+		check func(t *testing.T, m model.Mapping, explanation string)
+	}{
+		{
+			name: "string ports and an array of directives",
+			reply: `{"name":"内网 MySQL","protocol":"TCP","listenPort":"9000",` +
+				`"upstreamHost":"192.168.1.10","upstreamPort":"3306",` +
+				`"extraDirectives":["proxy_timeout 1h;","proxy_buffering off;"],"explanation":"ok"}`,
+			check: func(t *testing.T, m model.Mapping, _ string) {
+				if m.ListenPort != 9000 || m.UpstreamPort != 3306 {
+					t.Errorf("ports: %d/%d", m.ListenPort, m.UpstreamPort)
+				}
+				if m.ExtraDirectives != "proxy_timeout 1h;\nproxy_buffering off;" {
+					t.Errorf("directives: %q", m.ExtraDirectives)
+				}
+			},
+		},
+		{
+			name: "proxyMode alias fast maps to minimal",
+			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
+				`"proxyMode":"fast"}`,
+			check: func(t *testing.T, m model.Mapping, explanation string) {
+				if m.ProxyMode != model.ProxyMinimal {
+					t.Errorf("proxy mode: %q", m.ProxyMode)
+				}
+				if !strings.Contains(explanation, "fast") || !strings.Contains(explanation, "精简代理") {
+					t.Errorf("the alias should be explained: %q", explanation)
+				}
+			},
+		},
+		{
+			name: "unknown proxyMode falls back with a note",
+			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
+				`"proxyMode":"turbo"}`,
+			check: func(t *testing.T, m model.Mapping, explanation string) {
+				if m.ProxyMode != model.ProxyStandard {
+					t.Errorf("proxy mode: %q", m.ProxyMode)
+				}
+				if !strings.Contains(explanation, "turbo") || !strings.Contains(explanation, "标准反代") {
+					t.Errorf("the fallback should be explained: %q", explanation)
+				}
+			},
+		},
+		{
+			name: "group is dropped with a note",
+			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
+				`"group":"数据库"}`,
+			check: func(t *testing.T, m model.Mapping, explanation string) {
+				if !strings.Contains(explanation, "分组") || !strings.Contains(explanation, "数据库") {
+					t.Errorf("the dropped group should be said: %q", explanation)
+				}
+			},
+		},
+		{
+			name: "directive list with a brace line keeps only clean lines",
+			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
+				`"extraDirectives":["proxy_timeout 1h;","} server { listen 6666;"]}`,
+			check: func(t *testing.T, m model.Mapping, _ string) {
+				if m.ExtraDirectives != "proxy_timeout 1h;" {
+					t.Errorf("directives: %q", m.ExtraDirectives)
+				}
+			},
+		},
+		{
+			name: "a field with the wrong type is dropped, not fatal",
+			reply: `{"name":{"nested":"no"},"protocol":"tcp","listenPort":true,` +
+				`"upstreamHost":"1.2.3.4","upstreamPort":80,"explanation":"ok"}`,
+			check: func(t *testing.T, m model.Mapping, _ string) {
+				if m.Name != "AI 映射" || m.ListenPort != 0 {
+					t.Errorf("broken fields should fall back: %+v", m)
+				}
+			},
+		},
+		{
+			name: "field aliases like upstreamIp are mapped",
+			reply: `{"protocol":"tcp","listen":9000,"upstreamIp":"192.168.1.10",` +
+				`"upstreamPort":3306,"note":"别名形态"}`,
+			check: func(t *testing.T, m model.Mapping, _ string) {
+				if m.ListenPort != 9000 || m.UpstreamHost != "192.168.1.10" || m.UpstreamPort != 3306 {
+					t.Errorf("aliased fields: %+v", m)
+				}
+			},
+		},
+		{
+			name: "mixed directive list drops non-strings",
+			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
+				`"extraDirectives":["proxy_timeout 1h;",42,{"a":1}]}`,
+			check: func(t *testing.T, m model.Mapping, _ string) {
+				if m.ExtraDirectives != "proxy_timeout 1h;" {
+					t.Errorf("directives: %q", m.ExtraDirectives)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Write(chatReply(tc.reply))
+			})
+			c := New(Settings{BaseURL: srv.URL, Model: "t"})
+			d, err := c.Draft(context.Background(), "x")
+			if err != nil {
+				t.Fatal(err)
+			}
+			m, explanation, err := d.Mapping()
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.check(t, m, explanation)
+		})
+	}
 }

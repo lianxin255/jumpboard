@@ -16,16 +16,36 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lianxin255/jumpboard/internal/model"
 )
 
+// normalizeBase trims a user-typed API root so callers can append /v1/...
+// once.
+//
+// Gateways are advertised both as http://host:3425 and as
+// http://host:3425/v1. Models already stripped a trailing /v1; Draft used
+// to append /v1/chat/completions onto either form, so a base that already
+// carried /v1 became /v1/v1/chat/completions and 404'd. Every request goes
+// through this first: trim space and trailing slashes, then peel trailing
+// /v1 segments (repeatedly, so a pasted .../v1/v1 works too). Only whole
+// segments go: "https://host/api/v1" keeps "api" and loses just the /v1.
+func normalizeBase(base string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	for strings.HasSuffix(strings.ToLower(base), "/v1") {
+		base = strings.TrimRight(base[:len(base)-3], "/")
+	}
+	return base
+}
+
 // Settings configure the client.
 type Settings struct {
 	// BaseURL is the API root, such as https://api.openai.com or a local
-	// gateway's address. "/v1/chat/completions" is appended.
+	// gateway's address, with or without a trailing /v1. Requests append
+	// /v1/... after normalizeBase.
 	BaseURL string
 	// Model is the model name the gateway knows.
 	Model string
@@ -61,17 +81,24 @@ Rules:
 Reply with the JSON object only.`
 
 // Draft is what the model proposes.
+//
+// The fields a model is free to misshape are json.RawMessage and decoded by
+// UnmarshalJSON, which tolerates a port quoted as a string, a directive
+// list, or an enum alias — and drops one broken field instead of failing
+// the whole draft. Only a reply that is not a JSON object at all is
+// refused, which keeps the "model returned something else" signal.
 type Draft struct {
-	Name            string `json:"name"`
-	Protocol        string `json:"protocol"`
-	ListenPort      int    `json:"listenPort"`
-	ServerNames     string `json:"serverNames"`
-	ListenPath      string `json:"listenPath"`
-	UpstreamHost    string `json:"upstreamHost"`
-	UpstreamPort    int    `json:"upstreamPort"`
-	ProxyMode       string `json:"proxyMode"`
-	ExtraDirectives string `json:"extraDirectives"`
-	Explanation     string `json:"explanation"`
+	Name            string
+	Protocol        string
+	ListenPort      int
+	ServerNames     string
+	ListenPath      string
+	UpstreamHost    string
+	UpstreamPort    int
+	ProxyMode       string
+	Group           string
+	ExtraDirectives string
+	Explanation     string
 }
 
 // Mapping converts the draft, through the same validation the form uses.
@@ -79,12 +106,17 @@ type Draft struct {
 // A draft is untrusted input: the model may have hallucinated a port, an
 // address, or a directive. Everything except the explanation is run
 // through the app's sanitizers, and a field that fails is dropped rather
-// than passed on.
+// than passed on. A proxy mode the app does not know falls back to the
+// standard one, and a group the schema has no field for is ignored; both
+// are said so in the explanation, so what the form shows never quietly
+// differs from what the model said.
 func (d Draft) Mapping() (model.Mapping, string, error) {
 	proto := model.Protocol(strings.ToLower(strings.TrimSpace(d.Protocol)))
 	if !proto.Valid() {
 		return model.Mapping{}, "", fmt.Errorf("模型给出的协议 %q 不受支持", d.Protocol)
 	}
+	mode, modeNote := coerceProxyMode(d.ProxyMode)
+	explanation := joinNotes(d.Explanation, modeNote, dropGroup(d.Group))
 	m := model.Mapping{
 		Name:            strings.TrimSpace(d.Name),
 		Protocol:        proto,
@@ -94,7 +126,7 @@ func (d Draft) Mapping() (model.Mapping, string, error) {
 		ListenPath:      model.StripInject(d.ListenPath),
 		UpstreamHost:    model.StripInject(d.UpstreamHost),
 		UpstreamPort:    d.UpstreamPort,
-		ProxyMode:       model.ProxyMode(strings.ToLower(strings.TrimSpace(d.ProxyMode))),
+		ProxyMode:       mode,
 		ExtraDirectives: sanitizeDirectives(d.ExtraDirectives),
 	}
 	if m.Name == "" {
@@ -107,15 +139,12 @@ func (d Draft) Mapping() (model.Mapping, string, error) {
 		m.ListenPort = 0 // let the user choose
 	}
 	if !model.ValidPort(m.UpstreamPort) {
-		return model.Mapping{}, d.Explanation, fmt.Errorf("模型没有给出可用的上游端口")
+		return model.Mapping{}, explanation, fmt.Errorf("模型没有给出可用的上游端口")
 	}
 	if m.UpstreamHost == "" {
-		return model.Mapping{}, d.Explanation, fmt.Errorf("模型没有给出上游地址，请在表单里补上")
+		return model.Mapping{}, explanation, fmt.Errorf("模型没有给出上游地址，请在表单里补上")
 	}
-	if !m.ProxyMode.Valid() {
-		m.ProxyMode = model.ProxyStandard
-	}
-	return m, d.Explanation, nil
+	return m, explanation, nil
 }
 
 // sanitizeDirectives keeps extra directives to plain `name value;` lines.
@@ -138,6 +167,171 @@ func sanitizeDirectives(s string) string {
 		out = out[:5]
 	}
 	return strings.Join(out, "\n")
+}
+
+// fieldAliases lists the names a model writes for one draft field. The
+// prompt asks for camelCase, and live models keep drifting: one gateway's
+// small model answers upstreamHost as "upstreamIp". The first alias that
+// arrives non-empty wins.
+var fieldAliases = map[string][]string{
+	"name":            {"name"},
+	"protocol":        {"protocol"},
+	"listenPort":      {"listenPort", "listen_port", "listen", "port"},
+	"serverNames":     {"serverNames", "server_names", "serverName"},
+	"listenPath":      {"listenPath", "listen_path", "path"},
+	"upstreamHost":    {"upstreamHost", "upstream_host", "upstreamIp", "upstream_ip", "upstreamAddr", "host", "target"},
+	"upstreamPort":    {"upstreamPort", "upstream_port", "targetPort", "target_port"},
+	"proxyMode":       {"proxyMode", "proxy_mode"},
+	"group":           {"group"},
+	"extraDirectives": {"extraDirectives", "extra_directives", "directives"},
+	"explanation":     {"explanation", "note"},
+}
+
+// UnmarshalJSON decodes a model's reply into a Draft, leniently.
+//
+// The reply is a JSON object, but the model decides the shape of each
+// field: a port may arrive as 9000 or "9000", extraDirectives as a string
+// or a list, a field under one of its alias names, and enum values in any
+// casing or alias. Rather than let one odd field void the whole draft,
+// every field is decoded on its own and a failure leaves that field at
+// its zero value. A reply that is not an object at all stays an error:
+// that is the "model did not answer with JSON" case the caller reports.
+func (d *Draft) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	str := func(aliases ...string) string {
+		for _, a := range aliases {
+			if raw, ok := fields[a]; ok {
+				if v := flexString(raw); v != "" {
+					return v
+				}
+			}
+		}
+		return ""
+	}
+	port := func(aliases ...string) int {
+		for _, a := range aliases {
+			if raw, ok := fields[a]; ok {
+				if v := flexPort(raw); v != 0 {
+					return v
+				}
+			}
+		}
+		return 0
+	}
+	d.Name = str(fieldAliases["name"]...)
+	d.Protocol = str(fieldAliases["protocol"]...)
+	d.ListenPort = port(fieldAliases["listenPort"]...)
+	d.ServerNames = str(fieldAliases["serverNames"]...)
+	d.ListenPath = str(fieldAliases["listenPath"]...)
+	d.UpstreamHost = str(fieldAliases["upstreamHost"]...)
+	d.UpstreamPort = port(fieldAliases["upstreamPort"]...)
+	d.ProxyMode = str(fieldAliases["proxyMode"]...)
+	d.Group = str(fieldAliases["group"]...)
+	d.ExtraDirectives = str(fieldAliases["extraDirectives"]...)
+	d.Explanation = str(fieldAliases["explanation"]...)
+	return nil
+}
+
+// flexString reads a field that may be a string, or a list of strings.
+//
+// A list is joined with newlines, which is what sanitizeDirectives splits
+// on again; entries that are not strings (a number, a nested object) are
+// dropped rather than joined into nonsense.
+func flexString(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var list []json.RawMessage
+	if json.Unmarshal(raw, &list) != nil {
+		return ""
+	}
+	var out []string
+	for _, item := range list {
+		if v := flexString(item); v != "" {
+			out = append(out, v)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// flexPort reads a port that may be a number or a numeric string. Anything
+// else reads as 0, which the existing validation already handles.
+func flexPort(raw json.RawMessage) int {
+	var n int
+	if json.Unmarshal(raw, &n) == nil {
+		return n
+	}
+	var str string
+	if json.Unmarshal(raw, &str) == nil {
+		v, err := strconv.Atoi(strings.TrimSpace(str))
+		if err == nil {
+			return v
+		}
+	}
+	return 0
+}
+
+// proxyModeAliases maps the names a model tends to invent to the modes the
+// app has. An alias that could mean two things is not listed: an unknown
+// value falls back to the standard mode with a note, instead of a guess
+// the user cannot see.
+var proxyModeAliases = map[string]model.ProxyMode{
+	"standard":    model.ProxyStandard,
+	"std":         model.ProxyStandard,
+	"default":     model.ProxyStandard,
+	"normal":      model.ProxyStandard,
+	"full":        model.ProxyStandard,
+	"minimal":     model.ProxyMinimal,
+	"min":         model.ProxyMinimal,
+	"fast":        model.ProxyMinimal,
+	"simple":      model.ProxyMinimal,
+	"passthrough": model.ProxyMinimal,
+	"custom":      model.ProxyCustom,
+	"none":        model.ProxyCustom,
+}
+
+// coerceProxyMode maps a draft's proxy mode to a valid one, and says how.
+func coerceProxyMode(s string) (model.ProxyMode, string) {
+	v := strings.ToLower(strings.TrimSpace(s))
+	if v == "" {
+		return model.ProxyStandard, ""
+	}
+	if mode, ok := proxyModeAliases[v]; ok {
+		if mode != model.ProxyMode(v) {
+			return mode, fmt.Sprintf("代理模式 %q 已按 %s 处理", v, mode.Label())
+		}
+		return mode, ""
+	}
+	return model.ProxyStandard, fmt.Sprintf("代理模式 %q 不受支持，已按 标准反代 处理", v)
+}
+
+// dropGroup explains that a group field was ignored: the app's schema has
+// no such grouping, so the value goes nowhere rather than into a field
+// that would silently drop it later.
+func dropGroup(group string) string {
+	if strings.TrimSpace(group) == "" {
+		return ""
+	}
+	return fmt.Sprintf("已忽略不支持的分组字段 %q", group)
+}
+
+// joinNotes appends the per-field notes to the model's explanation, so the
+// user reads what was adjusted in the same place as the draft itself.
+func joinNotes(explanation string, notes ...string) string {
+	var kept []string
+	if e := strings.TrimSpace(explanation); e != "" {
+		kept = append(kept, e)
+	}
+	for _, n := range notes {
+		if n != "" {
+			kept = append(kept, n)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // Client calls an OpenAI compatible endpoint.
@@ -221,7 +415,7 @@ func (c *Client) Draft(ctx context.Context, sentence string) (Draft, error) {
 		return Draft{}, err
 	}
 
-	url := strings.TrimRight(c.settings.BaseURL, "/") + "/v1/chat/completions"
+	url := normalizeBase(c.settings.BaseURL) + "/v1/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return Draft{}, err
@@ -307,12 +501,12 @@ type modelsResponse struct {
 // Models lists what the endpoint offers, for the settings page's picker.
 //
 // The list comes from GET /v1/models, which every OpenAI compatible
-// gateway answers; a base URL that already carries /v1 is trimmed so the
-// path is not doubled. The ids are sorted and de-duplicated: gateways
-// repeat them, and a dropdown of "gpt-4o, gpt-4o, gpt-4o" reads as a bug.
+// gateway answers. The base goes through normalizeBase so an address typed
+// with or without /v1, trailing slashes and all, reaches the same path.
+// The ids are sorted and de-duplicated: gateways repeat them, and a
+// dropdown of "gpt-4o, gpt-4o, gpt-4o" reads as a bug.
 func (c *Client) Models(ctx context.Context) ([]string, error) {
-	base := strings.TrimRight(c.settings.BaseURL, "/")
-	base = strings.TrimSuffix(base, "/v1")
+	base := normalizeBase(c.settings.BaseURL)
 	if base == "" {
 		return nil, errors.New("请先填写接口地址")
 	}
