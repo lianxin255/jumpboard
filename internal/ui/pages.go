@@ -41,6 +41,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(280)
 			ui.Spacer(c)
 			if v.logTab == 0 {
+				if ui.Button(c, "导出").Disabled(busy).
+					Tooltip("把操作日志全量导出为文本文件").Clicked() {
+					v.exportAppLogs()
+				}
 				if ui.Button(c, "清空操作日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
 						Title: "清空操作日志", Body: "所有操作记录都会被删除。",
@@ -60,6 +64,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 						Tooltip("把当前 access.log 的尾部交给模型总结").Clicked() {
 						a.RunBackground(a.InterpretAccessLog)
 					}
+				}
+				if ui.Button(c, "导出").Disabled(busy).
+					Tooltip("把 access.log 全量导出").Clicked() {
+					v.exportAccessLog()
 				}
 				if ui.Button(c, "清空访问日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{

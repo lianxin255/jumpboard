@@ -840,6 +840,34 @@ func (a *App) ClearNginxLogs() error {
 	return nil
 }
 
+// AppLogExport is the operation log as plain text, oldest first, for the
+// export button. The page shows the newest five hundred; a file someone
+// keeps should hold everything there is.
+func (a *App) AppLogExport() ([]byte, int, error) {
+	logs, err := a.Store.ListLogs(10000)
+	if err != nil {
+		return nil, 0, err
+	}
+	var b strings.Builder
+	for i := len(logs) - 1; i >= 0; i-- {
+		l := logs[i]
+		fmt.Fprintf(&b, "%s %s %s\n",
+			time.UnixMilli(l.Timestamp).Format("2006-01-02 15:04:05"),
+			strings.ToUpper(string(l.Level)), l.Message)
+	}
+	return []byte(b.String()), len(logs), nil
+}
+
+// AccessLogExport is the engine's access log as it stands on disk. A log
+// that was never written exports as an empty file — that is what it is.
+func (a *App) AccessLogExport() ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join(a.Paths.LogsDir, "access.log"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return data, err
+}
+
 // ClearAppLogs empties the operation log.
 func (a *App) ClearAppLogs() error {
 	if err := a.Store.ClearLogs(); err != nil {
