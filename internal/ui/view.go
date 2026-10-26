@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/chart"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -745,6 +746,7 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 		} else {
 			ui.Text(c, "健康检查未启用").FontSize(11).TextColor(t.Meta)
 		}
+		v.throughputBlock(c, t, m.ID)
 		ui.Row(c).Gap(8).Children(func() {
 			if ui.Button(c, "编辑").Clicked() {
 				v.detailID = ""
@@ -756,6 +758,57 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 			}
 		})
 	})
+}
+
+// throughputBlock is the popover's throughput section: the current rate
+// beside its title, and the last minute of it as a line whose right edge is
+// now. Until two samples are in there is no line to draw, only the note
+// that one is on the way.
+func (v *View) throughputBlock(c *ui.Context, t Tokens, mappingID string) {
+	rates := v.App.Throughput(mappingID)
+	ui.Column(c).Gap(4).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "吞吐").FontSize(11).TextColor(t.Muted)
+			ui.Spacer(c)
+			ui.Textf(c, "当前速率 %s", formatRate(v.App.CurrentRate(mappingID))).
+				FontSize(11).TextColor(t.Meta)
+		})
+		if len(rates) < 2 {
+			ui.Text(c, "收集中…").FontSize(11).TextColor(t.Meta)
+			return
+		}
+		top := 0.0
+		for _, r := range rates {
+			top = max(top, r)
+		}
+		// Headroom over the peak keeps the newest point off the frame's top.
+		y := chart.NewLinear(0, max(top*1.1, 1))
+		y.Format = func(v float64) string { return formatBytes(int64(v)) }
+		n := len(rates)
+		xs, ys := make([]float32, n), make([]float32, n)
+		for i, r := range rates {
+			// The newest sample sits on the right edge, so the line grows
+			// leftward until the minute fills. One minute needs no x labels.
+			xs[i] = float32(i+appt.RateWindow-n) / float32(appt.RateWindow-1)
+			ys[i] = y.At(r)
+		}
+		axes := chart.Axes{Left: y.Ticks(2)}
+		axes.Label = func(_ chart.Side, tick chart.Tick) {
+			ui.Text(c, tick.Label).FontSize(9).TextColor(t.Meta).NoWrap()
+		}
+		chart.Plot(c, axes, func(area ui.Element) {
+			area.Label("近一分钟吞吐")
+			area.Draw(func(p *ui.Painter, r ui.Rect) {
+				p.StrokePath(chart.Line(r, xs, ys, chart.CurveLinear), 2, t.Accent)
+			})
+		}).Height(64).Gap(6)
+	})
+}
+
+// formatRate renders a throughput for the popover: the byte formatter with
+// the per-second unit.
+func formatRate(bps float64) string {
+	return formatBytes(int64(bps)) + "/s"
 }
 
 // forwardLine is the mapping's forwarding relation as one line, for the

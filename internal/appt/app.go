@@ -66,6 +66,9 @@ type App struct {
 	Tpl   *services.Templates
 	Log   *services.Logger
 	Check *services.Checker
+	// rates samples the rules' byte counters once a second, for the detail
+	// popover's throughput curve.
+	rates *rateSampler
 
 	// OnChange asks the window for a frame. Set by the UI.
 	OnChange func()
@@ -198,6 +201,7 @@ func New(p paths.Paths) (*App, error) {
 		Log:   services.NewLogger(st),
 		Check: services.NewChecker(st),
 	}
+	a.rates = newRateSampler(a.Eng, a.notify)
 	a.theme = ThemeChoice(st.Setting(store.SettingTheme, string(ThemeSystem)))
 	a.whitelistOn = st.WhitelistOn()
 	a.nginxLogRead = st.SettingBool(store.SettingNginxLogRead, true)
@@ -226,6 +230,9 @@ func New(p paths.Paths) (*App, error) {
 		_ = a.Reload()
 		a.notifyHealthChanges(changed)
 	}
+	// The sampler runs beside the checker: the popover's chart reads it, and
+	// it asks for a frame each tick that lands a sample.
+	a.rates.Start()
 	_ = st.TrimLogs(10000)
 	return a, nil
 }
@@ -237,6 +244,9 @@ func New(p paths.Paths) (*App, error) {
 // underneath them at quit.
 func (a *App) Close() {
 	a.Check.Stop()
+	if a.rates != nil {
+		a.rates.Stop()
+	}
 	_ = a.Eng.Stop()
 	a.bg.Wait()
 	if a.Store != nil {
@@ -292,6 +302,24 @@ func (a *App) RuleStatus() []engine.RuleStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return append([]engine.RuleStatus(nil), a.ruleStatus...)
+}
+
+// Throughput returns a rule's throughput history, one sample per second
+// oldest-first, for the popover's chart.
+func (a *App) Throughput(mappingID string) []float64 {
+	if a.rates == nil {
+		return nil
+	}
+	return a.rates.throughput(mappingID)
+}
+
+// CurrentRate is a rule's latest throughput in bytes per second, 0 with no
+// sample yet.
+func (a *App) CurrentRate(mappingID string) float64 {
+	if a.rates == nil {
+		return 0
+	}
+	return a.rates.current(mappingID)
 }
 
 // notify asks for a frame after the state changed.
