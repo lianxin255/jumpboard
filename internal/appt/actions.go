@@ -483,7 +483,12 @@ func (a *App) Apply() error {
 	_ = a.Store.AddSnapshot(conf, "apply")
 	_ = a.Store.TrimSnapshots(50)
 	// The export is written for anyone who wants the same rules in nginx.
+	// The watch takes the file's mtime as the app's own, so this write is
+	// never reported as a foreign edit.
 	_ = os.WriteFile(filepath.Join(a.Paths.ExportDir, "nginx.conf"), []byte(conf), 0o644)
+	if a.conf != nil {
+		a.conf.noteSelfWrite()
+	}
 
 	a.mu.Lock()
 	a.dirty = false

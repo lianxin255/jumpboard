@@ -69,6 +69,8 @@ type App struct {
 	// rates samples the rules' byte counters once a second, for the detail
 	// popover's throughput curve.
 	rates *rateSampler
+	// conf watches the exported nginx.conf for edits made outside the app.
+	conf *confWatch
 
 	// OnChange asks the window for a frame. Set by the UI.
 	OnChange func()
@@ -202,6 +204,7 @@ func New(p paths.Paths) (*App, error) {
 		Check: services.NewChecker(st),
 	}
 	a.rates = newRateSampler(a.Eng, a.notify)
+	a.conf = newConfWatch(p.ExportDir, a.notify)
 	a.theme = ThemeChoice(st.Setting(store.SettingTheme, string(ThemeSystem)))
 	a.whitelistOn = st.WhitelistOn()
 	a.nginxLogRead = st.SettingBool(store.SettingNginxLogRead, true)
@@ -233,6 +236,9 @@ func New(p paths.Paths) (*App, error) {
 	// The sampler runs beside the checker: the popover's chart reads it, and
 	// it asks for a frame each tick that lands a sample.
 	a.rates.Start()
+	// The exported configuration is watched from the start, so an edit made
+	// while the app was closed is noticed at the first look too.
+	a.conf.start()
 	_ = st.TrimLogs(10000)
 	return a, nil
 }
@@ -246,6 +252,9 @@ func (a *App) Close() {
 	a.Check.Stop()
 	if a.rates != nil {
 		a.rates.Stop()
+	}
+	if a.conf != nil {
+		a.conf.Stop()
 	}
 	_ = a.Eng.Stop()
 	a.bg.Wait()

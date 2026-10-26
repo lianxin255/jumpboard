@@ -24,6 +24,10 @@ type View struct {
 
 	query  string
 	filter int
+	// groupFilter is the group the chips row picked, "" for 全部. Like the
+	// query it is the view's own: it narrows what the table shows, not what
+	// the app holds.
+	groupFilter string
 	// aiFilterPrompt is what the natural language filter's input holds.
 	// The ask and its answer live in the app, like the busy state of
 	// every other AI path; this is only the text, with v.query's
@@ -344,7 +348,22 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	mappings, _, _, _, _, _, busy, _ := a.Snapshot()
 
-	filtered := filterMappings(mappings, v.query, v.filter)
+	groups := distinctGroups(mappings)
+	// A selected group can vanish: its rule edited into another group, or
+	// deleted outright. The chip row would no longer show the group, so
+	// the filter would quietly match nothing — the view follows the data
+	// and falls back to 全部.
+	if v.groupFilter != "" {
+		kept := false
+		for _, g := range groups {
+			kept = kept || g == v.groupFilter
+		}
+		if !kept {
+			v.groupFilter = ""
+		}
+	}
+
+	filtered := filterMappings(mappings, v.query, v.filter, v.groupFilter)
 	// The AI filter narrows what the search left: once one has landed —
 	// its query is set, which is the flag, so "matched nothing" stays a
 	// filter too — only the rows it named stay, possibly none, which the
@@ -403,6 +422,11 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				})
 			}
 		})
+		// The group filter sits under the search box's row: the same row of
+		// the page that narrows the table, one chip per group in use. It is
+		// absent while no rule carries a group, so an ungrouped rule book
+		// stays as plain as it was.
+		v.groupChips(c, t, groups)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			if len(mappings) > 0 {
 				// No fixed width: the control sizes to its labels. A width
@@ -618,6 +642,14 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 			}
 			if info.Active > 0 {
 				ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success)
+			}
+			// The group rides at the end of the row: a label, not a
+			// control — the chips above the table are where a group is
+			// picked, this only says which one the rule belongs to.
+			if m.Group != "" {
+				ui.Text(c, m.Group).FontSize(10).TextColor(t.Meta).SingleLine().
+					Label("分组 "+m.Group).Tooltip("分组："+m.Group).
+					Padding(2, 6).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border)
 			}
 		})
 		// The rule's bytes join the other counters on this cell's second
@@ -858,6 +890,55 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 	})
 }
 
+// groupChips is the group filter under the search box: 全部, then one chip
+// per group in use, in first-seen order. A click picks the group the table
+// shows alongside the text query; the selected chip says so in accent, the
+// way the sidebar's tab does. The row wraps, so a long rule book cannot
+// push its oldest group off screen.
+func (v *View) groupChips(c *ui.Context, t Tokens, groups []string) {
+	if len(groups) == 0 {
+		return
+	}
+	names := append([]string{"全部"}, groups...)
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+		for _, name := range names {
+			// 全部 selects the empty filter, the state with no group chosen.
+			target := name
+			if name == "全部" {
+				target = ""
+			}
+			on := v.groupFilter == target
+			chip := ui.Text(c, name).FontSize(11).SingleLine().
+				Label("组 "+name).Tooltip("按分组筛选").
+				Padding(3, 8).Radius(RadiusChip)
+			if on {
+				chip.Bold().TextColor(t.Accent).
+					Background(t.Accent.Alpha(0.12)).Border(1, t.Accent.Alpha(0.45))
+			} else {
+				chip.TextColor(t.FG2).Background(t.Chip).Border(1, t.Border)
+			}
+			if chip.Clicked() {
+				v.groupFilter = target
+			}
+		}
+	})
+}
+
+// distinctGroups lists the groups in use, in first-seen order: the order
+// the chips row shows them in.
+func distinctGroups(mappings []model.Mapping) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range mappings {
+		if m.Group == "" || seen[m.Group] {
+			continue
+		}
+		seen[m.Group] = true
+		out = append(out, m.Group)
+	}
+	return out
+}
+
 // mappingsEmpty is the first-run card: one clear path to add a rule.
 func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
@@ -917,7 +998,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 	scope := "当前列表"
 	// The AI filter counts as a filter here too: the bar acts on what is
 	// on screen, which an AI ask has narrowed as surely as a search did.
-	if _, _, aiQuery, _, _ := v.App.AIFilterState(); v.query != "" || v.filter != 0 || aiQuery != "" {
+	if _, _, aiQuery, _, _ := v.App.AIFilterState(); v.query != "" || v.filter != 0 || v.groupFilter != "" || aiQuery != "" {
 		scope = "筛选结果"
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -967,6 +1048,7 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 					if ui.PrimaryButton(c, "清除筛选").Clicked() {
 						v.query = ""
 						v.filter = 0
+						v.groupFilter = ""
 						// The AI filter may be the reason nothing matched;
 						// one button retires every filter the page has.
 						v.App.ClearAIFilter()
@@ -982,11 +1064,15 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 	})
 }
 
-// filterMappings keeps the rules the search and the filter let through.
-func filterMappings(all []model.Mapping, query string, filter int) []model.Mapping {
+// filterMappings keeps the rules the search and the filters let through.
+// A group of "" lets every group by, grouped and ungrouped alike.
+func filterMappings(all []model.Mapping, query string, filter int, group string) []model.Mapping {
 	q := strings.ToLower(strings.TrimSpace(query))
 	out := make([]model.Mapping, 0, len(all))
 	for _, m := range all {
+		if group != "" && m.Group != group {
+			continue
+		}
 		switch filter {
 		case 1:
 			if !m.Enabled {

@@ -51,12 +51,14 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 
 	// fld is one labelled field: the label above the control, the error
-	// under it. Outside a ui.Form, Field draws exactly that.
-	fld := func(label, errKey string, fn func()) {
+	// under it. Outside a ui.Form, Field draws exactly that. The element
+	// comes back so a field can share a row and still take its share of it.
+	fld := func(label, errKey string, fn func()) ui.Element {
 		e := ui.Field(c, label, fn)
 		if msg := errs[errKey]; msg != "" {
 			e.Error(msg)
 		}
+		return e
 	}
 	// groupHead is the small heading above a set of fields.
 	groupHead := func(label string) {
@@ -98,8 +100,18 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 					ui.Scroll(c).Fill().Children(func() {
 						ui.Column(c).Gap(16).Children(func() {
 
-							fld("名称", "Name", func() {
-								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL")
+							// The name and its group share a row: the group is
+							// the name's qualifier, a label beside a label. The
+							// groups already in use suggest themselves, the way
+							// the upstream hosts do.
+							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+								fld("名称", "Name", func() {
+									ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
+								}).Grow(1)
+								fld("分组", "", func() {
+									ui.Autocomplete(c, &f.Group, v.App.GroupSuggestions()).
+										Placeholder("可选，如 数据库").Width(220)
+								})
 							})
 							ui.Field(c, "协议", func() {
 								protoIdx := appt.ProtocolIndex(f.Protocol)
