@@ -777,32 +777,37 @@ func (v *View) throughputBlock(c *ui.Context, t Tokens, mappingID string) {
 			ui.Text(c, "收集中…").FontSize(11).TextColor(t.Meta)
 			return
 		}
-		top := 0.0
-		for _, r := range rates {
-			top = max(top, r)
-		}
-		// Headroom over the peak keeps the newest point off the frame's top.
-		y := chart.NewLinear(0, max(top*1.1, 1))
-		y.Format = func(v float64) string { return formatBytes(int64(v)) }
-		n := len(rates)
-		xs, ys := make([]float32, n), make([]float32, n)
-		for i, r := range rates {
-			// The newest sample sits on the right edge, so the line grows
-			// leftward until the minute fills. One minute needs no x labels.
-			xs[i] = float32(i+appt.RateWindow-n) / float32(appt.RateWindow-1)
-			ys[i] = y.At(r)
-		}
-		axes := chart.Axes{Left: y.Ticks(2)}
-		axes.Label = func(_ chart.Side, tick chart.Tick) {
-			ui.Text(c, tick.Label).FontSize(9).TextColor(t.Meta).NoWrap()
-		}
-		chart.Plot(c, axes, func(area ui.Element) {
-			area.Label("近一分钟吞吐")
-			area.Draw(func(p *ui.Painter, r ui.Rect) {
-				p.StrokePath(chart.Line(r, xs, ys, chart.CurveLinear), 2, t.Accent)
-			})
-		}).Height(64).Gap(6)
+		v.throughputCurve(c, t, rates)
 	})
+}
+
+// throughputCurve draws the last minute of rates as one line. The newest
+// sample sits on the right edge, so the line grows leftward until the minute
+// fills; one minute needs no x labels.
+func (v *View) throughputCurve(c *ui.Context, t Tokens, rates []float64) {
+	top := 0.0
+	for _, r := range rates {
+		top = max(top, r)
+	}
+	// Headroom over the peak keeps the newest point off the frame's top.
+	y := chart.NewLinear(0, max(top*1.1, 1))
+	y.Format = func(v float64) string { return formatBytes(int64(v)) }
+	n := len(rates)
+	xs, ys := make([]float32, n), make([]float32, n)
+	for i, r := range rates {
+		xs[i] = float32(i+appt.RateWindow-n) / float32(appt.RateWindow-1)
+		ys[i] = y.At(r)
+	}
+	axes := chart.Axes{Left: y.Ticks(2)}
+	axes.Label = func(_ chart.Side, tick chart.Tick) {
+		ui.Text(c, tick.Label).FontSize(9).TextColor(t.Meta).NoWrap()
+	}
+	chart.Plot(c, axes, func(area ui.Element) {
+		area.Label("近一分钟吞吐")
+		area.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.StrokePath(chart.Line(r, xs, ys, chart.CurveLinear), 2, t.Accent)
+		})
+	}).Height(64).Gap(6)
 }
 
 // formatRate renders a throughput for the popover: the byte formatter with
