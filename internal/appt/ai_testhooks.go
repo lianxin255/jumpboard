@@ -11,14 +11,20 @@ import (
 // synchronously, so a test does not have to drive a goroutine, and expose
 // the draft the model produced.
 //
-// The production path is AskAI, which the UI calls from a goroutine.
+// The production path is AskAIMulti, which the UI calls from a goroutine;
+// this hook runs the same one, so what the tests drive is what ships.
 
-// RunAISync asks the model and keeps the draft, without the UI.
+// RunAISync asks the model and keeps the first usable draft, without the
+// UI.
 func (a *App) RunAISync(sentence string) error {
-	_, draft, err := a.AskAI(sentence)
+	_, drafts, err := a.AskAIMulti(sentence)
 	a.mu.Lock()
-	a.lastAIDraft = draft
-	a.mu.Unlock()
+	defer a.mu.Unlock()
+	a.lastAIDraft = nil
+	if err == nil && len(drafts) > 0 {
+		m := drafts[0].Mapping
+		a.lastAIDraft = &m
+	}
 	return err
 }
 

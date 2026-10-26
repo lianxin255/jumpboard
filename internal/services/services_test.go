@@ -235,7 +235,7 @@ func TestHealthCheckerLoopStops(t *testing.T) {
 	c := NewChecker(s)
 	c.Interval = 20 * time.Millisecond
 	done := make(chan struct{})
-	c.OnResult = func([]model.Mapping) { close(done) }
+	c.OnResult = func([]HealthChange) { close(done) }
 
 	if _, err := s.CreateMapping(model.Mapping{
 		Name: "x", Protocol: model.TCP, Enabled: true, ListenPort: 9000,

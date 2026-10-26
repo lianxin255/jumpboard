@@ -2,12 +2,14 @@ package appt
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/lianxin255/jumpboard/internal/engine"
 	"github.com/lianxin255/jumpboard/internal/model"
 	"github.com/lianxin255/jumpboard/internal/nginx"
 	"github.com/lianxin255/jumpboard/internal/services"
@@ -376,6 +378,23 @@ func (a *App) CopyAddress(m model.Mapping) error {
 	return nil
 }
 
+// CopyText puts arbitrary text on the clipboard — a diagnostic command,
+// say — by the same path CopyAddress takes.
+func (a *App) CopyText(text string) error {
+	if text == "" {
+		return nil
+	}
+	a.mu.Lock()
+	a.copied = text
+	a.mu.Unlock()
+	if a.Clipboard != nil {
+		a.Clipboard(text)
+	}
+	// A command can run long; the toast keeps to one line's worth.
+	a.setStatus("已复制 "+truncateNotice(text, 60), false)
+	return nil
+}
+
 // CloneMapping copies a mapping under a new name.
 func (a *App) CloneMapping(id string) error {
 	m, err := a.Store.GetMapping(id)
@@ -405,19 +424,33 @@ func (a *App) CloneMapping(id string) error {
 func (a *App) Apply() error {
 	a.mu.Lock()
 	a.applyErr, a.applyWarn = "", ""
+	a.applyErrPort, a.failKind = 0, ""
 	a.mu.Unlock()
 
 	spec, err := a.spec()
 	if err != nil {
+		// A rule set that cannot even be built — the whitelist refusing
+		// to run with no addresses — is as much a failed apply as an
+		// engine error, and just as invisible with the window closed.
+		a.notifyUser("JumpBoard", "应用规则失败："+truncateNotice(err.Error(), 120))
 		return err
 	}
 	res, err := a.Eng.Apply(spec)
 	if err != nil {
 		a.mu.Lock()
 		a.applyErr = err.Error()
+		a.applyErrPort, a.failKind = bindPort(err), "apply"
+		// A new failure retires the diagnosis of the old one: advice about
+		// a failure that no longer exists must not ride along under the
+		// fresh red bar.
+		a.diagErr, a.diagAdvice = "", nil
 		a.mu.Unlock()
 		a.Log.Error("应用规则失败: %v", err)
 		a.refreshEngine()
+		// The window may be closed in the tray when an apply fails — the
+		// tray menu can run one too — so the failure is a notification,
+		// not just a toast.
+		a.notifyUser("JumpBoard", "应用规则失败："+truncateNotice(err.Error(), 120))
 		return err
 	}
 
@@ -437,6 +470,10 @@ func (a *App) Apply() error {
 		a.setStatus("没有启用的映射，所有监听已关闭", false)
 	} else {
 		a.setStatus(fmt.Sprintf("已应用 %d 条映射", len(spec.Mappings)), false)
+		// Worth a notification only when something is listening: an empty
+		// rule set is a shutdown, and the tray menu's 应用配置 is the path
+		// that runs without the window.
+		a.notifyUser("JumpBoard", fmt.Sprintf("已应用 %d 条映射", len(spec.Mappings)))
 	}
 	a.Log.Info("规则已应用：%d 条映射", len(spec.Mappings))
 
@@ -454,12 +491,32 @@ func (a *App) Apply() error {
 	return nil
 }
 
+// truncateNotice keeps a notification's body to one banner's worth: the
+// full error stays in the log and the window either way.
+func truncateNotice(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}
+
 // ApplyError returns why the last apply failed, for the detail line the
 // user can expand.
 func (a *App) ApplyError() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.applyErr
+}
+
+// bindPort pulls the listen port out of a bind failure, so the diagnosis
+// can name the mapping involved without parsing error text.
+func bindPort(err error) int {
+	var bind *engine.ErrBind
+	if errors.As(err, &bind) {
+		return bind.Port
+	}
+	return 0
 }
 
 // ApplyWarning returns what the engine could not honor.
@@ -495,6 +552,10 @@ func (a *App) TestConfig() error {
 	if err := a.Eng.Check(spec); err != nil {
 		a.mu.Lock()
 		a.applyErr = err.Error()
+		a.applyErrPort, a.failKind = bindPort(err), "check"
+		// As with a failed apply: the diagnosis belongs to the failure that
+		// asked for it, not to whichever red bar shows next.
+		a.diagErr, a.diagAdvice = "", nil
 		a.mu.Unlock()
 		return fmt.Errorf("预检失败：%v", err)
 	}
@@ -606,6 +667,108 @@ func (a *App) Import(data []byte) error {
 	a.Log.Info("导入完成：%d 条映射，%d 个快照，跳过 %d 条", res.MappingsImported, res.SnapshotsImported, res.Skipped)
 	a.markDirty()
 	return nil
+}
+
+// importKind names what a dropped file is by its extension: a JumpBoard
+// backup, an nginx configuration, or nothing this app can use.
+func importKind(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".json":
+		return "json"
+	case ".conf":
+		return "conf"
+	default:
+		return ""
+	}
+}
+
+// ImportDroppedFiles takes the files dropped on the window and imports
+// each one by what it is: a .json goes through the backup import, which
+// replaces the rules with the backup's; a .conf's server blocks merge in
+// as new mappings. Anything else is named and skipped — a drop is a
+// gesture, not a dialog, so refusals are a status line, never a crash,
+// and one bad file does not stop the ones behind it.
+//
+// It runs on the caller's background goroutine; the summary it leaves in
+// the status line covers the whole drop at once.
+func (a *App) ImportDroppedFiles(paths []string) error {
+	var imported, skippedFiles []string
+	for _, p := range paths {
+		base := filepath.Base(p)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			a.Fail("读取 %s 失败：%v", base, err)
+			continue
+		}
+		switch importKind(filepath.Ext(p)) {
+		case "json":
+			if err := a.Import(data); err != nil {
+				a.Fail("导入 %s 失败：%v", base, err)
+				continue
+			}
+			imported = append(imported, base+"（备份替换）")
+		case "conf":
+			n, err := a.ImportNginxConf(data)
+			if err != nil {
+				a.Fail("导入 %s 失败：%v", base, err)
+				continue
+			}
+			// The bar remembers the path, not the bytes: by the time the
+			// user asks for an interpretation the file may already be gone,
+			// and that read failure is then reported as an error rather
+			// than explained from a copy the user cannot see. A dropped
+			// backup replaces the rules and is no interpretation entry, so
+			// it records nothing.
+			a.setConfImport(ConfImport{Path: p, Name: base, Count: n})
+			imported = append(imported, fmt.Sprintf("%s（合并 %d 条）", base, n))
+		default:
+			skippedFiles = append(skippedFiles, base)
+		}
+	}
+	if len(imported) > 0 {
+		a.Info("已导入 %d 个文件：%s", len(imported), strings.Join(imported, "、"))
+	}
+	if len(skippedFiles) > 0 {
+		a.Fail("已跳过不支持的文件：%s（支持 .json 备份与 .conf 配置）", strings.Join(skippedFiles, "、"))
+	}
+	return nil
+}
+
+// ImportNginxConf merges an nginx.conf's server blocks in as new
+// mappings, for a conf dragged onto the window. Unlike Import — a
+// backup, which replaces everything — a conf is additions.
+func (a *App) ImportNginxConf(data []byte) (int, error) {
+	added, skipped, err := services.ImportNginxConf(a.Store, data)
+	if err != nil {
+		return 0, err
+	}
+	a.Log.Info("从 nginx 配置导入 %d 条映射，跳过 %d 块", added, skipped)
+	a.markDirty()
+	return added, nil
+}
+
+// UpstreamHostSuggestions lists the upstream hosts already in use, for
+// the form's autocomplete: an internal network has a handful of servers
+// and typing their names by hand is the form's most repetitive step.
+func (a *App) UpstreamHostSuggestions() []string {
+	mappings, err := a.Store.ListMappings()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, 16)
+	for _, m := range mappings {
+		h := m.UpstreamHost
+		if h == "" || seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, h)
+		if len(out) >= 20 {
+			break
+		}
+	}
+	return out
 }
 
 // Wipe clears every piece of data and rebuilds the engine.

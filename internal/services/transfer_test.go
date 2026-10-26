@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/nginx"
 	"github.com/lianxin255/jumpboard/internal/store"
 )
 
@@ -121,4 +122,55 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestImportNginxConf walks the conf drop path: the app's own export,
+// parsed back, merges in as new mappings beside what is already stored —
+// unlike a backup, which replaces.
+func TestImportNginxConf(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.CreateMapping(model.Mapping{
+		Name: "已有", Protocol: model.TCP, Enabled: true, ListenPort: 15001,
+		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	conf := nginx.Generate([]model.Mapping{
+		{Name: "数据库", Protocol: model.TCP, Enabled: true, ListenPort: 15002,
+			UpstreamHost: "10.0.0.2", UpstreamPort: 5432},
+		{Name: "内网站", Protocol: model.HTTP, Enabled: true, ListenPort: 15003,
+			ServerNames: "in.example", UpstreamHost: "10.0.0.3", UpstreamPort: 8080},
+	}, nginx.GenOptions{})
+
+	added, skipped, err := ImportNginxConf(s, []byte(conf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added != 2 || skipped != 0 {
+		t.Fatalf("added %d skipped %d, want 2/0", added, skipped)
+	}
+	list, _ := s.ListMappings()
+	if len(list) != 3 {
+		t.Fatalf("the conf should merge beside the existing mapping, have %d", len(list))
+	}
+	names := map[string]bool{}
+	for _, m := range list {
+		names[m.Name] = true
+	}
+	if !names["已有"] || !names["数据库"] {
+		t.Errorf("merge kept the old and added the new: %v", names)
+	}
+}
+
+// TestImportNginxConfRefusesRubbish keeps a dropped file from half-
+// importing: nothing recognizable is an error, not an empty success.
+func TestImportNginxConfRefusesRubbish(t *testing.T) {
+	s := testStore(t)
+	if _, _, err := ImportNginxConf(s, []byte("user nginx;\n")); err == nil {
+		t.Error("a conf with no server block should be refused")
+	}
+	if _, _, err := ImportNginxConf(s, []byte("")); err == nil {
+		t.Error("an empty conf should be refused")
+	}
 }

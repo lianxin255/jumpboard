@@ -23,7 +23,15 @@ type View struct {
 
 	query  string
 	filter int
-	table  ui.ListState
+	// aiFilterPrompt is what the natural language filter's input holds.
+	// The ask and its answer live in the app, like the busy state of
+	// every other AI path; this is only the text, with v.query's
+	// main-thread home.
+	aiFilterPrompt string
+	table          ui.ListState
+	// detailID is the mapping whose detail popover is open, "" for none.
+	// One popover at a time: opening another row's 详情 closes the first.
+	detailID string
 
 	// The forms' own state, which the app's state does not need to know
 	// about until it is saved.
@@ -44,7 +52,6 @@ type View struct {
 	nameLoaded    bool
 
 	ai aiState
-	md markdownState
 
 	// Last status shown as a toast, so that it is not added every frame.
 	shownStatusAt   time.Time
@@ -60,9 +67,12 @@ type View struct {
 	aiSettingsLoaded bool
 	aiBaseURL        string
 	aiModel          string
-	aiKey            string
-	aiKeySet         bool
-	aiMu             sync.Mutex
+	// aiDiagModel is the optional 诊断/解读模型 field; empty means the
+	// main model, which is what its placeholder says.
+	aiDiagModel string
+	aiKey       string
+	aiKeySet    bool
+	aiMu        sync.Mutex
 	aiModels         []string
 	aiFetching       bool
 	aiListErr        string
@@ -289,6 +299,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
 		})
+		v.diagSection(c, t, busy)
 	}
 	if msg := a.ApplyWarning(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
@@ -333,6 +344,21 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	mappings, _, _, _, _, _, busy, _ := a.Snapshot()
 
 	filtered := filterMappings(mappings, v.query, v.filter)
+	// The AI filter narrows what the search left: once one has landed —
+	// its query is set, which is the flag, so "matched nothing" stays a
+	// filter too — only the rows it named stay, possibly none, which the
+	// empty-state card below explains. While the ask is out the table is
+	// unfiltered: guessing rows the model has not named yet would only
+	// flicker.
+	if _, _, aiQuery, _, aiIDs := a.AIFilterState(); aiQuery != "" {
+		kept := make([]model.Mapping, 0, len(filtered))
+		for _, m := range filtered {
+			if aiIDs[m.ID] {
+				kept = append(kept, m)
+			}
+		}
+		filtered = kept
+	}
 	enabled := 0
 	for _, m := range mappings {
 		if m.Enabled {
@@ -340,7 +366,19 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		}
 	}
 
-	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12).Children(func() {
+	// The whole page is a drop target: a backup or an nginx.conf dragged
+	// anywhere on the rules imports, with the border lighting up while a
+	// file hangs over it. DroppedFiles hands over the paths; what each
+	// one becomes is importDropped's decision.
+	page := ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12)
+	if paths := page.DroppedFiles(); paths != nil {
+		v.importDropped(paths)
+	}
+	if page.FileDragOver() {
+		page.Border(2, t.Accent)
+	}
+	page.Children(func() {
+
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
 				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)
@@ -374,9 +412,17 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				}
 			}
 			v.aiEntry(c, t)
+			v.aiFilterBar(c, t)
 			ui.Spacer(c)
 		})
+		// The line a filter ask leaves behind: its error, or its rationale
+		// and the button that puts the table back.
+		v.aiFilterResult(c, t)
 		v.actionRow(c, t)
+		// A dropped conf leaves a bar offering the interpretation, and its
+		// card lands right below: the answer sits where the drop did.
+		v.confImportBar(c, t, busy)
+		v.interpretSection(c, t, "import")
 
 		if len(mappings) == 0 {
 			v.mappingsEmpty(c, t, busy)
@@ -454,11 +500,59 @@ func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
 }
 
 // nameCell shows the mapping's name and the host under it. The protocol
-// has its own column, so it is not repeated here.
+// has its own column, so it is not repeated here. The cell carries the
+// row's context menu: everything the 修改 column does as buttons, plus
+// copy, one right-click away.
 func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
+	a := v.App
+	id := m.ID
 	listening, problem := v.App.RuleState(m.ID)
-	ui.Column(c).Gap(2).Children(func() {
-		ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine()
+	cell := ui.Column(c).Gap(2)
+	cell.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item("编辑").Chosen() {
+			mm := m
+			a.OpenForm(&mm)
+		}
+		if menu.Item("已启用").Checked(m.Enabled).Chosen() {
+			mm := m
+			a.RunBackground(func() error { return a.SetMappingEnabled(mm.ID, !mm.Enabled) })
+		}
+		menu.Separator()
+		if menu.Item("克隆").Chosen() {
+			a.RunBackground(func() error { return a.CloneMapping(id) })
+		}
+		if menu.Item("复制转发地址").Chosen() {
+			mm := m
+			a.RunBackground(func() error { return a.CopyAddress(mm) })
+		}
+		menu.Separator()
+		if menu.Item("删除…").Chosen() {
+			name := m.Name
+			a.Ask(&appt.Confirm{
+				Title:       "删除映射",
+				Body:        fmt.Sprintf("「%s」将被删除，需要重新创建。", name),
+				Label:       "确认删除",
+				Destructive: true,
+				Run:         func() error { return a.DeleteMapping(id) },
+			})
+		}
+	})
+	cell.Children(func() {
+		// The name opens the detail popover; the anchor is the name
+		// itself, so the panel points at what it is about. open is
+		// recomputed from detailID every frame, which keeps the popover
+		// honest when another row's name is clicked instead.
+		name := ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine().
+			Tooltip("点一下看详情，右键更多操作")
+		if name.Clicked() {
+			if v.detailID == m.ID {
+				v.detailID = ""
+			} else {
+				v.detailID = m.ID
+			}
+		}
+		open := v.detailID == m.ID
+		ui.Popover(c, name, &open, func() { v.detailPopover(c, t, m) })
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			// The dot says whether the rule is listening right now. It is
 			// only drawn once the engine has been applied to: before that,
@@ -584,6 +678,70 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 	})
 }
 
+// detailPopover is the mapping's summary panel: what it forwards, how it
+// is doing, and the edit action. Small by design — the form is where
+// editing happens; this is the look-before-you-click view.
+func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
+	a := v.App
+	ui.Column(c).Width(260).Padding(14).Gap(8).
+		Background(t.Surface).Border(1, t.Border).Radius(RadiusChip).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			v.protoCell(c, t, m)
+			if m.Enabled {
+				ui.Text(c, "已启用").FontSize(11).TextColor(t.Meta)
+			} else {
+				ui.Text(c, "已停用").FontSize(11).TextColor(t.Meta)
+			}
+			ui.Spacer(c)
+			if ui.Text(c, "×").FontSize(12).TextColor(t.Meta).Label("关闭详情").Clicked() {
+				v.detailID = ""
+			}
+		})
+		ui.Text(c, m.Name).FontSize(14).Bold().TextColor(t.FG)
+		ui.Text(c, forwardLine(m)).Font("monospace").FontSize(12).TextColor(t.FG2).
+			Tooltip("本地地址 → 上游目标")
+		if m.ServerNames != "" {
+			ui.Textf(c, "域名 %s", m.ServerNames).FontSize(11).TextColor(t.Meta)
+		}
+		if m.HealthCheckEnabled {
+			word, color := "未检查", t.Meta
+			switch m.HealthStatus {
+			case model.HealthHealthy:
+				word, color = "健康检查：正常", t.Success
+			case model.HealthUnhealthy:
+				word, color = "健康检查：异常", t.Danger
+			}
+			ui.Text(c, word).FontSize(11).TextColor(color)
+		} else {
+			ui.Text(c, "健康检查未启用").FontSize(11).TextColor(t.Meta)
+		}
+		ui.Row(c).Gap(8).Children(func() {
+			if ui.Button(c, "编辑").Clicked() {
+				v.detailID = ""
+				mm := m
+				a.OpenForm(&mm)
+			}
+			if ui.Button(c, "关闭").Clicked() {
+				v.detailID = ""
+			}
+		})
+	})
+}
+
+// forwardLine is the mapping's forwarding relation as one line, for the
+// detail popover.
+func forwardLine(m model.Mapping) string {
+	port := m.ListenPort
+	if port == 0 {
+		if m.Protocol == model.HTTPS {
+			port = 443
+		} else {
+			port = 80
+		}
+	}
+	return fmt.Sprintf("127.0.0.1:%d → %s:%d", port, m.UpstreamHost, m.UpstreamPort)
+}
+
 // searchBox is the mappings page's filter: a plain text input, so that
 // ⌘F can focus it — the input itself carries the AutoFocus, and changing
 // its Key on the shortcut rebirths it, which is the one moment AutoFocus
@@ -669,7 +827,9 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 		}
 	}
 	scope := "当前列表"
-	if v.query != "" || v.filter != 0 {
+	// The AI filter counts as a filter here too: the bar acts on what is
+	// on screen, which an AI ask has narrowed as surely as a search did.
+	if _, _, aiQuery, _, _ := v.App.AIFilterState(); v.query != "" || v.filter != 0 || aiQuery != "" {
 		scope = "筛选结果"
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -719,6 +879,9 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 					if ui.PrimaryButton(c, "清除筛选").Clicked() {
 						v.query = ""
 						v.filter = 0
+						// The AI filter may be the reason nothing matched;
+						// one button retires every filter the page has.
+						v.App.ClearAIFilter()
 					}
 					if v.filter != 0 {
 						if ui.Button(c, "显示全部").Clicked() {

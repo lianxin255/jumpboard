@@ -14,6 +14,10 @@ const (
 	SettingNginxLogRead = "nginx_log_read_enabled"
 	SettingAIBaseURL    = "ai_base_url"
 	SettingAIModel      = "ai_model"
+	// SettingAIDiagModel names the model the failure diagnosis and the
+	// interpretations use; "" means the main model. Mapping drafts always
+	// use the main model.
+	SettingAIDiagModel = "ai_diag_model"
 )
 
 // Setting returns a value, or def when it is unset.

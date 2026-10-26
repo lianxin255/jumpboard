@@ -134,7 +134,12 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 								// which, to a screen reader and to the tests.
 								ui.Field(c, "上游地址", func() {
 									ui.Row(c).Gap(8).Children(func() {
-										e := ui.TextInput(c, &f.UpstreamHost).Label("上游主机").Placeholder("192.168.1.10")
+										// The host is the form's most repetitive
+										// typing: an internal network has a handful
+										// of servers, so the ones already in use
+										// suggest themselves here.
+										e := ui.Autocomplete(c, &f.UpstreamHost, v.App.UpstreamHostSuggestions()).
+											Label("上游主机").Placeholder("192.168.1.10")
 										if msg := errs["UpstreamHost"]; msg != "" {
 											e.Error(msg)
 										}

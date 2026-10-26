@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/nginx"
 	"github.com/lianxin255/jumpboard/internal/store"
 )
 
@@ -118,6 +119,41 @@ func Import(s *store.Store, data []byte) (ImportResult, error) {
 	_ = s.TrimSnapshots(50)
 
 	return ImportResult{MappingsImported: len(clean), SnapshotsImported: imported, Skipped: skipped}, nil
+}
+
+// ImportNginxConf merges the server blocks of an nginx.conf into the
+// store as new mappings.
+//
+// This is deliberately not what Import does: a backup replaces the whole
+// rule set because it is the rule set, while a hand-written or
+// foreign nginx.conf is additions to what is already there. Each parsed
+// block goes through the same sanitizer a backup's mapping does, so a
+// dropped conf is no more trusted than a dropped file. It returns how
+// many mappings were added; blocks the sanitizer refuses are counted as
+// skipped rather than failing the import.
+func ImportNginxConf(s *store.Store, data []byte) (added, skipped int, err error) {
+	parsed, err := nginx.Parse(string(data))
+	if err != nil {
+		return 0, 0, fmt.Errorf("解析 nginx 配置失败: %w", err)
+	}
+	if len(parsed) == 0 {
+		return 0, 0, errors.New("配置里没有可识别的 server 块")
+	}
+	for _, raw := range parsed {
+		m, ok := sanitizeImported(raw)
+		if !ok {
+			skipped++
+			continue
+		}
+		if _, err := s.CreateMapping(m); err != nil {
+			return added, skipped, err
+		}
+		added++
+	}
+	if added == 0 {
+		return 0, skipped, errors.New("配置里的 server 块都缺少可用的转发信息")
+	}
+	return added, skipped, nil
 }
 
 // sanitizeImported validates and cleans one mapping from a backup.
