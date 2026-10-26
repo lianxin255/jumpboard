@@ -2,12 +2,14 @@ package appt
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/lianxin255/jumpboard/internal/engine"
 	"github.com/lianxin255/jumpboard/internal/model"
 	"github.com/lianxin255/jumpboard/internal/nginx"
 	"github.com/lianxin255/jumpboard/internal/services"
@@ -376,6 +378,23 @@ func (a *App) CopyAddress(m model.Mapping) error {
 	return nil
 }
 
+// CopyText puts arbitrary text on the clipboard — a diagnostic command,
+// say — by the same path CopyAddress takes.
+func (a *App) CopyText(text string) error {
+	if text == "" {
+		return nil
+	}
+	a.mu.Lock()
+	a.copied = text
+	a.mu.Unlock()
+	if a.Clipboard != nil {
+		a.Clipboard(text)
+	}
+	// A command can run long; the toast keeps to one line's worth.
+	a.setStatus("已复制 "+truncateNotice(text, 60), false)
+	return nil
+}
+
 // CloneMapping copies a mapping under a new name.
 func (a *App) CloneMapping(id string) error {
 	m, err := a.Store.GetMapping(id)
@@ -405,6 +424,7 @@ func (a *App) CloneMapping(id string) error {
 func (a *App) Apply() error {
 	a.mu.Lock()
 	a.applyErr, a.applyWarn = "", ""
+	a.applyErrPort, a.failKind = 0, ""
 	a.mu.Unlock()
 
 	spec, err := a.spec()
@@ -419,6 +439,7 @@ func (a *App) Apply() error {
 	if err != nil {
 		a.mu.Lock()
 		a.applyErr = err.Error()
+		a.applyErrPort, a.failKind = bindPort(err), "apply"
 		a.mu.Unlock()
 		a.Log.Error("应用规则失败: %v", err)
 		a.refreshEngine()
@@ -484,6 +505,16 @@ func (a *App) ApplyError() string {
 	return a.applyErr
 }
 
+// bindPort pulls the listen port out of a bind failure, so the diagnosis
+// can name the mapping involved without parsing error text.
+func bindPort(err error) int {
+	var bind *engine.ErrBind
+	if errors.As(err, &bind) {
+		return bind.Port
+	}
+	return 0
+}
+
 // ApplyWarning returns what the engine could not honor.
 func (a *App) ApplyWarning() string {
 	a.mu.Lock()
@@ -517,6 +548,7 @@ func (a *App) TestConfig() error {
 	if err := a.Eng.Check(spec); err != nil {
 		a.mu.Lock()
 		a.applyErr = err.Error()
+		a.applyErrPort, a.failKind = bindPort(err), "check"
 		a.mu.Unlock()
 		return fmt.Errorf("预检失败：%v", err)
 	}

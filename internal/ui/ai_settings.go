@@ -107,7 +107,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 		}
 		ui.Text(c, "Key 存在系统凭据库，不写进数据库或导出文件。").
 			FontSize(11).TextColor(t.Muted).Wrap()
-		ui.Text(c, "使用 AI 时只发送你输入的那句话，不上传映射列表。").
+		ui.Text(c, "生成草稿只发送你输入的那句话；失败诊断会发送错误信息、涉及的那一条映射摘要和两份日志的尾部片段。均不上传完整映射列表。").
 			FontSize(11).TextColor(t.Muted).Wrap()
 		if !a.AIReady() {
 			ui.Text(c, "填好地址和模型后，映射页才会出现 AI 入口。").

@@ -21,6 +21,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/lianxin255/jumpboard/internal/ai"
 	"github.com/lianxin255/jumpboard/internal/engine"
 	"github.com/lianxin255/jumpboard/internal/model"
 	"github.com/lianxin255/jumpboard/internal/paths"
@@ -99,6 +100,13 @@ type App struct {
 	busy      bool
 	// applyErr is why the last apply failed, shown next to the button.
 	applyErr string
+	// applyErrPort is the port a bind failure named, 0 when the failure
+	// was not about a port: the diagnosis uses it to find the one
+	// mapping involved without parsing error text.
+	applyErrPort int
+	// failKind says which action failed, "apply" or "check", so the
+	// diagnosis can name the operation the user actually ran.
+	failKind string
 	// applyWarn is what the engine could not honor, shown once.
 	applyWarn string
 	// ruleStatus is what each rule is doing, refreshed with the data.
@@ -110,6 +118,12 @@ type App struct {
 	// applied is set once a rule set has been started, so that the table
 	// can tell "not started yet" from "started and not listening".
 	applied bool
+
+	// The AI failure diagnosis: diagBusy while the request is out,
+	// diagErr when it failed, diagAdvice once it landed.
+	diagBusy   bool
+	diagErr    string
+	diagAdvice *ai.Advice
 
 	// UI state: main thread only.
 	page     Page

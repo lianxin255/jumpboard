@@ -292,6 +292,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
 			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
 		})
+		v.diagSection(c, t, busy)
 	}
 	if msg := a.ApplyWarning(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).

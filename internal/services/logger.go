@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -55,4 +56,25 @@ func (l *Logger) Warn(format string, args ...any) {
 // Error records an error.
 func (l *Logger) Error(format string, args ...any) {
 	l.Log(model.LogError, model.SourceApp, sprintf(format, args...))
+}
+
+// Tail returns the last n entries, oldest first, one "level message"
+// line each, for the failure diagnosis's context.
+//
+// A read failure returns no lines rather than an error: the diagnosis
+// degrades to less context, it does not fail — the same stance the
+// write side takes.
+func (l *Logger) Tail(n int) []string {
+	entries, err := l.store.ListLogs(n)
+	if err != nil {
+		return nil
+	}
+	// ListLogs is newest first; a log tail reads oldest first, so the
+	// lines line up with the file-based access log tail beside them.
+	out := make([]string, 0, len(entries))
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		out = append(out, fmt.Sprintf("[%s] %s", e.Level, e.Message))
+	}
+	return out
 }
