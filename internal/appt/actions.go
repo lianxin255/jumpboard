@@ -630,6 +630,30 @@ func (a *App) Import(data []byte) error {
 	return nil
 }
 
+// UpstreamHostSuggestions lists the upstream hosts already in use, for
+// the form's autocomplete: an internal network has a handful of servers
+// and typing their names by hand is the form's most repetitive step.
+func (a *App) UpstreamHostSuggestions() []string {
+	mappings, err := a.Store.ListMappings()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, 16)
+	for _, m := range mappings {
+		h := m.UpstreamHost
+		if h == "" || seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, h)
+		if len(out) >= 20 {
+			break
+		}
+	}
+	return out
+}
+
 // Wipe clears every piece of data and rebuilds the engine.
 func (a *App) Wipe() error {
 	_ = a.Eng.Stop()

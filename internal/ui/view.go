@@ -24,6 +24,9 @@ type View struct {
 	query  string
 	filter int
 	table  ui.ListState
+	// detailID is the mapping whose detail popover is open, "" for none.
+	// One popover at a time: opening another row's 详情 closes the first.
+	detailID string
 
 	// The forms' own state, which the app's state does not need to know
 	// about until it is saved.
@@ -454,11 +457,59 @@ func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
 }
 
 // nameCell shows the mapping's name and the host under it. The protocol
-// has its own column, so it is not repeated here.
+// has its own column, so it is not repeated here. The cell carries the
+// row's context menu: everything the 修改 column does as buttons, plus
+// copy, one right-click away.
 func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
+	a := v.App
+	id := m.ID
 	listening, problem := v.App.RuleState(m.ID)
-	ui.Column(c).Gap(2).Children(func() {
-		ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine()
+	cell := ui.Column(c).Gap(2)
+	cell.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item("编辑").Chosen() {
+			mm := m
+			a.OpenForm(&mm)
+		}
+		if menu.Item("已启用").Checked(m.Enabled).Chosen() {
+			mm := m
+			a.RunBackground(func() error { return a.SetMappingEnabled(mm.ID, !mm.Enabled) })
+		}
+		menu.Separator()
+		if menu.Item("克隆").Chosen() {
+			a.RunBackground(func() error { return a.CloneMapping(id) })
+		}
+		if menu.Item("复制转发地址").Chosen() {
+			mm := m
+			a.RunBackground(func() error { return a.CopyAddress(mm) })
+		}
+		menu.Separator()
+		if menu.Item("删除…").Chosen() {
+			name := m.Name
+			a.Ask(&appt.Confirm{
+				Title:       "删除映射",
+				Body:        fmt.Sprintf("「%s」将被删除，需要重新创建。", name),
+				Label:       "确认删除",
+				Destructive: true,
+				Run:         func() error { return a.DeleteMapping(id) },
+			})
+		}
+	})
+	cell.Children(func() {
+		// The name opens the detail popover; the anchor is the name
+		// itself, so the panel points at what it is about. open is
+		// recomputed from detailID every frame, which keeps the popover
+		// honest when another row's name is clicked instead.
+		name := ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine().
+			Tooltip("点一下看详情，右键更多操作")
+		if name.Clicked() {
+			if v.detailID == m.ID {
+				v.detailID = ""
+			} else {
+				v.detailID = m.ID
+			}
+		}
+		open := v.detailID == m.ID
+		ui.Popover(c, name, &open, func() { v.detailPopover(c, t, m) })
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			// The dot says whether the rule is listening right now. It is
 			// only drawn once the engine has been applied to: before that,
@@ -582,6 +633,70 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 			})
 		}
 	})
+}
+
+// detailPopover is the mapping's summary panel: what it forwards, how it
+// is doing, and the edit action. Small by design — the form is where
+// editing happens; this is the look-before-you-click view.
+func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
+	a := v.App
+	ui.Column(c).Width(260).Padding(14).Gap(8).
+		Background(t.Surface).Border(1, t.Border).Radius(RadiusChip).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			v.protoCell(c, t, m)
+			if m.Enabled {
+				ui.Text(c, "已启用").FontSize(11).TextColor(t.Meta)
+			} else {
+				ui.Text(c, "已停用").FontSize(11).TextColor(t.Meta)
+			}
+			ui.Spacer(c)
+			if ui.Text(c, "×").FontSize(12).TextColor(t.Meta).Label("关闭详情").Clicked() {
+				v.detailID = ""
+			}
+		})
+		ui.Text(c, m.Name).FontSize(14).Bold().TextColor(t.FG)
+		ui.Text(c, forwardLine(m)).Font("monospace").FontSize(12).TextColor(t.FG2).
+			Tooltip("本地地址 → 上游目标")
+		if m.ServerNames != "" {
+			ui.Textf(c, "域名 %s", m.ServerNames).FontSize(11).TextColor(t.Meta)
+		}
+		if m.HealthCheckEnabled {
+			word, color := "未检查", t.Meta
+			switch m.HealthStatus {
+			case model.HealthHealthy:
+				word, color = "健康检查：正常", t.Success
+			case model.HealthUnhealthy:
+				word, color = "健康检查：异常", t.Danger
+			}
+			ui.Text(c, word).FontSize(11).TextColor(color)
+		} else {
+			ui.Text(c, "健康检查未启用").FontSize(11).TextColor(t.Meta)
+		}
+		ui.Row(c).Gap(8).Children(func() {
+			if ui.Button(c, "编辑").Clicked() {
+				v.detailID = ""
+				mm := m
+				a.OpenForm(&mm)
+			}
+			if ui.Button(c, "关闭").Clicked() {
+				v.detailID = ""
+			}
+		})
+	})
+}
+
+// forwardLine is the mapping's forwarding relation as one line, for the
+// detail popover.
+func forwardLine(m model.Mapping) string {
+	port := m.ListenPort
+	if port == 0 {
+		if m.Protocol == model.HTTPS {
+			port = 443
+		} else {
+			port = 80
+		}
+	}
+	return fmt.Sprintf("127.0.0.1:%d → %s:%d", port, m.UpstreamHost, m.UpstreamPort)
 }
 
 // searchBox is the mappings page's filter: a plain text input, so that
