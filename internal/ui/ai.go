@@ -20,9 +20,9 @@ type aiState struct {
 	open   bool
 	prompt string
 
-	mu sync.Mutex
-	busy  bool
-	err   string
+	mu   sync.Mutex
+	busy bool
+	err  string
 	// note says what was dropped or capped, in plain text.
 	note string
 	// drafts are the mappings the model proposed, waiting for the user.

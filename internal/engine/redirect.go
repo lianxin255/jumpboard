@@ -34,8 +34,8 @@ func (f *redirectForwarder) key() ruleKey {
 	return ruleKey{proto: redirectProto, listen: listenAddr(f.port)}
 }
 
-func (f *redirectForwarder) stats() (int64, int) {
-	return f.conns.Load(), int(f.active.Load())
+func (f *redirectForwarder) stats(string) ruleStats {
+	return ruleStats{connections: f.conns.Load(), active: int(f.active.Load())}
 }
 
 func (f *redirectForwarder) Close() error {

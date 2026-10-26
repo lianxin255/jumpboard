@@ -73,9 +73,9 @@ type View struct {
 	aiKey       string
 	aiKeySet    bool
 	aiMu        sync.Mutex
-	aiModels         []string
-	aiFetching       bool
-	aiListErr        string
+	aiModels    []string
+	aiFetching  bool
+	aiListErr   string
 	// modelPicker shows the fetched list under the model field.
 	modelPicker bool
 }
@@ -581,7 +581,8 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 	})
 }
 
-// forwardCell shows what the mapping listens on and where it goes.
+// forwardCell shows what the mapping listens on and where it goes, with
+// the traffic it moved on a muted line below.
 func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 	port := m.ListenPort
 	if port == 0 {
@@ -597,26 +598,55 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if m.ServerNames != "" {
 		localLabel = fmt.Sprintf("%s:%d", m.ServerNames, port)
 	}
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		// The address is what someone shares, so a click puts it on the
-		// clipboard rather than making them select the text by hand.
-		if ui.Text(c, localLabel).Font("monospace").FontSize(12).TextColor(t.FG2).
-			Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
-			Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
-			mm := m
-			a.RunBackground(func() error { return a.CopyAddress(mm) })
-		}
-		ui.Text(c, "→").FontSize(12).TextColor(t.Meta)
-		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(12).TextColor(t.FG2).
-			Tooltip("上游目标")
-		if info.Connections > 0 {
-			ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
-				Tooltip("这条规则累计转发的连接数")
-		}
-		if info.Active > 0 {
-			ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success)
+	ui.Column(c).Gap(2).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			// The address is what someone shares, so a click puts it on the
+			// clipboard rather than making them select the text by hand.
+			if ui.Text(c, localLabel).Font("monospace").FontSize(12).TextColor(t.FG2).
+				Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
+				Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
+				mm := m
+				a.RunBackground(func() error { return a.CopyAddress(mm) })
+			}
+			ui.Text(c, "→").FontSize(12).TextColor(t.Meta)
+			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(12).TextColor(t.FG2).
+				Tooltip("上游目标")
+			if info.Connections > 0 {
+				ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
+					Tooltip("这条规则累计转发的连接数")
+			}
+			if info.Active > 0 {
+				ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success)
+			}
+		})
+		// The rule's bytes join the other counters on this cell's second
+		// line rather than in a column of their own: the table has one
+		// flexible column — this one — and a fixed-width traffic column
+		// would clip the addresses at the window's default size.
+		if info.BytesIn > 0 || info.BytesOut > 0 {
+			ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
+				FontSize(10).TextColor(t.Meta).
+				Tooltip("这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端")
 		}
 	})
+}
+
+// formatBytes renders a byte count for the table's counters: the usual
+// binary units with one decimal.
+func formatBytes(n int64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	v := float64(n)
+	unit := "KB"
+	for _, next := range []string{"KB", "MB", "GB", "TB"} {
+		v /= 1024
+		unit = next
+		if v < 1024 {
+			break
+		}
+	}
+	return fmt.Sprintf("%.1f %s", v, unit)
 }
 
 // displayHost is the host part shown under a mapping's name.

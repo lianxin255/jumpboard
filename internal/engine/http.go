@@ -42,8 +42,23 @@ func (f *httpForwarder) key() ruleKey {
 	return ruleKey{proto: f.proto, listen: listenAddr(f.port)}
 }
 
-func (f *httpForwarder) stats() (int64, int) {
-	return f.conns.Load(), int(f.active.Load())
+// stats reports the port's connection counts and one mapping's bytes: a
+// port serves several rules, so the bytes are the named rule's own, and a
+// rule whose route could not be built moved none.
+func (f *httpForwarder) stats(mappingID string) ruleStats {
+	st := ruleStats{connections: f.conns.Load(), active: int(f.active.Load())}
+	f.routesMu.Lock()
+	defer f.routesMu.Unlock()
+	for i := range f.routes {
+		r := &f.routes[i]
+		if r.mapping.ID != mappingID {
+			continue
+		}
+		st.bytesIn = r.traffic.in.Load()
+		st.bytesOut = r.traffic.out.Load()
+		break
+	}
+	return st
 }
 
 func (f *httpForwarder) Close() error {
@@ -73,11 +88,63 @@ type route struct {
 	proxy       *httputil.ReverseProxy
 	serverNames []string
 	path        string
+	// traffic counts the body bytes this rule moved, shared by pointer so
+	// the route value can be handed around freely.
+	traffic *ruleTraffic
 	// transport is the proxy's own, so a forwarder being replaced can
 	// close its idle connections: without that, sockets to the upstream
 	// linger for the transport's idle timeout after the rule is gone.
 	transport *http.Transport
 }
+
+// ruleTraffic is a rule's byte counters. They start at zero with every
+// apply, which is when a port's server is rebuilt — the same lifetime the
+// connection counters have.
+type ruleTraffic struct {
+	// in counts request bodies: what clients sent through the rule.
+	in atomic.Int64
+	// out counts response bodies: what the rule sent back to them.
+	out atomic.Int64
+}
+
+// countingTransport counts a rule's traffic where it flows: each read of a
+// request body counts in, each read of the response body counts out. It
+// wraps the proxy's transport, so every request of the rule passes through,
+// from concurrent connections too — the counters are atomic.
+type countingTransport struct {
+	next    http.RoundTripper
+	traffic *ruleTraffic
+}
+
+func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Body != nil {
+		// The proxy closes the body it knows about, which is the one under
+		// this wrapper, so the wrapper itself needs no closer of its own.
+		req.Body = &countingBody{body: req.Body, counter: &t.traffic.in}
+	}
+	resp, err := t.next.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &countingBody{body: resp.Body, counter: &t.traffic.out}
+	return resp, nil
+}
+
+// countingBody adds what it reads to a rule's counter.
+type countingBody struct {
+	body    io.ReadCloser
+	counter *atomic.Int64
+}
+
+func (b *countingBody) Read(p []byte) (int, error) {
+	n, err := b.body.Read(p)
+	if n > 0 {
+		b.counter.Add(int64(n))
+	}
+	return n, err
+}
+
+func (b *countingBody) Close() error { return b.body.Close() }
 
 // newHTTPForwarder starts a server for one port.
 func newHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec, access *accessLog) (*httpForwarder, error) {
@@ -359,8 +426,9 @@ func (s *statusRecorder) Flush() {
 	}
 }
 
-// newProxy builds the reverse proxy of a mapping.
-func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, *http.Transport, error) {
+// newProxy builds the reverse proxy of a mapping, counting what it moves
+// into traffic.
+func newProxy(m model.Mapping, spec Spec, traffic *ruleTraffic) (*httputil.ReverseProxy, *url.URL, *http.Transport, error) {
 	target := m.ProxyPassURL
 	if target == "" {
 		scheme := "http"
@@ -412,7 +480,7 @@ func newProxy(m model.Mapping, spec Spec) (*httputil.ReverseProxy, *url.URL, *ht
 			req.Host = req.URL.Host
 			applyHeaders(req, m, clientHost)
 		},
-		Transport:     transport,
+		Transport:     &countingTransport{next: transport, traffic: traffic},
 		FlushInterval: -1, // write through, as proxy_buffering off
 		ErrorLog:      nil,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
