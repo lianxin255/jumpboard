@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -187,4 +188,40 @@ func TestPostChatStreamToleratesChunkShapes(t *testing.T) {
 	if text, err := c.postChatStream(context.Background(), "s", "u", nil); err != nil || text != "Hello world" {
 		t.Errorf("nil onDelta: text = %q, err = %v", text, err)
 	}
+}
+
+// sseReply writes a complete streaming reply: every fragment becomes one
+// data event, each flushed, ending with [DONE].
+func sseReply(w http.ResponseWriter, frags ...string) []byte {
+	w.Header().Set("Content-Type", "text/event-stream")
+	fl := w.(http.Flusher)
+	fl.Flush()
+	var b bytes.Buffer
+	b.WriteString("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+	for _, f := range frags {
+		b.WriteString("data: {\"choices\":[{\"delta\":{\"content\":" + string(mustJSON(f)) + "}}]}\n\n")
+	}
+	b.WriteString("data: [DONE]\n\n")
+	fl.Flush()
+	return b.Bytes()
+}
+
+// sseReplyThenBreak writes one fragment and then cuts the connection
+// without [DONE] or a clean end — a socket dropped mid-reply.
+func sseReplyThenBreak(w http.ResponseWriter, frag string) []byte {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":" + string(mustJSON(frag)) + "}}]}\n\n"))
+	w.(http.Flusher).Flush()
+	// A socket dropped mid-reply: the connection closes without [DONE] and
+	// without a clean end, so the reader sees an unexpected EOF.
+	panic(http.ErrAbortHandler)
+}
+
+// mustJSON encodes one string as a JSON string literal for the helpers.
+func mustJSON(s string) []byte {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }

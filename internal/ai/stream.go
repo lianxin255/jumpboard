@@ -70,6 +70,7 @@ func (c *Client) postChatStream(ctx context.Context, system, user string, onDelt
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
 	if c.settings.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.settings.APIKey)
 	}
