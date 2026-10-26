@@ -573,6 +573,14 @@ func (a *App) RollbackSnapshot(sn model.Snapshot) error {
 	if err != nil {
 		return fmt.Errorf("快照无法解析：%v", err)
 	}
+	// Keep a record of what the rollback replaces, so the history grows
+	// instead of being the thing a rollback throws away. The snapshot of
+	// the rules as they stand now is what a second rollback returns to.
+	if current, _, genErr := a.NginxExport(); genErr != nil {
+		a.Log.Warn("回滚前保存当前配置失败：%v", genErr)
+	} else if err := a.Store.AddSnapshot(current, "rollback"); err != nil {
+		return fmt.Errorf("保存回滚前的配置失败：%v", err)
+	}
 	if err := a.Store.ReplaceAllMappings(mappings); err != nil {
 		return err
 	}

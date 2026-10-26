@@ -20,6 +20,42 @@ func open(t *testing.T) *Store {
 	return s
 }
 
+// TestReplaceAllMappingsKeepsSnapshotHistory locks in that replacing the
+// rules — what both an import and a rollback do — leaves the snapshots
+// where they are. A rollback used to erase the whole history on its way
+// in, which is the opposite of what a history is for.
+func TestReplaceAllMappingsKeepsSnapshotHistory(t *testing.T) {
+	s := open(t)
+	if _, err := s.CreateMapping(model.Mapping{
+		Name: "old", Protocol: model.TCP, ListenPort: 9000,
+		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddSnapshot("server { }", "apply"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ReplaceAllMappings([]model.Mapping{{
+		Name: "new", Protocol: model.TCP, ListenPort: 9001,
+		UpstreamHost: "10.0.0.6", UpstreamPort: 3306, Enabled: true,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	snaps, err := s.ListSnapshots(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snaps) != 1 || snaps[0].Reason != "apply" {
+		t.Fatalf("the snapshot should have survived the replace: %+v", snaps)
+	}
+	list, err := s.ListMappings()
+	if err != nil || len(list) != 1 || list[0].Name != "new" {
+		t.Fatalf("the rules should have been replaced: %+v %v", list, err)
+	}
+}
+
 func TestMappingCRUD(t *testing.T) {
 	s := open(t)
 	created, err := s.CreateMapping(model.Mapping{

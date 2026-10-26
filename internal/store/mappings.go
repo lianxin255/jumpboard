@@ -277,9 +277,11 @@ func (s *Store) ReplaceAllMappings(ms []model.Mapping) error {
 	if _, err := tx.Exec(`DELETE FROM mappings`); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM config_snapshots`); err != nil {
-		return err
-	}
+	// Snapshots are the history of the rules, not part of them: a
+	// rollback and an import both come through here, and wiping the
+	// history on the way in is how a rollback used to erase every
+	// snapshot it was meant to sit beside. The caller that wants a
+	// record of what it replaced saves one itself, before calling.
 	for i, m := range ms {
 		if m.ID == "" {
 			m.ID = newID()
