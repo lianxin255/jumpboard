@@ -138,6 +138,25 @@ func (w *confWatch) Stop() {
 	}
 }
 
+// ConfChanged reports whether the exported configuration was edited
+// outside the app and nobody has answered it yet.
+func (a *App) ConfChanged() bool {
+	if a.conf == nil {
+		return false
+	}
+	return a.conf.pending()
+}
+
+// DismissConfChange marks the external edit answered without importing it.
+// The file stays as the other tool left it; the next edit reports again.
+func (a *App) DismissConfChange() {
+	if a.conf == nil {
+		return
+	}
+	a.conf.answered()
+	a.notify()
+}
+
 // newConfWatch builds the watch for the app's exported configuration.
 func newConfWatch(exportDir string, onChange func()) *confWatch {
 	return &confWatch{path: filepath.Join(exportDir, "nginx.conf"), onChange: onChange}

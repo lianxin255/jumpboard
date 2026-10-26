@@ -64,9 +64,17 @@ jobs:
       # A release asset is a file; the macOS bundle is a directory. ditto
       # zips it the way macOS unpacks bundles (resource forks, symlinks and
       # the ad hoc signature intact), and the directory itself leaves the
-      # build folder so the upload below never meets it.
+      # build folder so the upload below never meets it. The checksums file
+      # carries the platform's name, because both platforms write one and
+      # the second upload would clobber the first. Names with spaces are
+      # renamed before checksumming: GitHub dots the spaces in an asset's
+      # name, so a manifest naming "Setup 1.2.0.exe" never matches the file
+      # a download produces. The icon sources are build inputs, not
+      # release artifacts.
       - name: Bundle and checksums
         shell: bash
+        env:
+          LEG: ${{ matrix.name }}
         run: |
           cd "${{ matrix.dir }}"
           if ls -d *.app >/dev/null 2>&1; then
@@ -74,10 +82,16 @@ jobs:
             ditto -c -k --keepParent "$app" "${app%.app}-macos.zip"
             rm -rf "$app"
           fi
+          rm -f icon.png icon.svg
+          for f in *" "*; do
+            if [ -f "$f" ]; then
+              mv "$f" "${f// /-}"
+            fi
+          done
           if command -v shasum >/dev/null; then
-            shasum -a 256 * > SHA256SUMS
+            shasum -a 256 * > "SHA256SUMS-$LEG"
           else
-            sha256sum * > SHA256SUMS
+            sha256sum * > "SHA256SUMS-$LEG"
           fi
       - name: Upload to the draft release
         env:
