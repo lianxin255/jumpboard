@@ -139,6 +139,17 @@ type App struct {
 	// mappings page can offer to interpret it after the import.
 	confImport *ConfImport
 
+	// The AI natural-language filter: filterBusy while the request is
+	// out, filterErr when it failed. A landed filter is filterQuery plus
+	// its answer — filterIDs is the set of rows the table keeps, and a
+	// non-empty filterQuery is what says the filter is on, so "no row
+	// matched" (an empty set) stays distinguishable from "no filter".
+	filterBusy      bool
+	filterErr       string
+	filterQuery     string
+	filterRationale string
+	filterIDs       map[string]bool
+
 	// UI state: main thread only.
 	page     Page
 	formOpen bool

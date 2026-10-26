@@ -23,7 +23,12 @@ type View struct {
 
 	query  string
 	filter int
-	table  ui.ListState
+	// aiFilterPrompt is what the natural language filter's input holds.
+	// The ask and its answer live in the app, like the busy state of
+	// every other AI path; this is only the text, with v.query's
+	// main-thread home.
+	aiFilterPrompt string
+	table          ui.ListState
 	// detailID is the mapping whose detail popover is open, "" for none.
 	// One popover at a time: opening another row's 详情 closes the first.
 	detailID string
@@ -339,6 +344,21 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	mappings, _, _, _, _, _, busy, _ := a.Snapshot()
 
 	filtered := filterMappings(mappings, v.query, v.filter)
+	// The AI filter narrows what the search left: once one has landed —
+	// its query is set, which is the flag, so "matched nothing" stays a
+	// filter too — only the rows it named stay, possibly none, which the
+	// empty-state card below explains. While the ask is out the table is
+	// unfiltered: guessing rows the model has not named yet would only
+	// flicker.
+	if _, _, aiQuery, _, aiIDs := a.AIFilterState(); aiQuery != "" {
+		kept := make([]model.Mapping, 0, len(filtered))
+		for _, m := range filtered {
+			if aiIDs[m.ID] {
+				kept = append(kept, m)
+			}
+		}
+		filtered = kept
+	}
 	enabled := 0
 	for _, m := range mappings {
 		if m.Enabled {
@@ -392,8 +412,12 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				}
 			}
 			v.aiEntry(c, t)
+			v.aiFilterBar(c, t)
 			ui.Spacer(c)
 		})
+		// The line a filter ask leaves behind: its error, or its rationale
+		// and the button that puts the table back.
+		v.aiFilterResult(c, t)
 		v.actionRow(c, t)
 		// A dropped conf leaves a bar offering the interpretation, and its
 		// card lands right below: the answer sits where the drop did.
@@ -803,7 +827,9 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 		}
 	}
 	scope := "当前列表"
-	if v.query != "" || v.filter != 0 {
+	// The AI filter counts as a filter here too: the bar acts on what is
+	// on screen, which an AI ask has narrowed as surely as a search did.
+	if _, _, aiQuery, _, _ := v.App.AIFilterState(); v.query != "" || v.filter != 0 || aiQuery != "" {
 		scope = "筛选结果"
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -853,6 +879,9 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 					if ui.PrimaryButton(c, "清除筛选").Clicked() {
 						v.query = ""
 						v.filter = 0
+						// The AI filter may be the reason nothing matched;
+						// one button retires every filter the page has.
+						v.App.ClearAIFilter()
 					}
 					if v.filter != 0 {
 						if ui.Button(c, "显示全部").Clicked() {
