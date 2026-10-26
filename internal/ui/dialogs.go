@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -431,37 +433,89 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	}
 }
 
-// snapshotDialog shows a saved configuration, read only.
+// snapshotDialog shows what rolling back to a saved configuration would
+// change: the rules as they stand against the snapshot, as a diff. The
+// generated header carries the time it was written, which would show as a
+// change on every snapshot, so that one line is blanked on both sides
+// before they are compared.
 func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
+	a := v.App
+	current, _, err := a.NginxExport()
+	if err != nil {
+		current = ""
+	}
+	diff := &editor.DiffState{
+		Old:          editor.NewBuffer(stripConfTimestamp(current)),
+		New:          editor.NewBuffer(stripConfTimestamp(sn.Content)),
+		Layout:       editor.DiffUnified,
+		Inline:       editor.DiffInlineWordAlt,
+		ContextLines: 3,
+	}
+	added, deleted := diff.Stats()
+
 	open := true
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(760).Gap(12).Padding(20).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "配置快照").FontSize(15).Bold().TextColor(t.FG)
+				ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(11).TextColor(t.Meta)
 				ui.Spacer(c)
 				ui.Text(c, formatTime(sn.CreatedAt)).FontSize(11).TextColor(t.Muted)
 			})
 			ui.Scroll(c).Height(460).Children(func() {
-				ui.Text(c, sn.Content).Font("monospace").FontSize(11).
-					TextColor(t.FG2).Selectable()
+				editor.DiffView(c, diff)
 			})
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if ui.Button(c, "关闭").Clicked() {
-					v.App.SetSnapshotView(nil)
+					a.SetSnapshotView(nil)
 				}
+				// The button used to roll back the moment it was clicked, with
+				// nothing to confirm against. The diff above is what the
+				// question refers to.
 				if ui.PrimaryButton(c, "回滚到此配置").Clicked() {
 					snap := *sn
-					v.App.SetSnapshotView(nil)
-					v.App.RunBackground(func() error { return v.App.RollbackSnapshot(snap) })
+					a.SetSnapshotView(nil)
+					a.Ask(&appt.Confirm{
+						Title: "回滚配置",
+						Body: fmt.Sprintf("回滚到 %s 的配置，相对当前 %+d −%d 行。当前配置会先存为一条快照。",
+							formatTime(snap.CreatedAt), added, deleted),
+						Label: "回滚",
+						Run:   func() error { return a.RollbackSnapshot(snap) },
+					})
 				}
 			})
 		})
 	})
-	if !open && v.App.SnapshotView() != nil {
-		v.App.SetSnapshotView(nil)
+	if !open && a.SnapshotView() != nil {
+		a.SetSnapshotView(nil)
 	}
+}
+
+// stripConfTimestamp blanks the generated header's timestamp, which changes
+// on every write and would otherwise be the only difference between two
+// identical rule sets. The line is kept, so the rest of the file stays on
+// the same line numbers.
+
+// snapshotDiffStats is the added and deleted line count the dialog shows,
+// computed the same way, so a test can check the numbers without a window.
+func snapshotDiffStats(current, snapshot string) (added, deleted int) {
+	d := &editor.DiffState{
+		Old: editor.NewBuffer(stripConfTimestamp(current)),
+		New: editor.NewBuffer(stripConfTimestamp(snapshot)),
+	}
+	return d.Stats()
+}
+func stripConfTimestamp(conf string) string {
+	const prefix = "# 生成时间: "
+	lines := strings.Split(conf, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			lines[i] = prefix
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // toast draws the last action's outcome.
