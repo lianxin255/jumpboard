@@ -706,6 +706,13 @@ func (a *App) ImportDroppedFiles(paths []string) error {
 				a.Fail("导入 %s 失败：%v", base, err)
 				continue
 			}
+			// The bar remembers the path, not the bytes: by the time the
+			// user asks for an interpretation the file may already be gone,
+			// and that read failure is then reported as an error rather
+			// than explained from a copy the user cannot see. A dropped
+			// backup replaces the rules and is no interpretation entry, so
+			// it records nothing.
+			a.setConfImport(ConfImport{Path: p, Name: base, Count: n})
 			imported = append(imported, fmt.Sprintf("%s（合并 %d 条）", base, n))
 		default:
 			skippedFiles = append(skippedFiles, base)

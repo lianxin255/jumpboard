@@ -393,6 +393,10 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			ui.Spacer(c)
 		})
 		v.actionRow(c, t)
+		// A dropped conf leaves a bar offering the interpretation, and its
+		// card lands right below: the answer sits where the drop did.
+		v.confImportBar(c, t, busy)
+		v.interpretSection(c, t, "import")
 
 		if len(mappings) == 0 {
 			v.mappingsEmpty(c, t, busy)

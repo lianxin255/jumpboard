@@ -52,6 +52,15 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 				if ui.Switch(c, boolPtr(a.NginxLogRead())).Label("读取访问日志").Changed() {
 					a.SetNginxLogRead(!a.NginxLogRead())
 				}
+				// The interpretation is offered only when there is a log to
+				// read: a button that would answer "nothing to interpret"
+				// is worse than none.
+				if a.AIReady() && a.NginxLogRead() {
+					if ui.Button(c, "解读访问日志").Disabled(busy).
+						Tooltip("把当前 access.log 的尾部交给模型总结").Clicked() {
+						a.RunBackground(a.InterpretAccessLog)
+					}
+				}
 				if ui.Button(c, "清空访问日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
 						Title: "清空访问日志", Body: "引擎写的 access.log 会被清空。",
@@ -61,6 +70,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 				}
 			}
 		})
+
+		if v.logTab == 1 {
+			v.interpretSection(c, t, "logs")
+		}
 
 		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 			if v.logTab == 0 {

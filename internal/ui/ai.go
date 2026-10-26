@@ -3,6 +3,7 @@ package ui
 import (
 	"sync"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -65,6 +66,17 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 					v.runAI()
 				}
 			})
+
+			// The panel also reads a file the user picks — an external
+			// nginx's error.log, a hand-written conf — and explains it
+			// read-only, on the card below the picker's row.
+			ui.Row(c).Gap(8).Children(func() {
+				if ui.Button(c, "解读文件…").
+					Tooltip("选一份 .conf / .log / .txt 交给模型解读，比如外部 nginx 的 error.log").Clicked() {
+					v.interpretFilePicker()
+				}
+			})
+			v.interpretSection(c, t, "panel")
 
 			if busy {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -147,4 +159,24 @@ func (v *View) aiEntry(c *ui.Context, t Tokens) {
 	if ui.Button(c, "✨ AI 建映射").Tooltip("用一句话描述，由模型生成草稿").Clicked() {
 		v.ai.open = true
 	}
+}
+
+// interpretFilePicker asks for one configuration or log and hands it to
+// the interpretation on the background goroutine: reading the file is
+// disk work no frame should wait on.
+func (v *View) interpretFilePicker() {
+	a := v.App
+	// A nil hook reads as a canceled dialog, the way importBackup reads it.
+	if a.OpenDialog == nil {
+		return
+	}
+	paths, err := a.OpenDialog(mygo.OpenDialogOptions{
+		Title:   "解读文件",
+		Filters: []mygo.FileFilter{{Name: "配置与日志", Extensions: []string{"conf", "log", "txt"}}},
+	})
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	path := paths[0]
+	a.RunBackground(func() error { return a.InterpretFile("", path) })
 }
