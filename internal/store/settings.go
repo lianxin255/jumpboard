@@ -12,6 +12,7 @@ const (
 	SettingTheme        = "theme"             // "system" | "light" | "dark"
 	SettingWhitelistOn  = "whitelist_enabled" // "1" | "0"
 	SettingNginxLogRead = "nginx_log_read_enabled"
+	SettingOpenAtLogin  = "open_at_login" // "1" | "0"
 	SettingAIBaseURL    = "ai_base_url"
 	SettingAIModel      = "ai_model"
 	// SettingAIDiagModel names the model the failure diagnosis and the

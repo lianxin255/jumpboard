@@ -318,6 +318,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							a.SetHostName(v.settingsName)
 						}
 					})
+					ui.Field(c, "开机自启", func() {
+						on := a.OpenAtLogin()
+						if ui.Switch(c, &on).Label("开机自启动").Changed() {
+							_ = a.SetOpenAtLogin(on)
+						}
+					})
+					ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
+						FontSize(11).TextColor(t.Muted).Wrap()
 				})
 
 				v.card(c, t, "访问控制", func() {

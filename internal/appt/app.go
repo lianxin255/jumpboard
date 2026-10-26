@@ -72,6 +72,11 @@ type App struct {
 	// OnTheme applies the appearance to the window's material, which the
 	// sidebar shows through. Set by the UI; nil in tests.
 	OnTheme func(ThemeChoice)
+	// OnOpenAtLogin applies the start-at-login choice to the desktop's
+	// login items. main.go points it at mygo's SetOpenAtLogin, which needs
+	// the running app; a test leaves it nil and the choice is only
+	// recorded.
+	OnOpenAtLogin func(bool) error
 	// Clipboard puts text on the system clipboard. main.go points it at
 	// mygo's clipboard, which needs the running app; a test leaves it nil
 	// and reads Copied instead.
@@ -165,6 +170,7 @@ type App struct {
 	hostName     string
 	whitelistOn  bool
 	nginxLogRead bool
+	openAtLogin  bool
 
 	// The last draft the model proposed, kept for the AI panel.
 	lastAIDraft *model.Mapping
@@ -201,6 +207,7 @@ func New(p paths.Paths) (*App, error) {
 	a.theme = ThemeChoice(st.Setting(store.SettingTheme, string(ThemeSystem)))
 	a.whitelistOn = st.WhitelistOn()
 	a.nginxLogRead = st.SettingBool(store.SettingNginxLogRead, true)
+	a.openAtLogin = st.SettingBool(store.SettingOpenAtLogin, false)
 	if name, err := st.HostName(); err == nil && name != "" {
 		a.hostName = name
 	}

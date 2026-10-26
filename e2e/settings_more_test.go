@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // streamRule is a plain TCP rule that applies cleanly without a live
@@ -59,6 +60,27 @@ func TestWhitelistEntryToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the address enabled again", enabled)
+}
+
+// TestOpenAtLoginSwitch walks the settings switch: a flip reaches the
+// store, with no desktop to register a login item with.
+func TestOpenAtLoginSwitch(t *testing.T) {
+	a := testApp(t)
+	tt := tester(t, a, 1200, 760)
+
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("开机自启动"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the login-item mirror on", func() bool {
+		return a.Store.Setting(store.SettingOpenAtLogin, "") == "1"
+	})
+	if !a.OpenAtLogin() {
+		t.Error("the switch should read on")
+	}
 }
 
 // TestSnapshotViewDialog opens a snapshot read-only and shows the
