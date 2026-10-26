@@ -167,6 +167,7 @@ type App struct {
 	templateOpen bool
 	confirm      *Confirm
 	snapshotView *model.Snapshot
+	confViewOpen bool
 	theme        ThemeChoice
 	hostName     string
 	whitelistOn  bool

@@ -28,6 +28,9 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 	if sn := a.SnapshotView(); sn != nil {
 		v.snapshotDialog(c, t, sn)
 	}
+	if a.ConfViewOpen() {
+		v.confViewDialog(c, t)
+	}
 	v.aiDialog(c, t)
 }
 
@@ -588,4 +591,64 @@ func formatTime(ms int64) string {
 		return "—"
 	}
 	return timeAt(ms).Format("2006-01-02 15:04")
+}
+
+// confViewDialog shows the rules as they stand, as the configuration the
+// engine runs, in a read-only editor. It is the "what is my nginx.conf
+// right now" answer on the settings page: the text is regenerated each
+// frame from the mappings, so nothing is cached and a change made while
+// the viewer is open shows on the next frame. The buffer is the view's
+// own, so the caret and scroll survive the refresh; the language is
+// LanguageNamed("shell") — .conf is the syntax this file really is, not
+// the TOML that LanguageFor aliases it to.
+func (v *View) confViewDialog(c *ui.Context, t Tokens) {
+	a := v.App
+	if v.confEditor == nil {
+		v.confEditor = &editor.State{
+			Buffer:   editor.NewBuffer(""),
+			ReadOnly: true,
+			Label:    "当前 nginx 配置",
+		}
+		v.confEditor.Buffer.SetLanguage(editor.LanguageNamed("shell"))
+	}
+	conf, n, err := a.NginxExport()
+	if err != nil {
+		conf = "# " + err.Error() + "\n"
+	} else if conf == "" {
+		conf = "# 还没有映射，应用一次配置后这里才有内容。\n"
+	}
+	if v.confEditor.Buffer.String() != conf {
+		buf := editor.NewBuffer(conf)
+		buf.SetLanguage(editor.LanguageNamed("shell"))
+		v.confEditor.Buffer = buf
+	}
+
+	open := true
+	ui.Modal(c, &open, func() {
+		ui.Column(c).Width(860).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "当前配置").FontSize(15).Bold().TextColor(t.FG)
+				ui.Textf(c, "%d 条规则", n).FontSize(11).TextColor(t.Meta)
+				ui.Spacer(c)
+				ui.Text(c, "只读").FontSize(10).TextColor(t.Muted)
+				if ui.Button(c, "复制全文").FontSize(11).
+					Tooltip("把这份配置复制到剪贴板").Clicked() {
+					a.RunBackground(func() error { return a.CopyText(conf) })
+				}
+			})
+			ui.Box(c).Height(520).Clip().Children(func() {
+				editor.View(c, v.confEditor).Grow(1).FillWidth()
+			})
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if ui.Button(c, "关闭").Clicked() {
+					a.SetConfViewOpen(false)
+				}
+			})
+		})
+	})
+	if !open {
+		a.SetConfViewOpen(false)
+	}
 }

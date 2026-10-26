@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
+	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -55,6 +56,10 @@ type View struct {
 	nginxLoadedAt int64
 	settingsName  string
 	nameLoaded    bool
+
+	// confEditor is the read-only configuration viewer's editor state,
+	// held here so the buffer is not rebuilt each frame.
+	confEditor *editor.State
 
 	ai aiState
 

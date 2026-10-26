@@ -432,6 +432,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							FontSize(11).TextColor(t.Muted).Wrap()
 					})
 					ui.Divider(c)
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						if ui.Button(c, "查看当前配置").Clicked() {
+							a.SetConfViewOpen(true)
+						}
+						ui.Text(c, "只读查看应用实际生成的 nginx.conf。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+					})
+					ui.Divider(c)
 					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).
 						TextColor(t.Muted).Wrap().Selectable()
 					if a.Paths.Fallback {

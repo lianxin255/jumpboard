@@ -204,6 +204,24 @@ func (a *App) SetSnapshotView(s *model.Snapshot) {
 	a.notify()
 }
 
+// ConfViewOpen reports whether the read-only current-configuration
+// viewer is open on the settings page.
+func (a *App) ConfViewOpen() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.confViewOpen
+}
+
+// SetConfViewOpen opens or closes the configuration viewer. The config it
+// shows is generated fresh each frame from the rules as they are, so
+// nothing is cached here.
+func (a *App) SetConfViewOpen(open bool) {
+	a.mu.Lock()
+	a.confViewOpen = open
+	a.mu.Unlock()
+	a.notify()
+}
+
 // Status returns the toast to show, if any.
 func (a *App) Status() (Status, bool) {
 	a.mu.Lock()
@@ -662,6 +680,16 @@ func (a *App) ReadImportFile(path string) ([]byte, error) {
 
 // NginxExport is the current rules as a standard nginx.conf, for someone
 // who wants to run them on a real nginx.
+// NginxExportOrEmpty is NginxExport's shape for a frame that only wants
+// the text: the error is not worth failing a read-only view over.
+func (a *App) NginxExportOrEmpty() string {
+	conf, _, err := a.NginxExport()
+	if err != nil {
+		return ""
+	}
+	return conf
+}
+
 func (a *App) NginxExport() (string, int, error) {
 	spec, err := a.Spec()
 	if err != nil {
