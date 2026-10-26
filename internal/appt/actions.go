@@ -630,6 +630,77 @@ func (a *App) Import(data []byte) error {
 	return nil
 }
 
+// importKind names what a dropped file is by its extension: a JumpBoard
+// backup, an nginx configuration, or nothing this app can use.
+func importKind(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".json":
+		return "json"
+	case ".conf":
+		return "conf"
+	default:
+		return ""
+	}
+}
+
+// ImportDroppedFiles takes the files dropped on the window and imports
+// each one by what it is: a .json goes through the backup import, which
+// replaces the rules with the backup's; a .conf's server blocks merge in
+// as new mappings. Anything else is named and skipped — a drop is a
+// gesture, not a dialog, so refusals are a status line, never a crash,
+// and one bad file does not stop the ones behind it.
+//
+// It runs on the caller's background goroutine; the summary it leaves in
+// the status line covers the whole drop at once.
+func (a *App) ImportDroppedFiles(paths []string) error {
+	var imported, skippedFiles []string
+	for _, p := range paths {
+		base := filepath.Base(p)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			a.Fail("读取 %s 失败：%v", base, err)
+			continue
+		}
+		switch importKind(filepath.Ext(p)) {
+		case "json":
+			if err := a.Import(data); err != nil {
+				a.Fail("导入 %s 失败：%v", base, err)
+				continue
+			}
+			imported = append(imported, base+"（备份替换）")
+		case "conf":
+			n, err := a.ImportNginxConf(data)
+			if err != nil {
+				a.Fail("导入 %s 失败：%v", base, err)
+				continue
+			}
+			imported = append(imported, fmt.Sprintf("%s（合并 %d 条）", base, n))
+		default:
+			skippedFiles = append(skippedFiles, base)
+		}
+	}
+	if len(imported) > 0 {
+		a.Info("已导入 %d 个文件：%s", len(imported), strings.Join(imported, "、"))
+	}
+	if len(skippedFiles) > 0 {
+		a.Fail("已跳过不支持的文件：%s（支持 .json 备份与 .conf 配置）", strings.Join(skippedFiles, "、"))
+	}
+	return nil
+}
+
+// ImportNginxConf merges an nginx.conf's server blocks in as new
+// mappings, for a conf dragged onto the window. Unlike Import — a
+// backup, which replaces everything — a conf is additions.
+func (a *App) ImportNginxConf(data []byte) (int, error) {
+	added, skipped, err := services.ImportNginxConf(a.Store, data)
+	if err != nil {
+		return 0, err
+	}
+	a.Log.Info("从 nginx 配置导入 %d 条映射，跳过 %d 块", added, skipped)
+	a.markDirty()
+	return added, nil
+}
+
 // UpstreamHostSuggestions lists the upstream hosts already in use, for
 // the form's autocomplete: an internal network has a handful of servers
 // and typing their names by hand is the form's most repetitive step.

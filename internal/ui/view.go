@@ -343,7 +343,19 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		}
 	}
 
-	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12).Children(func() {
+	// The whole page is a drop target: a backup or an nginx.conf dragged
+	// anywhere on the rules imports, with the border lighting up while a
+	// file hangs over it. DroppedFiles hands over the paths; what each
+	// one becomes is importDropped's decision.
+	page := ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12)
+	if paths := page.DroppedFiles(); paths != nil {
+		v.importDropped(paths)
+	}
+	if page.FileDragOver() {
+		page.Border(2, t.Accent)
+	}
+	page.Children(func() {
+
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
 				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)

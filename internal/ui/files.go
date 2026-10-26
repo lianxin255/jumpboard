@@ -90,3 +90,12 @@ func homeDir() string {
 	}
 	return dir
 }
+
+// importDropped hands the dropped paths to the app's importer on the
+// background goroutine: the decision of what each file is, and the
+// summary of what happened, live with the app — the view only owns the
+// gesture.
+func (v *View) importDropped(paths []string) {
+	a := v.App
+	a.RunBackground(func() error { return a.ImportDroppedFiles(paths) })
+}
