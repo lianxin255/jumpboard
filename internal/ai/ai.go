@@ -538,7 +538,8 @@ type DiagnoseInput struct {
 	Action string
 	// Error is the failure text.
 	Error string
-	// Rule is the one involved mapping's summary, "" if none matched.
+	// Rule is the involved mappings' summary — at most two, joined — ""
+	// if none matched. Only these lines ever travel, never the table.
 	Rule string
 	// OpLog is the operation log tail, oldest first.
 	OpLog []string

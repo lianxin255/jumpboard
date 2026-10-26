@@ -440,6 +440,10 @@ func (a *App) Apply() error {
 		a.mu.Lock()
 		a.applyErr = err.Error()
 		a.applyErrPort, a.failKind = bindPort(err), "apply"
+		// A new failure retires the diagnosis of the old one: advice about
+		// a failure that no longer exists must not ride along under the
+		// fresh red bar.
+		a.diagErr, a.diagAdvice = "", nil
 		a.mu.Unlock()
 		a.Log.Error("应用规则失败: %v", err)
 		a.refreshEngine()
@@ -549,6 +553,9 @@ func (a *App) TestConfig() error {
 		a.mu.Lock()
 		a.applyErr = err.Error()
 		a.applyErrPort, a.failKind = bindPort(err), "check"
+		// As with a failed apply: the diagnosis belongs to the failure that
+		// asked for it, not to whichever red bar shows next.
+		a.diagErr, a.diagAdvice = "", nil
 		a.mu.Unlock()
 		return fmt.Errorf("预检失败：%v", err)
 	}

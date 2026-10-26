@@ -210,10 +210,19 @@ func TestDiagnoseFailureUnreadableAccessLog(t *testing.T) {
 	if err := a.Apply(); err == nil {
 		t.Fatal("applying onto a taken port should fail")
 	}
-	// A directory where the log should be is unreadable, not missing.
+	// The failed apply leaves the engine holding access.log open, and
+	// Windows will not remove an open file, so the handle is released
+	// before the log is replaced. Remove then reports a real problem
+	// instead of one swallowed by "_ =", and MkdirAll tolerates the
+	// directory already being there.
+	if err := a.Eng.Stop(); err != nil {
+		t.Fatal(err)
+	}
 	logPath := filepath.Join(a.Paths.LogsDir, "access.log")
-	_ = os.Remove(logPath)
-	if err := os.Mkdir(logPath, 0o755); err != nil {
+	if err := os.Remove(logPath); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(logPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Remove(logPath) })
@@ -229,6 +238,61 @@ func TestDiagnoseFailureUnreadableAccessLog(t *testing.T) {
 	}
 	if content := g.content(t); !strings.Contains(content, "读取失败") {
 		t.Errorf("the degradation should be said:\n%s", content)
+	}
+}
+
+// TestDiagnoseFailureNewFailureClearsAdvice pins that a diagnosis belongs
+// to the failure that asked for it: a new failed apply or check retires
+// the advice, instead of leaving it under the next red bar.
+func TestDiagnoseFailureNewFailureClearsAdvice(t *testing.T) {
+	a := droppedApp(t)
+	port := heldPort(t)
+	if _, err := a.Store.CreateMapping(model.Mapping{
+		Name: "目标", Protocol: model.TCP, Enabled: true, ListenPort: port,
+		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Apply(); err == nil {
+		t.Fatal("applying onto a taken port should fail")
+	}
+
+	g := &diagGateway{}
+	srv := httptest.NewServer(http.HandlerFunc(g.handler))
+	t.Cleanup(srv.Close)
+	if err := a.SetAI(srv.URL, "test-model"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.DiagnoseFailure("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, advice := a.Diagnosis(); advice == nil {
+		t.Fatal("the diagnosis should have landed first")
+	}
+
+	// The port is still held, so a second apply fails again — and the old
+	// advice must go with the old failure.
+	if err := a.Apply(); err == nil {
+		t.Fatal("applying again onto the taken port should fail")
+	}
+	busy, errText, advice := a.Diagnosis()
+	if busy || errText != "" || advice != nil {
+		t.Fatalf("a new failure should retire the advice: %v %q %v", busy, errText, advice)
+	}
+
+	// The check's failure retires one too.
+	if err := a.DiagnoseFailure("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, advice = a.Diagnosis(); advice == nil {
+		t.Fatal("the diagnosis should have landed again")
+	}
+	if err := a.TestConfig(); err == nil {
+		t.Fatal("checking onto the taken port should fail")
+	}
+	_, _, advice = a.Diagnosis()
+	if advice != nil {
+		t.Fatalf("a new check failure should retire the advice: %v", advice)
 	}
 }
 
