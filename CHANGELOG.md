@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — 终端 v2
+
+- **多标签**：终端页可同时开多个会话标签（本地终端 / 端口探测 / 串口），切换与关闭互不影响；「全部关闭」与 ⌘Q 一并挂断
+- **串口**：列出本机串行设备，选定波特率打开，原始 8-N-1 读写；打不开或没设备时给出可读提示（不涉及 SSH/凭据/远程主机）
+
 ## [1.2.0] — 2026-10-26
 
 （1.0.0 之后的全部内容：mygo 原生化重构 + P1/P2 批次，随 1.2.0 号码入库）

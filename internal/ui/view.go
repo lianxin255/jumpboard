@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
 	"github.com/egoist/mygo/ui/editor"
@@ -69,24 +68,20 @@ type View struct {
 	// held here so the buffer is not rebuilt each frame.
 	confEditor *editor.State
 
-	// The terminal page: which kind of session it shows and the mapping
-	// the probe picks are the frame's own. The sessions themselves are
-	// started off the frame — the emulator library may be a first-run
-	// download, and a dial to a dead port takes a moment — so the
-	// goroutines write the fields behind termMu and the frame reads a
-	// snapshot, the AI settings card's pattern.
-	termMode      int
-	probePick     string
-	termMu        sync.Mutex
-	shell         *terminal.Terminal
-	shellStarting bool
-	shellErr      string
-	shellDone     bool
-	probe         *terminal.Terminal
-	probeAddr     string
-	probeDialing  bool
-	probeErr      string
-	probeDone     bool
+	// The terminal page is a set of session tabs — a local shell, a probe of
+	// a forwarded port, a serial device — which the user opens and closes
+	// on their own. The sessions are started off the frame — the emulator
+	// library may be a first-run download, a dial to a dead port takes a
+	// moment, and opening a serial port can block — so the goroutines
+	// write the fields behind termMu and the frame reads a snapshot, the
+	// AI settings card's pattern. Each tab carries its own mutable state,
+	// which is what keeps two sessions from tripping over each other.
+	termMu      sync.Mutex
+	termTabs    []*tabSession
+	termActive  int
+	termSeq     int
+	termNewKind int
+	termInit    sync.Once
 
 	ai aiState
 

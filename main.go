@@ -47,6 +47,17 @@ func main() {
 		return
 	}
 
+	// A second copy signals this one before it exits, so the window comes
+	// forward. The guard covers a second launch that arrives before
+	// WhenReady has built the window: that window then opens on its own
+	// when ready.
+	var dock *native.Dock
+	mygo.App.OnSecondInstance(func([]string, string) {
+		if dock != nil {
+			dock.Show()
+		}
+	})
+
 	p, err := paths.Resolve()
 	if err != nil {
 		fail("无法准备数据目录", err)
@@ -141,7 +152,9 @@ func main() {
 		// The tray, the close-to-tray behaviour and the global shortcut.
 		// Dock.Setup installs its own quit hooks; the engine shutdown
 		// below runs after them through the same OnBeforeQuit list.
-		dock := native.Setup(app, win, appIcon)
+		// Assigned, not declared: the second-instance guard above holds the
+		// same variable, so a second launch can bring this window forward.
+		dock = native.Setup(app, win, appIcon)
 
 		// A deeplink that says "show me" needs the window; it is wired once
 		// the dock exists, so the app never has to know the window does.
@@ -151,6 +164,12 @@ func main() {
 		// app writes its own items, the system's own menus where macOS
 		// needs them untouched.
 		native.SetupAppMenu(dock)
+
+		// The desktop's login items are the source of truth — the user can
+		// flip them in System Settings too — and the store only mirrors
+		// them for the settings switch.
+		app.OnOpenAtLogin = mygo.App.SetOpenAtLogin
+		app.SyncOpenAtLogin(mygo.App.OpenAtLogin())
 
 		// Quitting must not leave nginx behind: stop it before the
 		// process exits, and close the database after. Closing the window
