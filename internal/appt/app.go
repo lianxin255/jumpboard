@@ -38,6 +38,7 @@ const (
 	PageMappings Page = iota
 	PageLogs
 	PageHistory
+	PageTerminal
 	PageSettings
 )
 
@@ -143,6 +144,11 @@ type App struct {
 	copied string
 	// bg tracks RunBackground's goroutines, so Close can wait them out.
 	bg sync.WaitGroup
+	// closers hold the cleanups OnClose registered — the UI's terminal
+	// sessions hang up here — run once, before the store closes. Guarded
+	// by closeMu, which its own is: a terminal lands from a goroutine.
+	closers  []func()
+	closeMu  sync.Mutex
 	// applied is set once a rule set has been started, so that the table
 	// can tell "not started yet" from "started and not listening".
 	applied bool
@@ -277,12 +283,35 @@ func New(p paths.Paths) (*App, error) {
 	return a, nil
 }
 
+// OnClose registers a cleanup to run once, before the store closes, when
+// the app quits. The UI registers the sessions it owns here — a terminal
+// is a program the app started, and quitting should hang it up even
+// though this package knows nothing of terminals. Safe from any
+// goroutine.
+func (a *App) OnClose(fn func()) {
+	a.closeMu.Lock()
+	a.closers = append(a.closers, fn)
+	a.closeMu.Unlock()
+}
+
+// runClosers runs the registered cleanups once, first come first run.
+func (a *App) runClosers() {
+	a.closeMu.Lock()
+	fns := a.closers
+	a.closers = nil
+	a.closeMu.Unlock()
+	for _, fn := range fns {
+		fn()
+	}
+}
+
 // Close stops the background work and closes the database.
 //
 // The background tasks are waited for first: an Apply still binding ports
 // or an Import still writing rows would otherwise race the store closing
 // underneath them at quit.
 func (a *App) Close() {
+	a.runClosers()
 	a.Check.Stop()
 	if a.rates != nil {
 		a.rates.Stop()

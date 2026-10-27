@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **排序**：映射右键菜单可上移/下移，调整规则在配置中的顺序
 - **deeplink**：`jumpboard://` 链接可唤起窗口，`jumpboard://import?data=…` 直接进入导入预览
 - **应用内更新**：设置页「更新」卡片，手动检查、查看发布说明、安装并重启（mygo 签名更新器；开发构建显示不支持）
+- **终端**：应用内跑本地 shell，或对转发端口做 TCP/HTTP 探测会话（mygo 终端插件，随包分发 libghostty-vt，macOS 最低系统升至 13.0；SSH/串口/多标签不在本版）
 - **发布流水线**：`v*` tag 自动构建 macOS/Windows 产物并挂到 draft release，配好 secret 后同时产出签名更新包（见 `docs/release-and-updates.md`）
 
 ### Fixed — P1/P2 批次

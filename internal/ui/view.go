@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
 	"github.com/egoist/mygo/ui/editor"
@@ -60,6 +61,25 @@ type View struct {
 	// confEditor is the read-only configuration viewer's editor state,
 	// held here so the buffer is not rebuilt each frame.
 	confEditor *editor.State
+
+	// The terminal page: which kind of session it shows and the mapping
+	// the probe picks are the frame's own. The sessions themselves are
+	// started off the frame — the emulator library may be a first-run
+	// download, and a dial to a dead port takes a moment — so the
+	// goroutines write the fields behind termMu and the frame reads a
+	// snapshot, the AI settings card's pattern.
+	termMode  int
+	probePick string
+	termMu        sync.Mutex
+	shell         *terminal.Terminal
+	shellStarting bool
+	shellErr      string
+	shellDone     bool
+	probe         *terminal.Terminal
+	probeAddr     string
+	probeDialing  bool
+	probeErr      string
+	probeDone     bool
 
 	ai aiState
 
@@ -189,7 +209,7 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 			})
 		})
 
-		labels := []string{"映射", "日志", "历史", "设置"}
+		labels := []string{"映射", "日志", "历史", "终端", "设置"}
 		tabs := ui.TabsBase(c, &page, len(labels))
 		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
 			for i, label := range labels {
@@ -264,6 +284,8 @@ func (v *View) body(c *ui.Context, t Tokens) {
 		v.logsPage(c, t)
 	case appt.PageHistory:
 		v.historyPage(c, t)
+	case appt.PageTerminal:
+		v.terminalPage(c, t)
 	case appt.PageSettings:
 		v.settingsPage(c, t)
 	default:

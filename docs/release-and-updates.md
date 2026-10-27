@@ -9,6 +9,8 @@
 - 各自附带 `SHA256SUMS`，上传到同一个 draft；
 - 构建带 `MYGO_UPDATER_PRIVATE_KEY`（来自仓库 secret）：**配了 secret 就同时产出签名更新包**（`jumpboard-x.y.z-<platform>.tar.gz` + `update-<platform>.json` 清单 + 增量包），**没配则跳过更新文件**，流水线照常绿。
 
+**macOS 最低系统 13.0**（`mygo.json` 的 `macos.minimumSystemVersion`）：终端功能随包带 1–2 MB 的 `libghostty-vt`，需要 macOS 13+；Windows 侧要求 10 1809+（ConPTY）。低于下限的系统应用其余功能不受影响，只是终端页不可用。
+
 产物**没有代码签名**。macOS 上是 ad hoc 签名，Gatekeeper 会拦截别的 Mac 打开；Windows 上没有签名，SmartScreen 会警告。所以安装包只供维护者自己安装和分发，不面向公开下载。自动更新用的签名是 mygo 自己的 Ed25519 密钥对（见下），与代码签名无关，不受此影响——但更新替换进来的新版本同样是 ad hoc 签名，未公证，首次打开仍需绕过 Gatekeeper（`xattr -cr /Applications/JumpBoard.app`）。
 
 ## 自动更新（已接线）
