@@ -1,8 +1,12 @@
 package store
 
 import (
+	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite" // the driver the store opens databases with
 
 	"github.com/lianxin255/jumpboard/internal/model"
 )
@@ -17,6 +21,9 @@ func open(t *testing.T) *Store {
 	if err := s.EnsureLocalHost(); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.EnsureWorkspaces(); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 
@@ -26,7 +33,7 @@ func open(t *testing.T) *Store {
 // in, which is the opposite of what a history is for.
 func TestReplaceAllMappingsKeepsSnapshotHistory(t *testing.T) {
 	s := open(t)
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(DefaultWorkspaceID, model.Mapping{
 		Name: "old", Protocol: model.TCP, ListenPort: 9000,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
 	}); err != nil {
@@ -36,7 +43,7 @@ func TestReplaceAllMappingsKeepsSnapshotHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.ReplaceAllMappings([]model.Mapping{{
+	if err := s.ReplaceAllMappings(DefaultWorkspaceID, []model.Mapping{{
 		Name: "new", Protocol: model.TCP, ListenPort: 9001,
 		UpstreamHost: "10.0.0.6", UpstreamPort: 3306, Enabled: true,
 	}}); err != nil {
@@ -50,7 +57,7 @@ func TestReplaceAllMappingsKeepsSnapshotHistory(t *testing.T) {
 	if len(snaps) != 1 || snaps[0].Reason != "apply" {
 		t.Fatalf("the snapshot should have survived the replace: %+v", snaps)
 	}
-	list, err := s.ListMappings()
+	list, err := s.ListMappings(DefaultWorkspaceID)
 	if err != nil || len(list) != 1 || list[0].Name != "new" {
 		t.Fatalf("the rules should have been replaced: %+v %v", list, err)
 	}
@@ -58,7 +65,7 @@ func TestReplaceAllMappingsKeepsSnapshotHistory(t *testing.T) {
 
 func TestMappingCRUD(t *testing.T) {
 	s := open(t)
-	created, err := s.CreateMapping(model.Mapping{
+	created, err := s.CreateMapping(DefaultWorkspaceID, model.Mapping{
 		Name: "mysql", Protocol: model.TCP, ListenPort: 9000,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
 	})
@@ -68,7 +75,7 @@ func TestMappingCRUD(t *testing.T) {
 	if created.ID == "" || created.SortOrder != 0 {
 		t.Fatalf("bad create result: %+v", created)
 	}
-	list, err := s.ListMappings()
+	list, err := s.ListMappings(DefaultWorkspaceID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %v", list, err)
 	}
@@ -106,12 +113,12 @@ func TestEnabledFilter(t *testing.T) {
 		{Name: "a", Protocol: model.TCP, ListenPort: 1, UpstreamHost: "h", UpstreamPort: 1, Enabled: true},
 		{Name: "b", Protocol: model.TCP, ListenPort: 2, UpstreamHost: "h", UpstreamPort: 1, Enabled: false},
 	} {
-		if _, err := s.CreateMapping(m); err != nil {
+		if _, err := s.CreateMapping(DefaultWorkspaceID, m); err != nil {
 			t.Fatal(err)
 		}
 	}
-	all, _ := s.ListMappings()
-	enabled, _ := s.ListEnabledMappings()
+	all, _ := s.ListMappings(DefaultWorkspaceID)
+	enabled, _ := s.ListEnabledMappings(DefaultWorkspaceID)
 	if len(all) != 2 || len(enabled) != 1 || enabled[0].Name != "a" {
 		t.Fatalf("all=%d enabled=%d", len(all), len(enabled))
 	}
@@ -231,14 +238,14 @@ func TestWhitelistAndWipe(t *testing.T) {
 // one — which must read back as the empty string, not NULL.
 func TestMappingGroupRoundtrip(t *testing.T) {
 	s := open(t)
-	created, err := s.CreateMapping(model.Mapping{
+	created, err := s.CreateMapping(DefaultWorkspaceID, model.Mapping{
 		Name: "mysql", Group: "数据库", Protocol: model.TCP, ListenPort: 9000,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.ListMappings()
+	list, err := s.ListMappings(DefaultWorkspaceID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %v", list, err)
 	}
@@ -258,7 +265,7 @@ func TestMappingGroupRoundtrip(t *testing.T) {
 		t.Fatalf("group after update: %q", got.Group)
 	}
 
-	bare, err := s.CreateMapping(model.Mapping{
+	bare, err := s.CreateMapping(DefaultWorkspaceID, model.Mapping{
 		Name: "bare", Protocol: model.TCP, ListenPort: 9001,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306, Enabled: true,
 	})
@@ -299,5 +306,91 @@ func TestMigrationsIdempotent(t *testing.T) {
 		if !cols[name] {
 			t.Errorf("mappings.%s missing after reopen", name)
 		}
+	}
+}
+
+// ddlFromSchema cuts one CREATE TABLE out of the package schema, so a test
+// that builds a database in the shape an earlier version wrote stays in
+// sync with the real DDL instead of copying it.
+func ddlFromSchema(t *testing.T, table string) string {
+	t.Helper()
+	needle := "CREATE TABLE IF NOT EXISTS " + table + " ("
+	start := strings.Index(schema, needle)
+	if start < 0 {
+		t.Fatalf("%s DDL not found in schema", table)
+	}
+	end := strings.Index(schema[start:], "\n);")
+	if end < 0 {
+		t.Fatalf("%s DDL unterminated", table)
+	}
+	return schema[start : start+end+len("\n);")]
+}
+
+// TestMigrationsUpgradePreWorkspacesDatabase opens a database that only an
+// earlier version could have written: mappings without a workspace column,
+// and no workspaces table at all. Opening it must leave every pre-existing
+// rule in the 默认 scene and hand the app a scene to be active, which is
+// the whole reason the migration and EnsureWorkspaces exist.
+func TestMigrationsUpgradePreWorkspacesDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.db")
+	legacy, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range []string{
+		ddlFromSchema(t, "hosts"),
+		ddlFromSchema(t, "mappings"),
+		ddlFromSchema(t, "app_settings"),
+	} {
+		if _, err := legacy.Exec(ddl); err != nil {
+			t.Fatalf("building the legacy schema: %v", err)
+		}
+	}
+	// A rule as an older build wrote it: no workspace_id, and no
+	// workspaces table to be active in.
+	if _, err := legacy.Exec(
+		`INSERT INTO hosts (id, name, type, is_default, created_at) VALUES ('h1', '本机', 'local', 1, 1)`); err != nil {
+		t.Fatalf("host row: %v", err)
+	}
+	if _, err := legacy.Exec(
+		`INSERT INTO mappings (id, host_id, name, enabled, protocol, listen_port,
+		 upstream_host, upstream_port, health_status, created_at, updated_at)
+		 VALUES ('m1', 'h1', '旧规则', 1, 'tcp', 9100, '10.0.0.1', 3306, 'unknown', 1, 1)`); err != nil {
+		t.Fatalf("mapping row: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("opening the legacy database: %v", err)
+	}
+	defer s.Close()
+	cols, err := s.tableColumns("mappings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cols["workspace_id"] {
+		t.Error("mappings.workspace_id missing after migrating the legacy database")
+	}
+	if err := s.EnsureWorkspaces(); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.ActiveWorkspace(); got != DefaultWorkspaceID {
+		t.Errorf("active workspace = %q, want %q", got, DefaultWorkspaceID)
+	}
+	ms, err := s.ListMappings(DefaultWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ms) != 1 || ms[0].Name != "旧规则" {
+		t.Errorf("the legacy rule should live in 默认: %+v %v", ms, err)
+	}
+	// The index that serves the workspace query survived the ALTER: the
+	// query it accelerates still answers.
+	if err := s.db.QueryRow(
+		`SELECT name FROM mappings WHERE workspace_id = ?`, DefaultWorkspaceID).Scan(new(string)); err != nil {
+		t.Errorf("querying by workspace_id after migration: %v", err)
 	}
 }

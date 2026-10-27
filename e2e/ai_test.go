@@ -79,7 +79,7 @@ func TestAIDraftFillsTheForm(t *testing.T) {
 	if err := a.SaveForm(); err != nil {
 		t.Fatalf("saving the draft: %v", err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %v", list, err)
 	}
@@ -101,7 +101,7 @@ func TestAIBadJSONDegrades(t *testing.T) {
 	if a.AIDraftForTest() != nil {
 		t.Error("no draft should come from rubbish")
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Error("nothing should have been saved")
 	}
 }

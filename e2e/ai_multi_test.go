@@ -28,7 +28,7 @@ func TestAIMultiDraftFlow(t *testing.T) {
 		return tt.HasText("草稿（2 条）") && tt.HasText("内网 MySQL") && tt.HasText("内网 Redis")
 	})
 	// Not adopting anything yet stores nothing.
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Fatalf("drafts must not store anything: %+v", list)
 	}
 
@@ -46,7 +46,7 @@ func TestAIMultiDraftFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the mapping stored", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1
 	})
 
@@ -63,7 +63,7 @@ func TestAIMultiDraftFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	if len(list) != 1 || list[0].Name != "内网 MySQL" {
 		t.Fatalf("only the adopted draft may be stored: %+v", list)
 	}

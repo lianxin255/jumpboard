@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 func TestCheckTCP(t *testing.T) {
@@ -181,14 +182,14 @@ func TestHealthCheckerRunOnce(t *testing.T) {
 	defer live.Close()
 	livePort := live.Addr().(*net.TCPAddr).Port
 
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "up", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "127.0.0.1", UpstreamPort: livePort,
 		HealthCheckEnabled: true, HealthStatus: model.HealthUnknown,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "down", Protocol: model.TCP, Enabled: true, ListenPort: 9001,
 		UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		HealthCheckEnabled: true, HealthStatus: model.HealthUnknown,
@@ -196,7 +197,7 @@ func TestHealthCheckerRunOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A mapping with checks off is left alone.
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "off", Protocol: model.TCP, Enabled: true, ListenPort: 9002,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 		HealthCheckEnabled: false, HealthStatus: model.HealthUnknown,
@@ -209,7 +210,7 @@ func TestHealthCheckerRunOnce(t *testing.T) {
 	if len(changed) != 2 {
 		t.Fatalf("want 2 changed, got %d", len(changed))
 	}
-	list, _ := s.ListMappings()
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
 	status := map[string]model.HealthStatus{}
 	for _, m := range list {
 		status[m.Name] = m.HealthStatus
@@ -237,7 +238,7 @@ func TestHealthCheckerLoopStops(t *testing.T) {
 	done := make(chan struct{})
 	c.OnResult = func([]HealthChange) { close(done) }
 
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "x", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 		HealthCheckEnabled: true, HealthStatus: model.HealthUnknown,

@@ -15,7 +15,7 @@ func TestMultiSelectDragReorders(t *testing.T) {
 	a := testApp(t)
 	mk := func(name string) {
 		m := streamRule(t, name)
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -30,7 +30,7 @@ func TestMultiSelectDragReorders(t *testing.T) {
 		t.Fatal(err)
 	}
 	nameByID := func() []string {
-		ids, err := a.Store.MappingIDs()
+		ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -18,7 +18,7 @@ func TestGroupChipFilterAndEdit(t *testing.T) {
 		{Name: "乙组站", Group: "内网", Protocol: model.TCP, Enabled: true,
 			ListenPort: freePort(t), UpstreamHost: "127.0.0.1", UpstreamPort: 1},
 	} {
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,7 +71,7 @@ func TestGroupChipFilterAndEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the edit saved", func() bool {
-		list, err := a.Store.ListMappings()
+		list, err := a.Store.ListMappings(a.ActiveWorkspace())
 		if err != nil || len(list) != 2 {
 			return false
 		}

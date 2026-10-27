@@ -30,7 +30,7 @@ func TestFormSavesInSmallestWindow(t *testing.T) {
 		t.Fatalf("the save button must be reachable in a 900x600 window: %v", err)
 	}
 	waitFor(t, tt, "the mapping in the table", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1 && list[0].Name == "小窗口站"
 	})
 }
@@ -41,10 +41,10 @@ func TestSearchShortcutFilters(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if _, err := a.Store.CreateMapping(streamRule(t, "被搜的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "被搜的站")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Store.CreateMapping(streamRule(t, "别的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "别的站")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Reload(); err != nil {

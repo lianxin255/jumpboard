@@ -12,7 +12,7 @@ import (
 // dismissing it clears it.
 func TestExternalConfEditShowsTheBar(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "被监听的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "被监听的站")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {

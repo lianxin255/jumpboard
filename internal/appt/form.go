@@ -293,7 +293,7 @@ func sanitizeGroup(s string) string {
 // is most likely to join. First-seen order — the order the mappings page's
 // filter chips show them in.
 func (a *App) GroupSuggestions() []string {
-	mappings, err := a.Store.ListMappings()
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		return nil
 	}

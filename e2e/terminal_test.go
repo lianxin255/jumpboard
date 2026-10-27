@@ -109,7 +109,7 @@ func TestTerminalProbeConnects(t *testing.T) {
 	a := testApp(t)
 	m := streamRule(t, "探测目标")
 	m.UpstreamHost, m.UpstreamPort = "127.0.0.1", upstream.Addr().(*net.TCPAddr).Port
-	if _, err := a.Store.CreateMapping(m); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {

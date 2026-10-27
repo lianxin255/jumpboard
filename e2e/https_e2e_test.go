@@ -142,7 +142,7 @@ func TestHTTPSMappingEndToEnd(t *testing.T) {
 	writeTestCert(t, certPath, keyPath)
 
 	listen := freePort(t)
-	created, err := a.Store.CreateMapping(model.Mapping{
+	created, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "安全站", Protocol: model.HTTPS, Enabled: true,
 		ListenPort: listen, ServerNames: "secure.example.com", ListenPath: "/",
 		UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
@@ -212,7 +212,7 @@ func TestHTTPSExportHonorsListenPort(t *testing.T) {
 	writeTestCert(t, certPath, keyPath)
 
 	listen := freePort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "端口站", Protocol: model.HTTPS, Enabled: true,
 		ListenPort: listen, ServerNames: "port.example.com", ListenPath: "/",
 		UpstreamHost: "10.0.0.8", UpstreamPort: 8443,

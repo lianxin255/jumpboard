@@ -106,9 +106,13 @@ func NewChecker(s *store.Store) *Checker {
 	return &Checker{store: s, Interval: 30 * time.Second}
 }
 
-// RunOnce checks every mapping that has checks turned on.
+// RunOnce checks every mapping that has checks turned on. The rules it
+// reads are the active scene's — a switch changes what is running, and
+// the checker asks the store which scene that is on every pass rather
+// than holding a workspace of its own.
 func (c *Checker) RunOnce() []HealthChange {
-	mappings, err := c.store.ListEnabledMappings()
+	ws := c.store.ActiveWorkspace()
+	mappings, err := c.store.ListEnabledMappings(ws)
 	if err != nil {
 		return nil
 	}

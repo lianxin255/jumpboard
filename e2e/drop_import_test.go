@@ -21,12 +21,12 @@ func dropAndAwait(t *testing.T, a *appt.App, n int, paths ...string) {
 	njui.DropFilesForTest(a, paths)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if list, _ := a.Store.ListMappings(); len(list) == n {
+		if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) == n {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	t.Fatalf("store holds %d mappings, want %d", len(list), n)
 }
 
@@ -34,7 +34,7 @@ func dropAndAwait(t *testing.T, a *appt.App, n int, paths ...string) {
 // dropped on the page becomes new mappings beside the existing ones.
 func TestDropConfMergesMappings(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "已有", Protocol: model.TCP, Enabled: true, ListenPort: 16001,
 		UpstreamHost: "10.9.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -51,7 +51,7 @@ func TestDropConfMergesMappings(t *testing.T) {
 
 	dropAndAwait(t, a, 2, path)
 
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	names := map[string]bool{}
 	for _, m := range list {
 		names[m.Name] = true
@@ -75,7 +75,7 @@ func TestDropRejectsUnknownExtension(t *testing.T) {
 	// The refusal lands as a toast once the background pass finishes.
 	tt := tester(t, a, 1200, 760)
 	waitFor(t, tt, "the refusal", func() bool { return tt.HasText("已跳过不支持的文件") })
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("nothing should have been imported: %d", len(list))
 	}
 }

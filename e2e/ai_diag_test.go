@@ -30,7 +30,7 @@ func holdPort(t *testing.T) int {
 func TestAIDiagnoseAdviceCard(t *testing.T) {
 	a := testApp(t)
 	port := holdPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "诊断演示", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -78,7 +78,7 @@ func TestAIDiagnoseAdviceCard(t *testing.T) {
 
 	// The diagnosis is display only: the rule set is exactly what was
 	// saved, field for field.
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatalf("the diagnosis must not touch the rules: %v %v", list, err)
 	}
@@ -94,7 +94,7 @@ func TestAIDiagnoseAdviceCard(t *testing.T) {
 func TestAIDiagnoseHiddenWithoutAI(t *testing.T) {
 	a := testApp(t)
 	port := holdPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "未配置演示", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -123,7 +123,7 @@ func TestAIDiagnoseHiddenWithoutAI(t *testing.T) {
 func TestAIDiagnoseServerError(t *testing.T) {
 	a := testApp(t)
 	port := holdPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "错误演示", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {

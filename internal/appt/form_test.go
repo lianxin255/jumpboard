@@ -82,7 +82,7 @@ func TestGroupSuggestions(t *testing.T) {
 		{Name: "四", Protocol: model.TCP, Enabled: true,
 			ListenPort: 19004, UpstreamHost: "127.0.0.1", UpstreamPort: 1},
 	} {
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
 	}

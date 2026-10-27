@@ -334,7 +334,7 @@ func (a *App) SaveForm() error {
 		}
 		a.Log.Info("修改映射「%s」", m.Name)
 	} else {
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			return err
 		}
 		a.Log.Info("新建映射「%s」", m.Name)
@@ -418,7 +418,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 	if err != nil {
 		return err
 	}
-	ids, err := a.Store.MappingIDs()
+	ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 	if err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 		return nil
 	}
 	ids[at], ids[to] = ids[to], ids[at]
-	if err := a.Store.ReorderMappings(ids); err != nil {
+	if err := a.Store.ReorderMappings(a.ActiveWorkspace(), ids); err != nil {
 		return err
 	}
 	dir := "下移"
@@ -461,7 +461,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 // Like 上移/下移, only the sort order changes: the engine and the
 // configuration it generates are untouched and nothing is marked dirty.
 func (a *App) ReorderFilteredMappings(shown []string) error {
-	ids, err := a.Store.MappingIDs()
+	ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 	if err != nil {
 		return err
 	}
@@ -484,7 +484,7 @@ func (a *App) ReorderFilteredMappings(shown []string) error {
 		// or wider: acting on it would silently drop or duplicate rows.
 		return fmt.Errorf("拖动排序时表里的映射与配置不一致，请刷新后再试")
 	}
-	if err := a.Store.ReorderMappings(next); err != nil {
+	if err := a.Store.ReorderMappings(a.ActiveWorkspace(), next); err != nil {
 		return err
 	}
 	a.Log.Info("拖动调整了映射顺序")
@@ -563,7 +563,7 @@ func (a *App) CloneMapping(id string) error {
 	// The listen port would collide with the original's, so clear it and
 	// let the user pick one.
 	m.ListenPort = 0
-	if _, err := a.Store.CreateMapping(m); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 		return err
 	}
 	a.Log.Info("克隆映射「%s」", m.Name)
@@ -742,7 +742,7 @@ func (a *App) RollbackSnapshot(sn model.Snapshot) error {
 	} else if err := a.Store.AddSnapshot(current, "rollback"); err != nil {
 		return fmt.Errorf("保存回滚前的配置失败：%v", err)
 	}
-	if err := a.Store.ReplaceAllMappings(mappings); err != nil {
+	if err := a.Store.ReplaceAllMappings(a.ActiveWorkspace(), mappings); err != nil {
 		return err
 	}
 	if err := a.Reload(); err != nil {
@@ -789,8 +789,12 @@ func (a *App) ToggleWhitelist(id int64, on bool) error {
 }
 
 // Example shows how an export looks: the app keeps the format compatible
-// with the Electron build's backups.
-func (a *App) Export() (services.Payload, error) { return services.Export(a.Store) }
+// with the Electron build's backups. What is exported is the active
+// scene's rules — a backup of 公司 carries 公司's mappings, and 家里's
+// stay home.
+func (a *App) Export() (services.Payload, error) {
+	return services.Export(a.Store, a.ActiveWorkspace())
+}
 
 // ExportBackupJSON is the backup the UI saves. The dialog stays in the UI;
 // the payload and its formatting live here.
@@ -837,9 +841,9 @@ func (a *App) NginxExport() (string, int, error) {
 	return conf, len(spec.Mappings), nil
 }
 
-// Import replaces the data with a backup.
+// Import replaces the active scene's rules with a backup's.
 func (a *App) Import(data []byte) error {
-	res, err := services.Import(a.Store, data)
+	res, err := services.Import(a.Store, a.ActiveWorkspace(), data)
 	if err != nil {
 		return err
 	}
@@ -917,7 +921,7 @@ func (a *App) ImportDroppedFiles(paths []string) error {
 // mappings, for a conf dragged onto the window. Unlike Import — a
 // backup, which replaces everything — a conf is additions.
 func (a *App) ImportNginxConf(data []byte) (int, error) {
-	added, skipped, err := services.ImportNginxConf(a.Store, data)
+	added, skipped, err := services.ImportNginxConf(a.Store, a.ActiveWorkspace(), data)
 	if err != nil {
 		return 0, err
 	}
@@ -928,9 +932,11 @@ func (a *App) ImportNginxConf(data []byte) (int, error) {
 
 // UpstreamHostSuggestions lists the upstream hosts already in use, for
 // the form's autocomplete: an internal network has a handful of servers
-// and typing their names by hand is the form's most repetitive step.
+// and typing their names by hand is the form's most repetitive step. The
+// suggestions come from the active scene — a rule written in one scene
+// is no reason for another scene's form to whisper its hosts.
 func (a *App) UpstreamHostSuggestions() []string {
-	mappings, err := a.Store.ListMappings()
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		return nil
 	}
@@ -959,6 +965,9 @@ func (a *App) Wipe() error {
 	if err := a.Store.EnsureLocalHost(); err != nil {
 		return err
 	}
+	if err := a.Store.EnsureWorkspaces(); err != nil {
+		return err
+	}
 	a.refreshEngine()
 	a.Log.Warn("已清空所有数据")
 	// The settings live in the store and are mirrored in memory; a wipe
@@ -972,8 +981,14 @@ func (a *App) Wipe() error {
 		a.hostName = name
 	}
 	a.mu.Lock()
+	// The scenes are data too: what the wipe leaves is the one scene a
+	// fresh database starts with, active and with no edits waiting.
+	a.activeWS = store.DefaultWorkspaceID
 	a.dirty = false
 	a.mu.Unlock()
+	if err := a.Reload(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -98,7 +98,7 @@ func TestAIMultiAsksForDrafts(t *testing.T) {
 	if m := g.model(t); m != "main-model" {
 		t.Errorf("drafts must use the main model, got %q", m)
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("asking must store nothing: %+v", list)
 	}
 }

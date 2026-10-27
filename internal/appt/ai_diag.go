@@ -86,7 +86,7 @@ func (a *App) DiagnoseFailure(kind string) error {
 // is the entire mapping context the model gets; the rest of the table
 // stays home.
 func (a *App) involvedRule(port int) string {
-	mappings, err := a.Store.ListMappings()
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		return ""
 	}

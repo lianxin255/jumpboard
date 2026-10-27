@@ -15,7 +15,7 @@ import (
 // app owns.
 func TestLogExportBuildsTheFiles(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "日志导出的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "日志导出的站")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {
@@ -58,7 +58,7 @@ func TestAccessLogExportReadsTheFile(t *testing.T) {
 	defer stopUp()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "访问站", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,

@@ -86,7 +86,7 @@ func TestAskAIFilterHitsRows(t *testing.T) {
 		{"筛选 redis", 6379, true},
 		{"筛选 web", 8080, false},
 	} {
-		m, err := a.Store.CreateMapping(model.Mapping{
+		m, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 			Name: tc.name, Protocol: model.TCP, Enabled: tc.enabled, ListenPort: tc.port,
 			UpstreamHost: "192.168.1.10", UpstreamPort: tc.port,
 		})
@@ -95,7 +95,7 @@ func TestAskAIFilterHitsRows(t *testing.T) {
 		}
 		ids = append(ids, m.ID)
 	}
-	before, err := a.Store.ListMappings()
+	before, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestAskAIFilterHitsRows(t *testing.T) {
 	}
 
 	// The filter is display-only: the rule set is exactly what was saved.
-	after, err := a.Store.ListMappings()
+	after, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAskAIFilterHitsRows(t *testing.T) {
 // silently empty the table the way a landed empty answer may.
 func TestAskAIFilterServerError(t *testing.T) {
 	a := droppedApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "目标", Protocol: model.TCP, Enabled: true, ListenPort: 19401,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -189,7 +189,7 @@ func TestAskAIFilterServerError(t *testing.T) {
 // the landed error alike, leaving the state the page starts in.
 func TestClearAIFilter(t *testing.T) {
 	a := droppedApp(t)
-	m, err := a.Store.CreateMapping(model.Mapping{
+	m, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "清除演示", Protocol: model.TCP, Enabled: true, ListenPort: 19402,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	})

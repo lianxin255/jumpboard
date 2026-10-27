@@ -29,10 +29,10 @@ func seedRules(t *testing.T, a *App, names ...string) []string {
 			Name: name, Protocol: model.TCP, Enabled: true,
 			ListenPort: freeTCPPort(t), UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 		}
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -49,7 +49,7 @@ func seedRules(t *testing.T, a *App, names ...string) []string {
 // order reads the store's ordering, by name for readable failures.
 func order(t *testing.T, a *App) []string {
 	t.Helper()
-	ids, err := a.Store.MappingIDs()
+	ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 // no listen port (the original still holds it).
 func TestCloneMapping(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "原始", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -25,10 +25,10 @@ func TestCloneMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the clone", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 2
 	})
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	var clone model.Mapping
 	for _, m := range list {
 		if m.Name != "原始" {
@@ -52,7 +52,7 @@ func TestCloneMapping(t *testing.T) {
 // TestToggleMapping checks the enable switch in the table.
 func TestToggleMapping(t *testing.T) {
 	a := testApp(t)
-	created, err := a.Store.CreateMapping(model.Mapping{
+	created, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "开关", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	})
@@ -79,7 +79,7 @@ func TestHealthCheckNow(t *testing.T) {
 	port, stop := upstream(t)
 	defer stop()
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "健康", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "127.0.0.1", UpstreamPort: port,
 		HealthCheckEnabled: true, HealthStatus: model.HealthUnknown,

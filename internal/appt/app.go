@@ -132,6 +132,11 @@ type App struct {
 	engine    string
 	dirty     bool
 	busy      bool
+	// workspaces is the scene list and activeWS the one whose rules the
+	// app runs and shows; both live behind the mutex because CRUD and
+	// switches write them from the background goroutines.
+	workspaces []model.Workspace
+	activeWS   string
 	// applyErr is why the last apply failed, shown next to the button.
 	applyErr string
 	// applyErrPort is the port a bind failure named, 0 when the failure
@@ -241,6 +246,10 @@ func New(p paths.Paths) (*App, error) {
 		st.Close()
 		return nil, fmt.Errorf("初始化本机主机: %w", err)
 	}
+	if err := st.EnsureWorkspaces(); err != nil {
+		st.Close()
+		return nil, fmt.Errorf("初始化场景: %w", err)
+	}
 
 	a := &App{
 		Paths: p,
@@ -258,6 +267,10 @@ func New(p paths.Paths) (*App, error) {
 	if name, err := st.HostName(); err == nil && name != "" {
 		a.hostName = name
 	}
+	// The active scene is healed by the store — a stale pointer falls
+	// back to the first scene — so what the app holds is always one that
+	// exists.
+	a.activeWS = st.ActiveWorkspace()
 
 	if err := a.Reload(); err != nil {
 		return nil, err
@@ -456,7 +469,11 @@ func (a *App) Fail(format string, args ...any) { a.setStatus(fmt.Sprintf(format,
 
 // Reload rereads everything the UI shows and asks for a frame.
 func (a *App) Reload() error {
-	mappings, err := a.Store.ListMappings()
+	// The active scene is the store's word: a switch wrote it there, and
+	// a stale in-memory id — after a wipe, say — must not outlive the
+	// rows it named.
+	active := a.Store.ActiveWorkspace()
+	mappings, err := a.Store.ListMappings(active)
 	if err != nil {
 		return err
 	}
@@ -472,8 +489,14 @@ func (a *App) Reload() error {
 	if err != nil {
 		return err
 	}
+	workspaces, err := a.Store.ListWorkspaces()
+	if err != nil {
+		return err
+	}
 	a.mu.Lock()
+	a.activeWS = active
 	a.mappings, a.logs, a.snapshots, a.whitelist = mappings, logs, snaps, wl
+	a.workspaces = workspaces
 	a.mu.Unlock()
 	a.refreshEngine()
 	a.notify()
@@ -499,7 +522,7 @@ func (a *App) spec() (engine.Spec, error) {
 		}
 		wl = ips
 	}
-	mappings, err := a.Store.ListEnabledMappings()
+	mappings, err := a.Store.ListEnabledMappings(a.ActiveWorkspace())
 	if err != nil {
 		return engine.Spec{}, err
 	}

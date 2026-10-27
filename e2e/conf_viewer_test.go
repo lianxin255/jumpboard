@@ -12,7 +12,7 @@ import (
 func TestConfViewerOpens(t *testing.T) {
 	a := testApp(t)
 	m := streamRule(t, "被查看的站")
-	if _, err := a.Store.CreateMapping(m); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {

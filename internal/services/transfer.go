@@ -38,13 +38,15 @@ type hostOut struct {
 	CreatedAt    int64  `json:"createdAt"`
 }
 
-// Export returns everything the app can restore.
-func Export(s *store.Store) (Payload, error) {
+// Export returns a backup of one workspace's rules, everything the app
+// can restore. Snapshots and logs are the app's history, not a scene's,
+// so they ride along whatever scene is exported.
+func Export(s *store.Store, ws string) (Payload, error) {
 	name, err := s.HostName()
 	if err != nil {
 		return Payload{}, err
 	}
-	mappings, err := s.ListMappings()
+	mappings, err := s.ListMappings(ws)
 	if err != nil {
 		return Payload{}, err
 	}
@@ -77,13 +79,16 @@ type ImportResult struct {
 	Skipped           int `json:"skipped"`
 }
 
-// Import replaces the app's data with a backup.
+// Import replaces one workspace's rules with a backup's. A backup has no
+// scene of its own — the format predates them — so the scene it lands in
+// is the caller's choice: the active one for a plain 导入备份, a fresh one
+// for 导入为新场景.
 //
 // A backup is a file the user may have been sent, so nothing in it is
 // trusted: each mapping is validated and sanitized the same way a value
 // typed into the form is, and a record that fails is skipped rather than
 // aborting the whole import.
-func Import(s *store.Store, data []byte) (ImportResult, error) {
+func Import(s *store.Store, ws string, data []byte) (ImportResult, error) {
 	var p Payload
 	if err := json.Unmarshal(data, &p); err != nil {
 		return ImportResult{}, fmt.Errorf("备份文件不是合法的 JSON: %w", err)
@@ -102,7 +107,7 @@ func Import(s *store.Store, data []byte) (ImportResult, error) {
 		}
 		clean = append(clean, m)
 	}
-	if err := s.ReplaceAllMappings(clean); err != nil {
+	if err := s.ReplaceAllMappings(ws, clean); err != nil {
 		return ImportResult{}, err
 	}
 
@@ -121,8 +126,8 @@ func Import(s *store.Store, data []byte) (ImportResult, error) {
 	return ImportResult{MappingsImported: len(clean), SnapshotsImported: imported, Skipped: skipped}, nil
 }
 
-// ImportNginxConf merges the server blocks of an nginx.conf into the
-// store as new mappings.
+// ImportNginxConf merges the server blocks of an nginx.conf into a
+// workspace as new mappings.
 //
 // This is deliberately not what Import does: a backup replaces the whole
 // rule set because it is the rule set, while a hand-written or
@@ -131,7 +136,7 @@ func Import(s *store.Store, data []byte) (ImportResult, error) {
 // dropped conf is no more trusted than a dropped file. It returns how
 // many mappings were added; blocks the sanitizer refuses are counted as
 // skipped rather than failing the import.
-func ImportNginxConf(s *store.Store, data []byte) (added, skipped int, err error) {
+func ImportNginxConf(s *store.Store, ws string, data []byte) (added, skipped int, err error) {
 	parsed, err := nginx.Parse(string(data))
 	if err != nil {
 		return 0, 0, fmt.Errorf("解析 nginx 配置失败: %w", err)
@@ -145,7 +150,7 @@ func ImportNginxConf(s *store.Store, data []byte) (added, skipped int, err error
 			skipped++
 			continue
 		}
-		if _, err := s.CreateMapping(m); err != nil {
+		if _, err := s.CreateMapping(ws, m); err != nil {
 			return added, skipped, err
 		}
 		added++

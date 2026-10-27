@@ -22,6 +22,10 @@ const (
 	// SettingHotkey is the global show/hide accelerator; "" means the
 	// default binding.
 	SettingHotkey = "hotkey"
+	// SettingActiveWorkspace is the id of the workspace whose mappings the
+	// app runs and shows; an unset or stale value reads as the first
+	// workspace, which for a fresh database is the default one.
+	SettingActiveWorkspace = "active_workspace"
 )
 
 // Setting returns a value, or def when it is unset.
@@ -47,6 +51,14 @@ func (s *Store) SettingBool(key string, def bool) bool {
 func (s *Store) SetSetting(key, value string) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	return s.setSettingLocked(key, value)
+}
+
+// setSettingLocked stores a value with writeMu already held. It exists so
+// callers that cannot take the lock themselves — ActiveWorkspace's heal,
+// which closes rows and then writes on the same pooled connection —
+// do not deadlock on a driver that runs with one connection.
+func (s *Store) setSettingLocked(key, value string) error {
 	_, err := s.db.Exec(`INSERT INTO app_settings (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
@@ -249,7 +261,7 @@ func (s *Store) Wipe() error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"app_logs", "config_snapshots", "mappings", "ip_whitelist", "app_settings"} {
+	for _, t := range []string{"app_logs", "config_snapshots", "mappings", "ip_whitelist", "app_settings", "workspaces"} {
 		if _, err := tx.Exec(`DELETE FROM ` + t); err != nil {
 			return err
 		}

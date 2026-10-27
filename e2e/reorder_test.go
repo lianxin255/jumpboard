@@ -28,12 +28,12 @@ func TestMoveMappingUpAndDown(t *testing.T) {
 	a := testApp(t)
 	mk := func(name string) model.Mapping {
 		m := streamRule(t, name)
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
 		// CreateMapping writes the row but not the id back into the model
 		// it was handed, so the id comes from the store.
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -51,7 +51,7 @@ func TestMoveMappingUpAndDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := func() []string {
-		ids, err := a.Store.MappingIDs()
+		ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,10 +94,10 @@ func TestDragRowReorders(t *testing.T) {
 	a := testApp(t)
 	mk := func(name string) string {
 		m := streamRule(t, name)
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +116,7 @@ func TestDragRowReorders(t *testing.T) {
 		t.Fatal(err)
 	}
 	nameByID := func() []string {
-		ids, err := a.Store.MappingIDs()
+		ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 		if err != nil {
 			t.Fatal(err)
 		}

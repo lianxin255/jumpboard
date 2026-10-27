@@ -126,7 +126,7 @@ func TestEngineSwitch(t *testing.T) {
 	upPort, stopUp := upstream(t)
 	defer stopUp()
 	listen := freePort(t)
-	if _, err := a.Store.CreateMapping(httpRule(t, "开关验证", listen, upPort)); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), httpRule(t, "开关验证", listen, upPort)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,7 +206,7 @@ func TestMappingTrafficLifecycle(t *testing.T) {
 	}
 	confirm(t, tt, "确认删除")
 	waitFor(t, tt, "the mapping gone", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 0
 	})
 	if err := tt.Click("应用配置"); err != nil {
@@ -252,7 +252,7 @@ func TestAccessLogClear(t *testing.T) {
 	upPort, stopUp := upstream(t)
 	defer stopUp()
 	listen := freePort(t)
-	if _, err := a.Store.CreateMapping(httpRule(t, "访问日志验证", listen, upPort)); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), httpRule(t, "访问日志验证", listen, upPort)); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {
@@ -301,7 +301,7 @@ func TestWhitelistBlocksTraffic(t *testing.T) {
 	upPort, stopUp := taggedUpstream(t, "whitelist-ok")
 	defer stopUp()
 	listen := freePort(t)
-	if _, err := a.Store.CreateMapping(httpRule(t, "白名单验证", listen, upPort)); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), httpRule(t, "白名单验证", listen, upPort)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -384,7 +384,7 @@ func TestHistoryRollbackTraffic(t *testing.T) {
 	defer stopB()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(httpRule(t, "回滚验证", listen, upA)); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), httpRule(t, "回滚验证", listen, upA)); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {
@@ -392,7 +392,7 @@ func TestHistoryRollbackTraffic(t *testing.T) {
 	}
 	waitPort(t, listen, true)
 
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatal(list, err)
 	}
@@ -503,14 +503,14 @@ func TestTemplatePickerRoundTrip(t *testing.T) {
 // wipes everything, checking the app still applies afterwards.
 func TestDataRoundTripUI(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "要被替换的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "要被替换的站")); err != nil {
 		t.Fatal(err)
 	}
 	payload, err := a.Export()
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatal(list, err)
 	}
@@ -536,7 +536,7 @@ func TestDataRoundTripUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the import to land", func() bool {
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		return err == nil && len(got) == 1 && got[0].Name == "备份里的站"
 	})
 
@@ -546,12 +546,12 @@ func TestDataRoundTripUI(t *testing.T) {
 	}
 	confirm(t, tt, "全部删除")
 	waitFor(t, tt, "the data wiped", func() bool {
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		return err == nil && len(got) == 0
 	})
 
 	// The app still works afterwards.
-	if _, err := a.Store.CreateMapping(streamRule(t, "清空之后")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "清空之后")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {

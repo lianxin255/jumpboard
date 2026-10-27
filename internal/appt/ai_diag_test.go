@@ -93,13 +93,13 @@ func sparePort(t *testing.T) int {
 func TestDiagnoseFailureAssemblesContext(t *testing.T) {
 	a := droppedApp(t)
 	port := heldPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "诊断目标库", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "无关映射", Protocol: model.TCP, Enabled: true, ListenPort: sparePort(t),
 		UpstreamHost: "10.8.0.2", UpstreamPort: 80,
 	}); err != nil {
@@ -148,7 +148,7 @@ func TestDiagnoseFailureAssemblesContext(t *testing.T) {
 func TestDiagnoseFailureCheckKind(t *testing.T) {
 	a := droppedApp(t)
 	port := heldPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "预检目标", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -201,7 +201,7 @@ func TestDiagnoseFailureNeedsFailure(t *testing.T) {
 func TestDiagnoseFailureUnreadableAccessLog(t *testing.T) {
 	a := droppedApp(t)
 	port := heldPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "目标", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -247,7 +247,7 @@ func TestDiagnoseFailureUnreadableAccessLog(t *testing.T) {
 func TestDiagnoseFailureNewFailureClearsAdvice(t *testing.T) {
 	a := droppedApp(t)
 	port := heldPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "目标", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -302,7 +302,7 @@ func TestDiagnoseFailureNewFailureClearsAdvice(t *testing.T) {
 func TestDiagnoseFailureServerError(t *testing.T) {
 	a := droppedApp(t)
 	port := heldPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "目标", Protocol: model.TCP, Enabled: true, ListenPort: port,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {

@@ -91,7 +91,7 @@ func TestApplyForwardsTraffic(t *testing.T) {
 	defer stopUp()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "测试站点", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,
@@ -160,7 +160,7 @@ func TestPortConflictLeavesRulesRunning(t *testing.T) {
 	defer stopUp()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "好的", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,
@@ -178,7 +178,7 @@ func TestPortConflictLeavesRulesRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer busy.Close()
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "冲突", Protocol: model.TCP, Enabled: true,
 		ListenPort:   busy.Addr().(*net.TCPAddr).Port,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
@@ -220,7 +220,7 @@ func TestCheckConfigReportsProblems(t *testing.T) {
 
 	// Two rules on one port.
 	for _, name := range []string{"一", "二"} {
-		if _, err := a.Store.CreateMapping(model.Mapping{
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 			Name: name, Protocol: model.TCP, Enabled: true, ListenPort: listen,
 			UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 		}); err != nil {
@@ -232,7 +232,7 @@ func TestCheckConfigReportsProblems(t *testing.T) {
 	}
 
 	// A resolvable single rule passes.
-	if err := a.Store.ReplaceAllMappings([]model.Mapping{{
+	if err := a.Store.ReplaceAllMappings(a.ActiveWorkspace(), []model.Mapping{{
 		ID: "1", Name: "好", Protocol: model.TCP, Enabled: true, ListenPort: listen,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	}}); err != nil {
@@ -250,7 +250,7 @@ func TestSnapshotRollback(t *testing.T) {
 	defer stopUp()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "站点", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,
@@ -268,7 +268,7 @@ func TestSnapshotRollback(t *testing.T) {
 	}
 
 	// Add a second rule, so the snapshot and the database differ.
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "后来加的", Protocol: model.TCP, Enabled: true, ListenPort: freePort(t),
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	}); err != nil {
@@ -280,7 +280,7 @@ func TestSnapshotRollback(t *testing.T) {
 	if err := a.RollbackSnapshot(snaps[0]); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestSnapshotRollback(t *testing.T) {
 func TestQuitStopsEverything(t *testing.T) {
 	a := testApp(t)
 	listen := freePort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "x", Protocol: model.TCP, Enabled: true, ListenPort: listen,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	}); err != nil {

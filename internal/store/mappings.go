@@ -58,13 +58,15 @@ const mappingColumns = `id, name, group_name, enabled, protocol, listen_port, se
 	health_check_enabled, health_check_interval_sec, health_check_target_path, health_check_expected_status,
 	health_status, last_checked_at, sort_order, created_at, updated_at`
 
-// insertMapping writes one mapping, with the local host.
-const insertMapping = `INSERT INTO mappings (id, host_id, name, group_name, enabled, protocol, listen_port,
+// insertMapping writes one mapping, with the local host. The workspace is
+// a parameter, not a field of the mapping: which scene a rule belongs to
+// is a fact about where it was created, and the app knows that.
+const insertMapping = `INSERT INTO mappings (id, host_id, workspace_id, name, group_name, enabled, protocol, listen_port,
 	server_names, listen_path, upstream_host, upstream_port, tls_cert_path, tls_key_path,
 	redirect_http, extra_directives, proxy_mode, proxy_headers, proxy_pass_url,
 	health_check_enabled, health_check_interval_sec, health_check_target_path,
 	health_check_expected_status, health_status, last_checked_at, sort_order, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // scanMapping reads one mapping row.
 func scanMapping(sc interface{ Scan(...any) error }) (model.Mapping, error) {
@@ -113,9 +115,9 @@ func scanMapping(sc interface{ Scan(...any) error }) (model.Mapping, error) {
 	return m, nil
 }
 
-// ListMappings returns every mapping, in display order.
-func (s *Store) ListMappings() ([]model.Mapping, error) {
-	rows, err := s.db.Query(`SELECT ` + mappingColumns + ` FROM mappings ORDER BY sort_order, created_at`)
+// ListMappings returns every mapping of one workspace, in display order.
+func (s *Store) ListMappings(ws string) ([]model.Mapping, error) {
+	rows, err := s.db.Query(`SELECT `+mappingColumns+` FROM mappings WHERE workspace_id = ? ORDER BY sort_order, created_at`, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +133,10 @@ func (s *Store) ListMappings() ([]model.Mapping, error) {
 	return out, rows.Err()
 }
 
-// ListEnabledMappings returns the mappings a configuration is built from.
-func (s *Store) ListEnabledMappings() ([]model.Mapping, error) {
-	rows, err := s.db.Query(`SELECT ` + mappingColumns + ` FROM mappings WHERE enabled = 1 ORDER BY sort_order, created_at`)
+// ListEnabledMappings returns the mappings of one workspace that a
+// configuration is built from.
+func (s *Store) ListEnabledMappings(ws string) ([]model.Mapping, error) {
+	rows, err := s.db.Query(`SELECT `+mappingColumns+` FROM mappings WHERE workspace_id = ? AND enabled = 1 ORDER BY sort_order, created_at`, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +162,9 @@ func (s *Store) GetMapping(id string) (model.Mapping, error) {
 	return m, err
 }
 
-// CreateMapping inserts a mapping and returns it with its ID and
-// timestamps filled in.
-func (s *Store) CreateMapping(m model.Mapping) (model.Mapping, error) {
+// CreateMapping inserts a mapping into a workspace and returns it with
+// its ID and timestamps filled in.
+func (s *Store) CreateMapping(ws string, m model.Mapping) (model.Mapping, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
@@ -171,8 +174,10 @@ func (s *Store) CreateMapping(m model.Mapping) (model.Mapping, error) {
 	}
 	m.CreatedAt, m.UpdatedAt = now, now
 	if m.SortOrder == 0 {
+		// The tail of the table is the tail of this workspace's rules, not
+		// of every rule in the database.
 		var max int
-		if err := s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), -1) FROM mappings`).Scan(&max); err != nil {
+		if err := s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), -1) FROM mappings WHERE workspace_id = ?`, ws).Scan(&max); err != nil {
 			return model.Mapping{}, err
 		}
 		m.SortOrder = max + 1
@@ -184,7 +189,7 @@ func (s *Store) CreateMapping(m model.Mapping) (model.Mapping, error) {
 		m.HealthStatus = model.HealthUnknown
 	}
 	_, err := s.db.Exec(insertMapping,
-		m.ID, localHostID, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+		m.ID, localHostID, ws, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 		m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP), m.ExtraDirectives,
 		string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
 		boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath, m.HealthCheckExpectedCode,
@@ -247,12 +252,13 @@ func (s *Store) SetMappingHealth(id string, status model.HealthStatus, at int64)
 	return err
 }
 
-// MappingIDs lists the mappings' ids in the order the table shows them,
-// which is the order a move reorders. It is the cheap shape of
-// ListMappings: a reorder only needs the ids, and pulling every field of
-// every rule to move one is the sort of waste this list exists to skip.
-func (s *Store) MappingIDs() ([]string, error) {
-	rows, err := s.db.Query(`SELECT id FROM mappings ORDER BY sort_order, created_at`)
+// MappingIDs lists one workspace's mappings' ids in the order the table
+// shows them, which is the order a move reorders. It is the cheap shape
+// of ListMappings: a reorder only needs the ids, and pulling every field
+// of every rule to move one is the sort of waste this list exists to
+// skip.
+func (s *Store) MappingIDs(ws string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT id FROM mappings WHERE workspace_id = ? ORDER BY sort_order, created_at`, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -268,8 +274,10 @@ func (s *Store) MappingIDs() ([]string, error) {
 	return ids, rows.Err()
 }
 
-// ReorderMappings applies a new sort order: ids[i] gets position i.
-func (s *Store) ReorderMappings(ids []string) error {
+// ReorderMappings applies a new sort order to one workspace: ids[i] gets
+// position i. The workspace rides along on the UPDATE so a stale id from
+// another scene cannot be dragged into this one's order.
+func (s *Store) ReorderMappings(ws string, ids []string) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	tx, err := s.db.Begin()
@@ -278,16 +286,16 @@ func (s *Store) ReorderMappings(ids []string) error {
 	}
 	defer tx.Rollback()
 	for i, id := range ids {
-		if _, err := tx.Exec(`UPDATE mappings SET sort_order = ? WHERE id = ?`, i, id); err != nil {
+		if _, err := tx.Exec(`UPDATE mappings SET sort_order = ? WHERE id = ? AND workspace_id = ?`, i, id, ws); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-// ReplaceAllMappings removes every mapping and inserts the given ones,
-// which is what an import does.
-func (s *Store) ReplaceAllMappings(ms []model.Mapping) error {
+// ReplaceAllMappings removes every mapping of one workspace and inserts
+// the given ones there, which is what an import does.
+func (s *Store) ReplaceAllMappings(ws string, ms []model.Mapping) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	tx, err := s.db.Begin()
@@ -295,7 +303,7 @@ func (s *Store) ReplaceAllMappings(ms []model.Mapping) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM mappings`); err != nil {
+	if _, err := tx.Exec(`DELETE FROM mappings WHERE workspace_id = ?`, ws); err != nil {
 		return err
 	}
 	// Snapshots are the history of the rules, not part of them: a
@@ -308,7 +316,7 @@ func (s *Store) ReplaceAllMappings(ms []model.Mapping) error {
 			m.ID = newID()
 		}
 		if _, err := tx.Exec(insertMapping,
-			m.ID, localHostID, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+			m.ID, localHostID, ws, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 			m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP), m.ExtraDirectives,
 			string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
 			boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath, m.HealthCheckExpectedCode,

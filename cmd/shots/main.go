@@ -59,7 +59,7 @@ func main() {
 			UpstreamHost: "192.168.1.40", UpstreamPort: 1883, HealthCheckEnabled: true, HealthStatus: model.HealthHealthy},
 	}
 	for _, m := range rows {
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			panic(err)
 		}
 	}

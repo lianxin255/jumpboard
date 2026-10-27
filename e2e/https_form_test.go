@@ -51,7 +51,7 @@ func TestHTTPSFormSavesAllFields(t *testing.T) {
 	if !tt.HasText("HTTPS 需要证书和私钥路径") || !tt.HasText("HTTPS 需要 server_name") {
 		t.Errorf("the certificate errors should show: %v", tt.Texts())
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("an HTTPS rule without a certificate was saved: %+v", list)
 	}
 
@@ -74,11 +74,11 @@ func TestHTTPSFormSavesAllFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the mapping in the table", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1
 	})
 
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}

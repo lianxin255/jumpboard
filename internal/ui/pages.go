@@ -426,6 +426,10 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						if ui.Button(c, "导入备份").Clicked() {
 							v.importBackup()
 						}
+						if ui.Button(c, "导入为新场景").
+							Tooltip("把备份里的映射放进一个新建的场景，不动当前场景").Clicked() {
+							v.importBackupAsWorkspace()
+						}
 						if ui.Button(c, "配置历史").Clicked() {
 							a.SetPage(appt.PageHistory)
 						}
@@ -547,6 +551,12 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				})
 			})
 
+			// The scene card comes last: a scene is renamed and retired
+			// rarely enough that the tools around it keep the first rows,
+			// and the page scrolls. The one-click switch is on the
+			// mappings page, where it belongs.
+			v.workspaceCard(c, t, busy)
+
 			// The danger zone is a band across the page, not a button
 			// among the tools: wiping everything deserves to look
 			// different from exporting a backup.
@@ -571,6 +581,77 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					}
 				})
 		}).Grow(1)
+	})
+}
+
+// workspaceCard is the settings page's scene manager: the list with
+// switch, rename and delete, and the field that adds a scene. The
+// one-click switch itself lives on the mappings page; this is where a
+// scene is born, renamed and retired.
+func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	list, active := a.WorkspacesState()
+	v.card(c, t, "场景", func() {
+		ui.Text(c, "每个场景一套独立映射：公司、家里各存各的规则，切换后立即按新场景重新应用。").
+			FontSize(11).TextColor(t.Muted).Wrap()
+		for _, w := range list {
+			w := w
+			on := w.ID == active
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if v.wsRenameID == w.ID {
+					// The rename is the row itself turned into a field,
+					// prefilled with the name it would change.
+					ui.TextInput(c, &v.wsRenameName).Grow(1).Label("重命名 " + w.Name)
+					if ui.Button(c, "保存").FontSize(11).Disabled(busy).Clicked() {
+						id, name := w.ID, v.wsRenameName
+						v.wsRenameID = ""
+						a.RunBackground(func() error { return a.RenameWorkspaceAction(id, name) })
+					}
+					if ui.Button(c, "取消").FontSize(11).Clicked() {
+						v.wsRenameID = ""
+					}
+					return
+				}
+				ui.Column(c).Gap(1).Grow(1).Children(func() {
+					ui.Text(c, w.Name).FontSize(12).TextColor(t.FG)
+					if on {
+						ui.Text(c, "当前场景").FontSize(10).TextColor(t.Accent)
+					}
+				})
+				if !on {
+					if ui.Button(c, "切换").FontSize(11).Label("切换 " + w.Name).
+						Disabled(busy).Tooltip("切换到这个场景，引擎立即按它重新应用").Clicked() {
+						a.RequestSwitchWorkspace(w.ID)
+					}
+				}
+				if ui.Button(c, "重命名").FontSize(11).Label("重命名 " + w.Name).Disabled(busy).Clicked() {
+					v.wsRenameID, v.wsRenameName = w.ID, w.Name
+				}
+				// The last scene and the active one have no delete: the
+				// buttons stay rather than flicker with the list.
+				del := ui.Button(c, "删除").FontSize(11).Label("删除场景 " + w.Name).
+					Disabled(busy || on || len(list) <= 1).Tooltip("删除场景及其全部映射，删除前会确认")
+				if del.Clicked() {
+					name := w.Name
+					a.Ask(&appt.Confirm{
+						Title: "删除场景",
+						Body:  fmt.Sprintf("场景「%s」和它的全部映射都会被删除，无法撤销。", name),
+						Label: "删除场景", Destructive: true,
+						Run: func() error { return a.DeleteWorkspaceAction(w.ID) },
+					})
+				}
+			})
+		}
+		ui.Divider(c)
+		ui.Row(c).Gap(6).Children(func() {
+			ui.TextInput(c, &v.wsNewName).Placeholder("公司 / 家里 / 项目A").Grow(1).Label("新场景名称")
+			if ui.Button(c, "新建场景").Disabled(busy).Clicked() {
+				name := v.wsNewName
+				v.wsNewName = ""
+				a.RunBackground(func() error { return a.CreateWorkspaceAction(name) })
+			}
+		})
+		ui.Text(c, "新场景从空白开始，不会影响正在转发的规则。").FontSize(11).TextColor(t.Muted).Wrap()
 	})
 }
 

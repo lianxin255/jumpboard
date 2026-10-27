@@ -95,7 +95,7 @@ func TestHandleDeeplinkImportRunsThePreview(t *testing.T) {
 	if err := a.ConfirmPasteImport(); err != nil {
 		t.Fatal(err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 || list[0].UpstreamHost != "10.9.8.7" {
 		t.Fatalf("imported: %v %v", list, err)
 	}
