@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestListReturnsDevices expects the machine to enumerate something — a
-// machine with no serial device is a legitimate answer, but a machine
+// TestSerialListReturnsDevices expects the machine to enumerate something
+// — a machine with no serial device is a legitimate answer, but a machine
 // with one must name it, sorted, with a hint or not.
-func TestListReturnsDevices(t *testing.T) {
+func TestSerialListReturnsDevices(t *testing.T) {
 	ports := List()
 	seen := map[string]bool{}
 	for i, p := range ports {
@@ -22,9 +22,9 @@ func TestListReturnsDevices(t *testing.T) {
 	}
 }
 
-// TestOpenMissingPortFails asks for a device no machine has; the failure
-// names it, so a pane can say which device refused.
-func TestOpenMissingPortFails(t *testing.T) {
+// TestSerialOpenMissingPortFails asks for a device no machine has; the
+// failure names it, so a pane can say which device refused.
+func TestSerialOpenMissingPortFails(t *testing.T) {
 	const missing = "/dev/cu.__jumpboard-none__"
 	_, err := Open(missing, Baud115200)
 	if err == nil {
@@ -35,11 +35,11 @@ func TestOpenMissingPortFails(t *testing.T) {
 	}
 }
 
-// TestOpenRealPortAndClose opens the first device the machine offers. A
-// machine whose devices refuse (a permission the user has not granted, a
-// device a driver keeps busy) is an environment the test skips rather
-// than fails; where it opens, the port closes cleanly.
-func TestOpenRealPortAndClose(t *testing.T) {
+// TestSerialOpenRealPortAndClose opens the first device the machine
+// offers. A machine whose devices refuse (a permission the user has not
+// granted, a device a driver keeps busy) is an environment the test skips
+// rather than fails; where it opens, the port closes cleanly.
+func TestSerialOpenRealPortAndClose(t *testing.T) {
 	ports := List()
 	if len(ports) == 0 {
 		t.Skip("no serial device on this machine")
@@ -53,9 +53,9 @@ func TestOpenRealPortAndClose(t *testing.T) {
 	}
 }
 
-// TestAllRatesAreOrderedAndDistinct keeps the picker honest: the rates it
-// offers ascend, and none repeats.
-func TestAllRatesAreOrderedAndDistinct(t *testing.T) {
+// TestSerialAllRatesAreOrderedAndDistinct keeps the picker honest: the
+// rates it offers ascend, and none repeats.
+func TestSerialAllRatesAreOrderedAndDistinct(t *testing.T) {
 	rates := AllRates()
 	if len(rates) < 2 {
 		t.Fatalf("only %d rates offered", len(rates))
