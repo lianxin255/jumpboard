@@ -49,6 +49,15 @@ type RuleStatus struct {
 	BytesIn int64
 	// BytesOut is how many bytes the rule wrote back to them.
 	BytesOut int64
+	// LastCloseAt is when the rule's latest connection ended — a stream
+	// pipe that finished, an HTTP request that was answered — zero when
+	// none has yet.
+	LastCloseAt time.Time
+	// LastErrAt is when the rule last failed to move a connection or a
+	// request: an upstream that refused, a name that did not resolve.
+	// LastErr says why; both are zero when it has not failed.
+	LastErrAt time.Time
+	LastErr   string
 	// Err is why the rule is not running, empty when it is.
 	Err string
 	// Warning is what the rule asked for and the engine could not honor.

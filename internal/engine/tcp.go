@@ -36,6 +36,11 @@ type ruleStats struct {
 	// clients in and back out again.
 	bytesIn  int64
 	bytesOut int64
+	// lastCloseAt is when the rule's latest connection ended; lastErrAt
+	// and lastErr its latest failure. Zero values mean "not yet".
+	lastCloseAt time.Time
+	lastErrAt   time.Time
+	lastErr     string
 }
 
 // ruleKey identifies what a listener is bound to and what it does, so that
@@ -69,8 +74,17 @@ type tcpForwarder struct {
 	// which keeps the listener — keeps the rule's totals, like conns.
 	bytesIn  atomic.Int64
 	bytesOut atomic.Int64
-	closing  atomic.Bool
-	wg       sync.WaitGroup
+	// lastClose, lastErrAt and lastErr say when the rule's latest pipe
+	// ended and, when the upstream could not be reached at all, why —
+	// unix nanoseconds, zero until the first one.
+	lastClose atomic.Int64
+	lastErrAt atomic.Int64
+	lastErr   atomic.Pointer[string]
+	// poke wakes whoever watches the rule's counters, nil when nobody
+	// does. It is called from the serving goroutines and never blocks.
+	poke    func()
+	closing atomic.Bool
+	wg      sync.WaitGroup
 	// access logs each connection, as nginx's stream access_log does.
 	access *accessLog
 	// whitelist limits which clients may connect, the same filter the HTTP
@@ -84,12 +98,12 @@ type tcpForwarder struct {
 	live map[*tcpPipe]struct{}
 }
 
-func newTCPForwarder(listenAddr, upstream string, idle time.Duration, access *accessLog, whitelist []*net.IPNet) (*tcpForwarder, error) {
+func newTCPForwarder(listenAddr, upstream string, idle time.Duration, access *accessLog, whitelist []*net.IPNet, poke func()) (*tcpForwarder, error) {
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return nil, err
 	}
-	f := &tcpForwarder{ln: ln, idle: idle, access: access, whitelist: whitelist, live: map[*tcpPipe]struct{}{}}
+	f := &tcpForwarder{ln: ln, idle: idle, access: access, whitelist: whitelist, poke: poke, live: map[*tcpPipe]struct{}{}}
 	f.upstream.Store(&upstream)
 	f.wg.Add(1)
 	go f.serve()
@@ -112,6 +126,9 @@ func (f *tcpForwarder) stats(string) ruleStats {
 		active:      int(f.active.Load()),
 		bytesIn:     f.bytesIn.Load(),
 		bytesOut:    f.bytesOut.Load(),
+		lastCloseAt: time.Unix(0, f.lastClose.Load()),
+		lastErrAt:   time.Unix(0, f.lastErrAt.Load()),
+		lastErr:     ptrValue(f.lastErr.Load()),
 	}
 }
 
@@ -154,19 +171,42 @@ func (f *tcpForwarder) serve() {
 		f.mu.Unlock()
 		f.conns.Add(1)
 		f.active.Add(1)
+		f.wake()
 		f.wg.Add(1)
 		go func() {
 			defer f.wg.Done()
 			defer f.active.Add(-1)
 			start := time.Now()
-			p.run()
+			err := p.run()
 			f.mu.Lock()
 			delete(f.live, p)
 			f.mu.Unlock()
+			f.pipeDone(err)
 			if f.access != nil {
 				f.access.writeStream(client.RemoteAddr().String(), p.upstream, time.Since(start))
 			}
 		}()
+	}
+}
+
+// pipeDone folds a finished pipe into the rule's history: when it ended,
+// and — when the upstream could not be reached at all — why. It wakes the
+// watcher so the table hears about the disconnect at once.
+func (f *tcpForwarder) pipeDone(dialErr error) {
+	now := time.Now().UnixNano()
+	if dialErr != nil {
+		msg := "上游连接失败：" + dialErr.Error()
+		f.lastErr.Store(&msg)
+		f.lastErrAt.Store(now)
+	}
+	f.lastClose.Store(now)
+	f.wake()
+}
+
+// wake pokes the watcher when there is one.
+func (f *tcpForwarder) wake() {
+	if f.poke != nil {
+		f.poke()
 	}
 }
 
@@ -219,12 +259,13 @@ func (p *tcpPipe) Close() {
 }
 
 // run connects the client to the upstream and copies both ways until
-// either side closes.
-func (p *tcpPipe) run() {
+// either side closes. It reports the dial error itself, the only failure
+// that belongs to the rule rather than to a connection that simply ended.
+func (p *tcpPipe) run() error {
 	defer p.client.Close()
 	server, err := net.DialTimeout("tcp", p.upstream, 10*time.Second)
 	if err != nil {
-		return
+		return err
 	}
 	p.mu.Lock()
 	abandoned := p.closed
@@ -235,7 +276,7 @@ func (p *tcpPipe) run() {
 	if abandoned {
 		// The forwarder closed while the dial was in flight.
 		_ = server.Close()
-		return
+		return nil
 	}
 	defer server.Close()
 
@@ -272,6 +313,7 @@ func (p *tcpPipe) run() {
 	go copyHalf(p.client, server, p.out)
 	<-done
 	<-done
+	return nil
 }
 
 // listenAddr turns a port into the address a rule listens on.

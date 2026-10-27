@@ -39,6 +39,15 @@ type udpForwarder struct {
 	// conns.
 	bytesIn  atomic.Int64
 	bytesOut atomic.Int64
+	// lastClose, lastErrAt and lastErr say when the rule's latest session
+	// ended and, when the upstream could not be reached, why — unix
+	// nanoseconds, zero until the first one.
+	lastClose atomic.Int64
+	lastErrAt atomic.Int64
+	lastErr   atomic.Pointer[string]
+	// poke wakes whoever watches the rule's counters, nil when nobody
+	// does. It is called from the serving goroutines and never blocks.
+	poke func()
 }
 
 type udpSession struct {
@@ -47,7 +56,7 @@ type udpSession struct {
 	lastSeen   atomic.Int64
 }
 
-func newUDPForwarder(listenAddr, upstream string, idle time.Duration, whitelist []*net.IPNet) (*udpForwarder, error) {
+func newUDPForwarder(listenAddr, upstream string, idle time.Duration, whitelist []*net.IPNet, poke func()) (*udpForwarder, error) {
 	addr, err := net.ResolveUDPAddr("udp", listenAddr)
 	if err != nil {
 		return nil, err
@@ -60,6 +69,7 @@ func newUDPForwarder(listenAddr, upstream string, idle time.Duration, whitelist 
 		conn:      conn,
 		idle:      idle,
 		whitelist: whitelist,
+		poke:      poke,
 		sessions:  map[string]*udpSession{},
 	}
 	f.upstream.Store(&upstream)
@@ -97,6 +107,9 @@ func (f *udpForwarder) stats(string) ruleStats {
 		active:      int(f.active.Load()),
 		bytesIn:     f.bytesIn.Load(),
 		bytesOut:    f.bytesOut.Load(),
+		lastCloseAt: time.Unix(0, f.lastClose.Load()),
+		lastErrAt:   time.Unix(0, f.lastErrAt.Load()),
+		lastErr:     ptrValue(f.lastErr.Load()),
 	}
 }
 
@@ -147,11 +160,13 @@ func (f *udpForwarder) session(client *net.UDPAddr) *udpSession {
 	upstreamAddr, err := net.ResolveUDPAddr("udp", f.target())
 	if err != nil {
 		f.mu.Unlock()
+		f.recordErr("上游地址解析失败: " + err.Error())
 		return nil
 	}
 	up, err := net.DialUDP("udp", nil, upstreamAddr)
 	if err != nil {
 		f.mu.Unlock()
+		f.recordErr("上游连接失败: " + err.Error())
 		return nil
 	}
 	s := &udpSession{clientAddr: client, upstream: up}
@@ -159,6 +174,7 @@ func (f *udpForwarder) session(client *net.UDPAddr) *udpSession {
 	f.sessions[key] = s
 	f.conns.Add(1)
 	f.active.Add(1)
+	f.wake()
 	f.wg.Add(1)
 	f.mu.Unlock()
 
@@ -236,6 +252,20 @@ func (f *udpForwarder) dropSessionByKey(key string) {
 			_ = s.upstream.Close()
 		}
 		f.active.Add(-1)
+		f.lastClose.Store(time.Now().UnixNano())
+		f.wake()
+	}
+}
+
+func (f *udpForwarder) recordErr(msg string) {
+	f.lastErr.Store(&msg)
+	f.lastErrAt.Store(time.Now().UnixNano())
+	f.wake()
+}
+
+func (f *udpForwarder) wake() {
+	if f.poke != nil {
+		f.poke()
 	}
 }
 
