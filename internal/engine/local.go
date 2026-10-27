@@ -26,11 +26,36 @@ type Local struct {
 	started time.Time
 	// lastWarning holds the directives that could not be honored.
 	lastWarning []string
+	// events is poked whenever a rule's counters moved — a connection
+	// opened or ended, an upstream refused — so that whoever watches the
+	// rules can reread them at once. One buffered slot and non-blocking
+	// sends: a burst coalesces into a single wake, and a serving goroutine
+	// never waits on whoever is reading.
+	events chan struct{}
 }
 
 // NewLocal returns an engine with no rules running.
 func NewLocal() *Local {
-	return &Local{running: map[ruleKey]forwarder{}, status: Stopped}
+	return &Local{
+		running: map[ruleKey]forwarder{},
+		status:  Stopped,
+		events:  make(chan struct{}, 1),
+	}
+}
+
+// Events is poked when a rule's counters moved. Reading it must never be
+// required for the engine's own progress: the pokes are non-blocking, so a
+// watcher that has gone away leaves them dropped, not piled up.
+func (l *Local) Events() <-chan struct{} { return l.events }
+
+// poke asks for a reread of the rules. It runs from the serving goroutines
+// and returns at once: filling the single slot is all it does, and a slot
+// already full says the same thing.
+func (l *Local) poke() {
+	select {
+	case l.events <- struct{}{}:
+	default:
+	}
 }
 
 // Mode names the engine.
@@ -73,6 +98,7 @@ func (l *Local) Rules() []RuleStatus {
 			st := f.stats(entry.status.MappingID)
 			row.Connections, row.Active = st.connections, st.active
 			row.BytesIn, row.BytesOut = st.bytesIn, st.bytesOut
+			row.LastCloseAt, row.LastErrAt, row.LastErr = st.lastCloseAt, st.lastErrAt, st.lastErr
 			row.Listening = true
 		}
 		out = append(out, row)
@@ -129,7 +155,7 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		if m.Protocol.IsStream() {
 			continue
 		}
-		r, err := buildRoute(m, spec)
+		r, err := buildRoute(m, spec, l.poke)
 		if err != nil {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("「%s」%v", m.Name, err))
 			broken[m.ID] = err.Error()
@@ -176,14 +202,17 @@ func (l *Local) Apply(spec Spec) (Result, error) {
 		}
 		idle := idleFor(m, spec)
 		whitelist := parseWhitelist(spec.WhitelistIPs)
+		// The watcher callback is handed to the constructor, so the serving
+		// goroutine it starts already has one: a rule whose first connection
+		// ends before any reapply would otherwise never wake the table.
 		var (
 			f   forwarder
 			err error
 		)
 		if m.Protocol == model.UDP {
-			f, err = newUDPForwarder(addr, upstream, idle, whitelist)
+			f, err = newUDPForwarder(addr, upstream, idle, whitelist, l.poke)
 		} else {
-			f, err = newTCPForwarder(addr, upstream, idle, l.access, whitelist)
+			f, err = newTCPForwarder(addr, upstream, idle, l.access, whitelist, l.poke)
 		}
 		if err != nil {
 			closeAll(opened)
@@ -383,10 +412,12 @@ func statuses(mappings []model.Mapping, broken map[string]string) []ruleEntry {
 }
 
 // buildRoute prepares one HTTP mapping.
-func buildRoute(m model.Mapping, spec Spec) (route, error) {
+func buildRoute(m model.Mapping, spec Spec, poke func()) (route, error) {
 	// The traffic counters are allocated here, so the route value can be
-	// copied into the port's table while the counters stay shared.
-	r := route{mapping: m, traffic: &ruleTraffic{}}
+	// copied into the port's table while the counters stay shared. poke is
+	// set once and read from the request path, which the server starts only
+	// after every route is built.
+	r := route{mapping: m, traffic: &ruleTraffic{poke: poke}}
 	proxy, u, tr, err := newProxy(m, spec, r.traffic)
 	if err != nil {
 		return route{}, err

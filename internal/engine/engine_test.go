@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +21,40 @@ func freePort(t *testing.T) int {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port
+}
+
+// freeUDPPort returns a port a UDP rule can listen on.
+//
+// freePort's TCP probe is not proof for UDP: Windows reserves Hyper-V's
+// port ranges per protocol, so a port the TCP probe took freely can be
+// one UDP is forbidden to touch, and the apply dies with "an attempt was
+// made to access a socket in a way forbidden". Here the port is picked
+// by a UDP bind of its own — the OS hands out nothing from an excluded
+// range — and proven by binding it a second time after the first socket
+// closed, so a stray grabber in between earns a fresh pick instead of a
+// failed test.
+func freeUDPPort(t *testing.T) int {
+	t.Helper()
+	for try := 0; try < 10; try++ {
+		c, err := net.ListenPacket("udp", ":0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := c.LocalAddr().(*net.UDPAddr).Port
+		if err := c.Close(); err != nil {
+			t.Fatal(err)
+		}
+		p, err := net.ListenPacket("udp", ":"+itoa(port))
+		if err != nil {
+			continue // taken between the two binds: another pick is cheap
+		}
+		if err := p.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return port
+	}
+	t.Fatal("no UDP port stayed free through a rebind")
+	return 0
 }
 
 // upstream starts an HTTP server that answers with its own name.
@@ -109,6 +142,10 @@ func TestHTTPProxy(t *testing.T) {
 	if rules[0].Connections == 0 {
 		t.Errorf("the rule should have counted a connection: %+v", rules[0])
 	}
+	// The request is answered, so none is in flight any more. The client can
+	// finish reading before the serving goroutine counts the request out, so
+	// the check waits for the counter to settle rather than reading it once.
+	waitActive(t, e, "1", 0, 2*time.Second)
 }
 
 // TestHTTPHostAndPathRouting checks that server_name and location route the
@@ -257,8 +294,15 @@ func TestTCPCountsBytes(t *testing.T) {
 		if string(buf) != string(payload) {
 			t.Errorf("echo = %q", buf)
 		}
+	}
+	// Both echoes came back, so both pipes are running at once: the rule
+	// must be holding two active connections, not one counted twice.
+	waitActive(t, e, "1", 2, 2*time.Second)
+
+	for _, c := range conns {
 		_ = c.Close()
 	}
+	waitActive(t, e, "1", 0, 2*time.Second)
 
 	rules := e.Rules()
 	if len(rules) != 1 {
@@ -271,6 +315,9 @@ func TestTCPCountsBytes(t *testing.T) {
 	}
 	if rules[0].Connections < 2 {
 		t.Errorf("both connections should count: %+v", rules[0])
+	}
+	if rules[0].Active != 0 {
+		t.Errorf("both pipes ended, active = %d, want 0", rules[0].Active)
 	}
 }
 
@@ -315,6 +362,8 @@ func TestHTTPCountsBytes(t *testing.T) {
 		t.Errorf("bytes = ↓%d ↑%d, want at least ↓%d ↑%d",
 			rules[0].BytesIn, rules[0].BytesOut, len(body), len(body))
 	}
+	// The request was answered in full, so it is no longer in flight.
+	waitActive(t, e, "1", 0, 2*time.Second)
 }
 
 // TestUDPForward sends a datagram through a UDP rule.
@@ -334,7 +383,7 @@ func TestUDPForward(t *testing.T) {
 			_, _ = up.WriteTo(append([]byte("echo:"), buf[:n]...), addr)
 		}
 	}()
-	listen := freePort(t)
+	listen := freeUDPPort(t)
 
 	e := NewLocal()
 	defer e.Stop()
@@ -362,6 +411,16 @@ func TestUDPForward(t *testing.T) {
 	}
 	if got := string(buf[:n]); got != "echo:ping" {
 		t.Errorf("reply = %q", got)
+	}
+	// The echo came back, so the client address holds a live session: UDP
+	// has no connection, and the rule's active count is that session count.
+	// The default idle timeout keeps it for minutes, so one is exact.
+	rules := e.Rules()
+	if len(rules) != 1 {
+		t.Fatalf("one rule: %+v", rules)
+	}
+	if rules[0].Active != 1 {
+		t.Errorf("a live session should count as active: %+v", rules[0])
 	}
 }
 
@@ -562,6 +621,3 @@ func testCert(t *testing.T) (certPath, keyPath string) {
 	}
 	return certPath, keyPath
 }
-
-// ensure httptest stays imported for the helpers below.
-var _ = httptest.NewServer

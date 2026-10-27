@@ -145,6 +145,24 @@ func fillFieldScrolled(t *testing.T, tt *ui.Tester, label, text string) {
 	fillField(t, tt, label, text)
 }
 
+// clickScrolled clicks an element that may sit below the fold of a page's
+// own scroll — present in the tree with height, but past the window's
+// bottom edge, where reveal's clipped-height test cannot tell it from a
+// visible one. The click is tried first: an element already in view costs
+// nothing, and one that is not earns a scroll, as a user would give it.
+func clickScrolled(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	var err error
+	for i := 0; i < 12; i++ {
+		if err = tt.Click(label); err == nil {
+			return
+		}
+		tt.Scroll(600, 400, 0, 120)
+		tt.Frame()
+	}
+	t.Fatalf("clicking %q: %v", label, err)
+}
+
 // waitFor runs the frames until cond holds.
 //
 // The app changes its state in goroutines, so a test asks for frames until

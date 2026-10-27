@@ -13,8 +13,12 @@ const (
 	SettingWhitelistOn  = "whitelist_enabled" // "1" | "0"
 	SettingNginxLogRead = "nginx_log_read_enabled"
 	SettingOpenAtLogin  = "open_at_login" // "1" | "0"
-	SettingAIBaseURL    = "ai_base_url"
-	SettingAIModel      = "ai_model"
+	// SettingShowTraffic turns the table's per-rule counters — connections,
+	// bytes, the recent close and error — on and off. The forwarding itself
+	// is untouched; only the display goes quiet.
+	SettingShowTraffic = "show_traffic"
+	SettingAIBaseURL   = "ai_base_url"
+	SettingAIModel     = "ai_model"
 	// SettingAIDiagModel names the model the failure diagnosis and the
 	// interpretations use; "" means the main model. Mapping drafts always
 	// use the main model.

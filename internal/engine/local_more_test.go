@@ -31,7 +31,7 @@ func TestUDPIdleSessionsAreReaped(t *testing.T) {
 		}
 	}()
 
-	listen := freePort(t)
+	listen := freeUDPPort(t)
 	e := NewLocal()
 	defer e.Stop()
 	if _, err := e.Apply(Spec{
@@ -46,9 +46,9 @@ func TestUDPIdleSessionsAreReaped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := net.Dial("udp", listenAddr(listen)[1:])
+	c, err := net.Dial("udp", "127.0.0.1:"+itoa(listen))
 	if err != nil {
-		t.Skipf("the test client could not dial: %v", err)
+		t.Fatalf("dial: %v", err)
 	}
 	_ = c.SetDeadline(time.Now().Add(2 * time.Second))
 	if _, err := c.Write([]byte("a")); err != nil {
@@ -60,9 +60,14 @@ func TestUDPIdleSessionsAreReaped(t *testing.T) {
 	}
 	c.Close()
 
+	// The echo came back, so the client address holds a live session: the
+	// rule's active count is that session, and the short idle has not
+	// expired yet.
+	waitActive(t, e, "1", 1, 2*time.Second)
+
 	// A second datagram through a fresh socket still works, which is the
-	// behaviour a caller depends on; the reaping itself is internal.
-	c2, err := net.Dial("udp", listenAddr(listen)[1:])
+	// behaviour a caller depends on.
+	c2, err := net.Dial("udp", "127.0.0.1:"+itoa(listen))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +79,11 @@ func TestUDPIdleSessionsAreReaped(t *testing.T) {
 	if _, err := c2.Read(buf); err != nil {
 		t.Fatalf("second datagram: %v", err)
 	}
+
+	// Both sessions have gone quiet, so after the one-second idle the rule
+	// reaps them and holds no active session — which is what "reaped" means
+	// where it shows, in the counter the table reads.
+	waitActive(t, e, "1", 0, 4*time.Second)
 }
 
 // TestProxyPassURLIsUsed checks that a mapping with its own proxy_pass
@@ -225,7 +235,7 @@ func TestStopClosesEveryListener(t *testing.T) {
 	}()
 
 	listen := freePort(t)
-	udp := freePort(t)
+	udp := freeUDPPort(t)
 	e := NewLocal()
 	if _, err := e.Apply(Spec{Mappings: []model.Mapping{
 		{ID: "1", Name: "h", Protocol: model.HTTP, Enabled: true, ListenPort: listen,

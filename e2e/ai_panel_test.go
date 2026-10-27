@@ -26,12 +26,13 @@ func TestAIPanelWalkthrough(t *testing.T) {
 	if !tt.HasText("fast 类模型") {
 		t.Errorf("the model advice line is missing: %v", tt.Texts())
 	}
-	fillField(t, tt, "接口地址", srv.URL)
-	fillField(t, tt, "模型", "test-model")
-	fillField(t, tt, "诊断/解读模型", "diag-model")
-	if err := tt.Click("保存"); err != nil {
-		t.Fatal(err)
-	}
+	// The AI card sits below the fold of the window's default height, so
+	// the fields and the save are reached the way a user reaches them: by
+	// scrolling to them.
+	fillFieldScrolled(t, tt, "接口地址", srv.URL)
+	fillFieldScrolled(t, tt, "模型", "test-model")
+	fillFieldScrolled(t, tt, "诊断/解读模型", "diag-model")
+	clickScrolled(t, tt, "保存")
 	tt.Frame()
 	if !a.AIReady() {
 		t.Fatal("the AI should be ready after the card is saved")

@@ -42,9 +42,11 @@ func (f *httpForwarder) key() ruleKey {
 	return ruleKey{proto: f.proto, listen: listenAddr(f.port)}
 }
 
-// stats reports the port's connection counts and one mapping's bytes: a
-// port serves several rules, so the bytes are the named rule's own, and a
-// rule whose route could not be built moved none.
+// stats reports the port's connection counts and one mapping's own: the
+// requests it served, the ones in flight, the bytes it moved, when its
+// latest request ended and its latest refusal. A port serves several rules,
+// so each rule's counters are its own; a rule whose route could not be built
+// moved none.
 func (f *httpForwarder) stats(mappingID string) ruleStats {
 	st := ruleStats{connections: f.conns.Load(), active: int(f.active.Load())}
 	f.routesMu.Lock()
@@ -56,6 +58,11 @@ func (f *httpForwarder) stats(mappingID string) ruleStats {
 		}
 		st.bytesIn = r.traffic.in.Load()
 		st.bytesOut = r.traffic.out.Load()
+		st.connections = r.traffic.conns.Load()
+		st.active = int(r.traffic.active.Load())
+		st.lastCloseAt = time.Unix(0, r.traffic.lastClose.Load())
+		st.lastErrAt = time.Unix(0, r.traffic.lastErrAt.Load())
+		st.lastErr = ptrValue(r.traffic.lastErr.Load())
 		break
 	}
 	return st
@@ -97,14 +104,41 @@ type route struct {
 	transport *http.Transport
 }
 
-// ruleTraffic is a rule's byte counters. They start at zero with every
-// apply, which is when a port's server is rebuilt — the same lifetime the
-// connection counters have.
+// ruleTraffic is a rule's counters. They start at zero with every apply,
+// which is when a port's server is rebuilt — the same lifetime the
+// forwarder's connection counters have.
 type ruleTraffic struct {
 	// in counts request bodies: what clients sent through the rule.
 	in atomic.Int64
 	// out counts response bodies: what the rule sent back to them.
 	out atomic.Int64
+	// conns and active count the requests the rule served and the ones in
+	// flight now: a port serves several rules, so each one counts its own.
+	conns  atomic.Int64
+	active atomic.Int32
+	// lastClose, lastErrAt and lastErr say when the rule's latest request
+	// was answered and, when the upstream refused it, why — unix
+	// nanoseconds, zero until the first one.
+	lastClose atomic.Int64
+	lastErrAt atomic.Int64
+	lastErr   atomic.Pointer[string]
+	// poke wakes whoever watches the rule's counters, nil when nobody
+	// does. It is called from the request path and never blocks.
+	poke func()
+}
+
+// recordErr folds a refusal of the upstream into the rule's history: what
+// went wrong and when. The last error is all the UI keeps.
+func (r *ruleTraffic) recordErr(msg string) {
+	r.lastErr.Store(&msg)
+	r.lastErrAt.Store(time.Now().UnixNano())
+	r.wake()
+}
+
+func (r *ruleTraffic) wake() {
+	if r.poke != nil {
+		r.poke()
+	}
 }
 
 // countingTransport counts a rule's traffic where it flows: each read of a
@@ -145,6 +179,14 @@ func (b *countingBody) Read(p []byte) (int, error) {
 }
 
 func (b *countingBody) Close() error { return b.body.Close() }
+
+// ptrValue returns the value behind a *string, empty when nil.
+func ptrValue(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
 
 // newHTTPForwarder starts a server for one port.
 func newHTTPForwarder(port int, proto model.Protocol, routes []route, spec Spec, access *accessLog) (*httpForwarder, error) {
@@ -351,6 +393,17 @@ func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rte := &rt.routes[best]
 	rec := &statusRecorder{ResponseWriter: w, status: 200}
+	// A port serves several rules, so a rule counts its own requests: what
+	// it served and what it is serving now. A hijacked connection counts
+	// out when the proxy hands it over, whatever it then becomes.
+	rte.traffic.conns.Add(1)
+	rte.traffic.active.Add(1)
+	rte.traffic.wake()
+	defer func() {
+		rte.traffic.active.Add(-1)
+		rte.traffic.lastClose.Store(time.Now().UnixNano())
+		rte.traffic.wake()
+	}()
 	rte.proxy.ServeHTTP(rec, r)
 	rt.log.write(rt.host.port, r, rec.status, rec.bytes)
 }
@@ -484,6 +537,9 @@ func newProxy(m model.Mapping, spec Spec, traffic *ruleTraffic) (*httputil.Rever
 		FlushInterval: -1, // write through, as proxy_buffering off
 		ErrorLog:      nil,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			// The refusal is the rule's news: it becomes the row's last
+			// error, kept until the upstream answers again.
+			traffic.recordErr(err.Error())
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte("502 bad gateway: " + err.Error()))
 		},

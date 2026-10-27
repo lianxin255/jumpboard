@@ -213,9 +213,9 @@ func TestAITestConnectionButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("测试连接"); err != nil {
-		t.Fatal(err)
-	}
+	// The AI card sits below the fold of the window's default height; the
+	// test scrolls to it, as a user would.
+	clickScrolled(t, tt, "测试连接")
 	// The probe runs in the background; the failure arrives as a status.
 	waitFor(t, tt, "the probe result", func() bool {
 		st, ok := a.Status()
@@ -256,10 +256,9 @@ func TestAIListModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	fillField(t, tt, "接口地址", srv.URL)
-	if err := tt.Click("拉取模型"); err != nil {
-		t.Fatal(err)
-	}
+	fillFieldScrolled(t, tt, "接口地址", srv.URL)
+	// The AI card sits below the fold of the window's default height.
+	clickScrolled(t, tt, "拉取模型")
 	// The fetch runs in a goroutine; the model list lands and the card says so.
 	waitFor(t, tt, "the model list", func() bool {
 		return tt.HasText("已拉取 2 个模型")
@@ -326,10 +325,10 @@ func TestAIListModelsReportsFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	fillField(t, tt, "接口地址", srv.URL)
-	if err := tt.Click("拉取模型"); err != nil {
-		t.Fatal(err)
-	}
+	fillFieldScrolled(t, tt, "接口地址", srv.URL)
+	// The settings page has grown past the window's default height; the AI
+	// card sits below the fold until the test scrolls to it.
+	clickScrolled(t, tt, "拉取模型")
 	waitFor(t, tt, "the failure", func() bool { return tt.HasText("拉取失败") })
 	if !tt.HasText("401") {
 		t.Errorf("the failure should name the status: %v", tt.Texts())
