@@ -141,6 +141,16 @@ type App struct {
 	// switches write them from the background goroutines.
 	workspaces []model.Workspace
 	activeWS   string
+	// The settings mirrored into memory — theme, host name, whitelist
+	// switch, nginx log reading — sit behind the mutex for the same reason
+	// the scene list does: the frame reads them every draw, and Wipe writes
+	// them from a background goroutine. A theme the window has been showing
+	// all along, changed under it by a wipe, is as much shared state as a
+	// scene switch.
+	theme        ThemeChoice
+	hostName     string
+	whitelistOn  bool
+	nginxLogRead bool
 	// applyErr is why the last apply failed, shown next to the button.
 	applyErr string
 	// applyErrPort is the port a bind failure named, 0 when the failure
@@ -223,10 +233,6 @@ type App struct {
 	snapshotView *model.Snapshot
 	confViewOpen bool
 	pastePending *PastePreview
-	theme        ThemeChoice
-	hostName     string
-	whitelistOn  bool
-	nginxLogRead bool
 	openAtLogin  bool
 	// showTraffic says the table carries each rule's counters. Off is only
 	// quieter: the engine still counts, the detail popover simply stops

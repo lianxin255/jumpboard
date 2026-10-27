@@ -124,13 +124,21 @@ func (a *App) ResolveConfirm(ok bool) {
 	a.RunBackground(c.Run)
 }
 
-// Theme returns the chosen appearance.
-func (a *App) Theme() ThemeChoice { return a.theme }
+// Theme returns the chosen appearance. The lock is the one the frame's
+// reads of the shared state take: Wipe rewrites this from a background
+// goroutine, and a theme read while that lands is a torn read.
+func (a *App) Theme() ThemeChoice {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.theme
+}
 
 // SetTheme stores the appearance and applies it at once, to the widgets on
 // the next frame and to the window's material now.
 func (a *App) SetTheme(t ThemeChoice) {
+	a.mu.Lock()
 	a.theme = t
+	a.mu.Unlock()
 	_ = a.Store.SetSetting(store.SettingTheme, string(t))
 	if a.OnTheme != nil {
 		a.OnTheme(t)
@@ -139,20 +147,30 @@ func (a *App) SetTheme(t ThemeChoice) {
 }
 
 // HostName returns the local host's name.
-func (a *App) HostName() string { return a.hostName }
+func (a *App) HostName() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.hostName
+}
 
 // SetHostName renames the local host.
 func (a *App) SetHostName(name string) {
 	if name == "" {
 		return
 	}
+	a.mu.Lock()
 	a.hostName = name
+	a.mu.Unlock()
 	_ = a.Store.SetHostName(name)
 	a.notify()
 }
 
 // WhitelistOn reports whether access is limited to the whitelist.
-func (a *App) WhitelistOn() bool { return a.whitelistOn }
+func (a *App) WhitelistOn() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.whitelistOn
+}
 
 // SetWhitelistOn turns the whitelist on or off.
 //
@@ -161,17 +179,22 @@ func (a *App) WhitelistOn() bool { return a.whitelistOn }
 // the operation log for a flip that never happened, which reads like an
 // access-control change.
 func (a *App) SetWhitelistOn(on bool) error {
-	if a.whitelistOn == on {
+	a.mu.Lock()
+	prev := a.whitelistOn
+	if prev == on {
+		a.mu.Unlock()
 		return nil
 	}
-	prev := a.whitelistOn
 	a.whitelistOn = on
+	a.mu.Unlock()
 	// An access-control switch that reports success without reaching the
 	// database is worse than an error: the window would say "已开启" while
 	// the next launch — and any other reader of the store — sees it off,
 	// allowing every address. A failed write rolls the mirror back.
 	if err := a.Store.SetWhitelistOn(on); err != nil {
+		a.mu.Lock()
 		a.whitelistOn = prev
+		a.mu.Unlock()
 		a.Fail("白名单设置未保存：%v", err)
 		return err
 	}
@@ -185,11 +208,17 @@ func (a *App) SetWhitelistOn(on bool) error {
 }
 
 // NginxLogRead reports whether the app reads the engine's access log.
-func (a *App) NginxLogRead() bool { return a.nginxLogRead }
+func (a *App) NginxLogRead() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.nginxLogRead
+}
 
 // SetNginxLogRead stores the setting.
 func (a *App) SetNginxLogRead(on bool) {
+	a.mu.Lock()
 	a.nginxLogRead = on
+	a.mu.Unlock()
 	v := "0"
 	if on {
 		v = "1"
@@ -1045,17 +1074,24 @@ func (a *App) Wipe() error {
 	// resets the store, so the mirror has to be reloaded or the window
 	// keeps showing the old theme and, worse, an "enabled" whitelist that
 	// the next apply reads as off — which would allow every address.
-	a.theme = ThemeChoice(a.Store.Setting(store.SettingTheme, string(ThemeSystem)))
-	a.whitelistOn = a.Store.WhitelistOn()
-	a.nginxLogRead = a.Store.SettingBool(store.SettingNginxLogRead, true)
+	theme := ThemeChoice(a.Store.Setting(store.SettingTheme, string(ThemeSystem)))
+	whitelistOn := a.Store.WhitelistOn()
+	nginxLogRead := a.Store.SettingBool(store.SettingNginxLogRead, true)
+	// The name is read from the store it was just wiped from — the old
+	// mirror is being replaced, not consulted.
+	var hostName string
 	if name, err := a.Store.HostName(); err == nil {
-		a.hostName = name
+		hostName = name
 	}
 	a.mu.Lock()
 	// The scenes are data too: what the wipe leaves is the one scene a
 	// fresh database starts with, active and with no edits waiting.
 	a.activeWS = store.DefaultWorkspaceID
 	a.dirty = false
+	// The mirror is written behind the same lock the accessors read with:
+	// a wipe runs on a background goroutine, and the frame may be drawing
+	// the theme and the whitelist switch it is replacing.
+	a.theme, a.whitelistOn, a.nginxLogRead, a.hostName = theme, whitelistOn, nginxLogRead, hostName
 	a.mu.Unlock()
 	if err := a.Reload(); err != nil {
 		return err
@@ -1065,7 +1101,7 @@ func (a *App) Wipe() error {
 
 // NginxLogs reads the engine's access log.
 func (a *App) NginxLogs(lines int) (access, errs []string) {
-	if !a.nginxLogRead {
+	if !a.NginxLogRead() {
 		return nil, nil
 	}
 	got, err := services.TailFile(filepath.Join(a.Paths.LogsDir, "access.log"), lines)
