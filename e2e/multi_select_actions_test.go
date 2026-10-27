@@ -36,7 +36,7 @@ func chooseRows(t *testing.T, tt *ui.Tester, names ...string) {
 // ruleEnabled reads one rule's switch from the store.
 func ruleEnabled(t *testing.T, a *appt.App, name string) bool {
 	t.Helper()
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func ruleEnabled(t *testing.T, a *appt.App, name string) bool {
 func seedNames(t *testing.T, a *appt.App, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		if _, err := a.Store.CreateMapping(streamRule(t, name)); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -115,7 +115,7 @@ func TestMultiSelectBatchDelete(t *testing.T) {
 	// The rows go, and the choice goes with them: once the store holds
 	// only 丙 the bar falls back to the whole list.
 	waitFor(t, tt, "the rows gone and the choice with them", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1 && list[0].Name == "丙" && tt.HasText("当前列表 1 条")
 	})
 }
@@ -194,7 +194,7 @@ func TestMultiSelectBatchMixedChoiceCount(t *testing.T) {
 	seedNames(t, a, "甲", "乙", "丙")
 	// streamRule leaves every rule on, so 乙 is flipped off: the choice of
 	// 甲 (on) and 乙 (off) is mixed.
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}

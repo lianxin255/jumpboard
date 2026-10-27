@@ -18,7 +18,7 @@ func enabledOf(t *testing.T, a *App, id string) bool {
 // namesLeft lists the rules the store still holds, in its order.
 func namesLeft(t *testing.T, a *App) []string {
 	t.Helper()
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
