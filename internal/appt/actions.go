@@ -195,6 +195,21 @@ func (a *App) SetNginxLogRead(on bool) {
 	a.notify()
 }
 
+// ShowTraffic reports whether the table carries each rule's counters.
+func (a *App) ShowTraffic() bool { return a.showTraffic }
+
+// SetShowTraffic stores the choice. The engine keeps counting either way;
+// this only says whether the table and the detail popover show it.
+func (a *App) SetShowTraffic(on bool) {
+	a.showTraffic = on
+	v := "0"
+	if on {
+		v = "1"
+	}
+	_ = a.Store.SetSetting(store.SettingShowTraffic, v)
+	a.notify()
+}
+
 // OpenAtLogin reports whether the app starts when the user logs in.
 func (a *App) OpenAtLogin() bool { return a.openAtLogin }
 
