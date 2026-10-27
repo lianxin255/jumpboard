@@ -38,6 +38,7 @@ func (a *App) OpenForm(m *model.Mapping) {
 		a.form = NewForm()
 	}
 	a.formErrs = nil
+	a.formPortFix = 0
 	a.formOpen = true
 }
 
@@ -53,6 +54,7 @@ func (a *App) OpenNewFormFrom(m model.Mapping) {
 	a.formEdit = nil
 	a.form = FormFromMapping(m)
 	a.formErrs = nil
+	a.formPortFix = 0
 	a.formOpen = true
 }
 
@@ -63,6 +65,7 @@ func (a *App) OpenFormFromTemplate(t model.Template) {
 	a.formEdit = nil
 	a.form = FormFromTemplate(t)
 	a.formErrs = nil
+	a.formPortFix = 0
 	a.formOpen = true
 }
 
@@ -317,8 +320,33 @@ func (a *App) SaveForm() error {
 	}
 
 	m, errs, ok := f.Validate()
+
+	// A listen port that passed the numeric check can still be taken by
+	// another mapping or another program: say who sits on it and offer the
+	// nearest free port, so the failure reads as an answer instead of a
+	// bind error the user would have to investigate on their own.
+	var excludeID string
+	if edit != nil {
+		excludeID = edit.ID
+	}
+	portTaken := errs["ListenPort"] == "" && m.ListenPort != 0
+	var portFix int
+	if portTaken {
+		why, fix := a.probeListenPort(m.ListenPort, m.Protocol, excludeID)
+		if why != "" {
+			if existing := errs["ListenPort"]; existing != "" {
+				errs["ListenPort"] = existing + "；" + why
+			} else {
+				errs["ListenPort"] = why
+			}
+			portFix = fix
+		}
+	}
+	ok = len(errs) == 0
+
 	a.mu.Lock()
 	a.formErrs = errs
+	a.formPortFix = portFix
 	a.mu.Unlock()
 	if !ok {
 		a.notify()
@@ -341,6 +369,7 @@ func (a *App) SaveForm() error {
 	}
 	a.mu.Lock()
 	a.formErrs = nil
+	a.formPortFix = 0
 	a.mu.Unlock()
 	a.CloseForm()
 	a.setStatus(fmt.Sprintf("已保存「%s」，点“应用配置”后生效", m.Name), false)
@@ -616,8 +645,11 @@ func (a *App) Apply() error {
 	}
 	res, err := a.Eng.Apply(spec)
 	if err != nil {
+		// The hint reads the store and the running rules, so it is computed
+		// before the lock: RuleStatus takes the same one.
+		hint := a.bindHint(err)
 		a.mu.Lock()
-		a.applyErr = err.Error()
+		a.applyErr = withBindHint(err, hint)
 		a.applyErrPort, a.failKind = bindPort(err), "apply"
 		// A new failure retires the diagnosis of the old one: advice about
 		// a failure that no longer exists must not ride along under the
@@ -734,8 +766,9 @@ func (a *App) TestConfig() error {
 		return err
 	}
 	if err := a.Eng.Check(spec); err != nil {
+		hint := a.bindHint(err)
 		a.mu.Lock()
-		a.applyErr = err.Error()
+		a.applyErr = withBindHint(err, hint)
 		a.applyErrPort, a.failKind = bindPort(err), "check"
 		// As with a failed apply: the diagnosis belongs to the failure that
 		// asked for it, not to whichever red bar shows next.

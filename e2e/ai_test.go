@@ -133,18 +133,26 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 		t.Errorf("port %d should read as taken", draft.ListenPort)
 	}
 
-	// The draft opens in the form; saving it is allowed — the conflict is
-	// the engine's to report on apply — but the row says why it is not
-	// listening, so the user is not left guessing.
+	// The draft opens in the form; saving it is refused at the form, with
+	// the occupier named and a free port offered — the save does not
+	// succeed until the port is one the machine lets the app bind.
 	a.OpenNewFormFrom(*draft)
-	if err := a.SaveForm(); err != nil {
-		t.Fatalf("saving a conflicted draft should be allowed: %v", err)
+	if err := a.SaveForm(); err == nil {
+		t.Fatal("saving a draft onto a taken port should be refused")
 	}
-	if err := a.Apply(); err == nil {
-		t.Fatal("applying onto a taken port should fail")
+	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+		t.Error("nothing should have been saved")
 	}
-	if listening, problem := a.RuleState(draft.ID); listening || problem == "" {
-		t.Errorf("the rule should say why it is not listening: %q", problem)
+	if fix := a.FormPortFix(); fix == 0 || fix == conflict {
+		t.Errorf("a free port should be offered, got %d", fix)
+	}
+	_, _, _, errs := a.FormState()
+	var text string
+	for _, msg := range errs {
+		text += msg + " "
+	}
+	if !strings.Contains(text, "占用") {
+		t.Errorf("the error should name the occupier: %q", text)
 	}
 }
 
