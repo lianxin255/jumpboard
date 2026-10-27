@@ -502,6 +502,40 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		// colors a row carries, and nothing here acts on a chosen row.
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
+		// A row dragged to a new place reorders through the same store
+		// call the context menu's 上移/下移 use. The toolkit carries the
+		// row at half opacity and draws the line it would land on; what
+		// the drop hands over are the dragged rows and the row they go
+		// before, in the indices of the list as it stands.
+		v.table.Reorder = func(rows []int, to int) {
+			inDrag := make(map[int]bool, len(rows))
+			moved := make([]string, 0, len(rows))
+			for _, r := range rows {
+				inDrag[r] = true
+				moved = append(moved, filtered[r].ID)
+			}
+			// The shown list, without the dragged rows, with them back
+			// where they landed: `to` is the original index of the row
+			// they go before, the count of rows for the end.
+			var rest []string
+			at := 0
+			for i, m := range filtered {
+				if i == to {
+					at = len(rest)
+				}
+				if !inDrag[i] {
+					rest = append(rest, m.ID)
+				}
+			}
+			if to == len(filtered) {
+				at = len(rest)
+			}
+			shown := make([]string, 0, len(filtered))
+			shown = append(shown, rest[:at]...)
+			shown = append(shown, moved...)
+			shown = append(shown, rest[at:]...)
+			a.RunBackground(func() error { return a.ReorderFilteredMappings(shown) })
+		}
 
 		ui.Column(c).Fill().Children(func() {
 			cols := []ui.TableColumn{

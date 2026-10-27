@@ -397,6 +397,44 @@ func (a *App) MoveMapping(id string, up bool) error {
 	return nil
 }
 
+// ReorderFilteredMappings applies the order a drag of the table left the
+// rows it shows in: shown holds those ids, in their new order. A filter or
+// a search may narrow the table, so the rows the drag could not see keep
+// their places, and the shown ones take the shown slots in the order the
+// drag left them — the table the user watches moves exactly as it lands.
+// Like 上移/下移, only the sort order changes: the engine and the
+// configuration it generates are untouched and nothing is marked dirty.
+func (a *App) ReorderFilteredMappings(shown []string) error {
+	ids, err := a.Store.MappingIDs()
+	if err != nil {
+		return err
+	}
+	shownAt := make(map[string]int, len(shown))
+	for i, id := range shown {
+		shownAt[id] = i
+	}
+	next := make([]string, len(ids))
+	j := 0
+	for pos, id := range ids {
+		if _, ok := shownAt[id]; !ok {
+			next[pos] = id // a row the drag could not see stays put
+			continue
+		}
+		next[pos] = shown[j]
+		j++
+	}
+	if j != len(shown) {
+		// The table the drag came from was narrower than the store thinks,
+		// or wider: acting on it would silently drop or duplicate rows.
+		return fmt.Errorf("拖动排序时表里的映射与配置不一致，请刷新后再试")
+	}
+	if err := a.Store.ReorderMappings(next); err != nil {
+		return err
+	}
+	a.Log.Info("拖动调整了映射顺序")
+	return nil
+}
+
 // SetMappingsEnabled turns every listed mapping on or off in one pass.
 //
 // It stops on the first failure so a partial batch leaves a clear toast;
