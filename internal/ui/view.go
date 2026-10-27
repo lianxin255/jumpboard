@@ -86,6 +86,11 @@ type View struct {
 	aiModels    []string
 	aiFetching  bool
 	aiListErr   string
+	// aiSuggest is the first model of a landed fetch, offered once. The
+	// goroutine only writes this; the frame applies it to aiModel itself,
+	// so the field the TextInput buffers is never touched off the frame's
+	// thread.
+	aiSuggest string
 	// modelPicker shows the fetched list under the model field.
 	modelPicker bool
 }

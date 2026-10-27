@@ -6,11 +6,47 @@
 
 - 先建一个 **draft** GitHub Release；
 - macOS runner 构建 `darwin/universal`，Windows runner 构建 `windows/amd64`；
-- 各自附带 `SHA256SUMS`，上传到同一个 draft。
+- 各自附带 `SHA256SUMS`，上传到同一个 draft；
+- 构建带 `MYGO_UPDATER_PRIVATE_KEY`（来自仓库 secret）：**配了 secret 就同时产出签名更新包**（`jumpboard-x.y.z-<platform>.tar.gz` + `update-<platform>.json` 清单 + 增量包），**没配则跳过更新文件**，流水线照常绿。
 
-产物**没有签名**。macOS 上是 ad hoc 签名，Gatekeeper 会拦截别的 Mac 打开；Windows 上没有签名，SmartScreen 会警告。所以现在的产物只供维护者自己安装和分发，不面向公开下载。
+产物**没有代码签名**。macOS 上是 ad hoc 签名，Gatekeeper 会拦截别的 Mac 打开；Windows 上没有签名，SmartScreen 会警告。所以安装包只供维护者自己安装和分发，不面向公开下载。自动更新用的签名是 mygo 自己的 Ed25519 密钥对（见下），与代码签名无关，不受此影响——但更新替换进来的新版本同样是 ad hoc 签名，未公证，首次打开仍需绕过 Gatekeeper（`xattr -cr /Applications/JumpBoard.app`）。
 
-## 补上签名需要什么
+## 自动更新（已接线）
+
+应用内已接 `mygo.Updater`：设置页「更新」卡片，手动「检查更新」→ 展示版本与 `CHANGELOG.md` 该版本的发布说明 → 「安装并重启」。默认**不做后台自动检查**。开发构建（`go run .`、测试）里卡片显示「开发构建不支持自动更新」。
+
+方案（mygo keygen 密钥体系，不需要 Apple 开发者账号）：
+
+- `mygo keygen` 生成的**公钥**已提交在 `mygo.json` 的 `updates.publicKey`，并指向 `updates.github: "lianxin255/jumpboard"`（应用从本仓库 Releases 的 latest 读 `update-<platform>.json`）。
+- **私钥绝不进仓库**：它只存在两处——生成机的 `~/Library/Application Support/mygo/update-keys/mygo-update.key`，和 GitHub 仓库 secret `MYGO_UPDATER_PRIVATE_KEY`。`.gitignore` 与提交历史已核查无 `mygo-update.key`。
+
+### ⚠️ 私钥保管（主人必读）
+
+已安装的应用只认这把公钥签的更新。**私钥丢失 = 所有已安装副本永远无法再自动更新**（只能手动下载覆盖）；私钥泄露 = 别人可以给所有用户推任意代码。请把 `mygo-update.key` 的内容存进密码管理器，再配进 GitHub secret。
+
+### 主人需要做的一次性配置
+
+```sh
+# 在生成密钥的机器上（或从密码管理器取出私钥文件）：
+gh secret set MYGO_UPDATER_PRIVATE_KEY --repo lianxin255/jumpboard < mygo-update.key
+```
+
+配好后，下一个 `v*` tag 的 release 就会带签名更新文件；没配之前的 release 只有安装包，已装应用检查更新会得到「已是最新版本」之外的错误提示（读不到清单），属预期。
+
+### 发布一个新版本的流程
+
+1. `CHANGELOG.md` 加（或补全）`## x.y.z` 小节——构建时它成为更新说明，**没有该小节签名构建会直接失败**；
+2. `mygo.json` 的 `version` 改成 `x.y.z`；
+3. 提交、打 tag 并推送：`git tag vx.y.z && git push origin vx.y.z`；
+4. CI 产出 draft release → 检查产物 → **发布（publish）**。只有发布成 latest 后，已安装的应用才能检查到它（draft 不可见）。
+
+### 首个版本的端到端冒烟（主人手测清单）
+
+配好 secret 后，按上面流程发布 v1.2.0 并安装；再发布一个 v1.2.1（CHANGELOG 随便写一行），然后在装着 v1.2.0 的应用里：设置 → 更新 → 检查更新 → 看到 1.2.1 与说明 → 安装并重启 → 重启后「当前版本」是 1.2.1。
+
+本地已验证的部分（2026-10-27，开发机）：`MYGO_UPDATER_PRIVATE_KEY=… go tool mygo build -platform darwin/universal` 产出 `jumpboard-1.2.0-darwin-universal.tar.gz`、`update-darwin-universal.json`（含版本、取自 CHANGELOG 的说明、URL 与 Ed25519 签名）；文件名无空格，与 release.yml 的改名与校验和步骤不冲突。未做：真实 vA→vB 应用内升级冒烟（需要仓库里存在已发布的签名 release，见上手测清单）。
+
+## 补上代码签名需要什么
 
 仓库目前没有这些 secret，补齐后按 [mygo 的 github-actions 文档](https://github.com/egoist/mygo/blob/v0.6.4/docs/github-actions.md) 在 workflow 里加导入步骤即可：
 
@@ -20,25 +56,3 @@
 | Windows | `WINDOWS_CERTIFICATE`（.pfx 的 base64）、`WINDOWS_CERTIFICATE_PASSWORD` | 代码签名证书（EV 或 OV），用 `osslsigncode` 签 |
 
 `mygo.json` 里对应加上 `macos.signingIdentity` 与 `macos.notarize`。
-
-## 自动更新为什么先只留文档
-
-mygo 自带签名更新器（`mygo.Updater`）：`mygo keygen` 生成密钥对，公钥写进 `mygo.json` 的 `updates.publicKey` 并指向 `updates.github`，构建时用 `MYGO_UPDATER_PRIVATE_KEY` 给每个平台产出 `update-<platform>.json` 清单和增量包，应用内检查清单、验签、替换自己。
-
-现在不做的原因：
-
-1. **私钥一旦发布就不能换。** 已安装的应用只接受这把密钥签的更新，丢了密钥这些安装就永远更新不了，而密钥泄露等于别人能给所有用户发代码。在还没有签名分发渠道、没有保管密钥的地方（密码管理器 + CI secret）之前生成它，风险大于收益。
-2. **更新包与安装包是同一套产物。** 安装包还没有正式签名，自动替换进去的也过不了 Gatekeeper / SmartScreen，用户侧体验和手动下载没有差别。
-3. **无密钥时 `mygo build` 本来就会跳过更新文件**，所以现在的发布流水线不需要为它做任何特殊处理。
-
-## 启用时的步骤
-
-1. 在有保管条件的机器上跑 `go tool mygo keygen`，私钥进密码管理器，再 `gh secret set MYGO_UPDATER_PRIVATE_KEY`。
-2. `mygo.json` 加：
-
-   ```json
-   "updates": { "publicKey": "…mygo-update.pub 的内容…", "github": "lianxin255/jumpboard" }
-   ```
-
-3. workflow 的构建命令改为 `go tool mygo build -platform … -upload`（`-upload` 需要密钥，没有会在构建前停下）。
-4. 应用里接 `mygo.Updater`：启动后检查、设置页放「检查更新」。发布说明取 `CHANGELOG.md` 里该版本的段落，所以每个版本都要有 `## x.y.z` 小节。

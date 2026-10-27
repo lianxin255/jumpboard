@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -499,6 +500,42 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						})
 					}
 					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(11).TextColor(t.Muted)
+				})
+
+				v.card(c, t, "更新", func() {
+					ui.Text(c, "当前版本 "+a.AppVersion).FontSize(11).TextColor(t.Muted)
+					if !a.UpdatesEnabled() {
+						ui.Text(c, "开发构建不支持自动更新，新版本请从 GitHub Releases 下载。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+						return
+					}
+					if up := a.UpdateAvail(); up != nil {
+						ui.Text(c, "发现新版本 "+up.Version).FontSize(13).Bold().TextColor(t.FG)
+						markdown.View(c, up.Notes, &markdown.Options{})
+						if a.UpdateBusy() {
+							if p := a.UpdateProgress(); p >= 0 {
+								ui.Text(c, fmt.Sprintf("正在下载更新…%d%%", int(p*100))).
+									FontSize(11).TextColor(t.Muted)
+							} else {
+								ui.Text(c, "正在下载更新…").FontSize(11).TextColor(t.Muted)
+							}
+						}
+						if ui.PrimaryButton(c, "安装并重启").Disabled(a.UpdateBusy()).Clicked() {
+							a.InstallFoundUpdate()
+						}
+						ui.Text(c, "下载校验通过后自动重启到新版本。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+						return
+					}
+					if ui.Button(c, "检查更新").Disabled(a.UpdateBusy()).Clicked() {
+						a.CheckForUpdates()
+					}
+					if a.UpdateBusy() {
+						ui.Text(c, "正在检查…").FontSize(11).TextColor(t.Muted)
+					} else {
+						ui.Text(c, "更新包经签名校验，只有检查后才会下载。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+					}
 				})
 			})
 

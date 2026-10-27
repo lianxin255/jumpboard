@@ -60,6 +60,12 @@ jobs:
             exit 1
           fi
       - name: Build
+        # The key signs the update manifests and archives; without the
+        # secret the build skips them and the release is installers only,
+        # so the pipeline works before the secret exists too. See
+        # docs/release-and-updates.md for how the secret is set.
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform ${{ matrix.platform }}
       # A release asset is a file; the macOS bundle is a directory. ditto
       # zips it the way macOS unpacks bundles (resource forks, symlinks and

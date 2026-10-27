@@ -14,6 +14,7 @@
 package appt
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -90,6 +91,19 @@ type App struct {
 	// needs the window; a test leaves it nil and a deeplink without it
 	// just does nothing about the window.
 	ShowWindow func()
+	// CheckUpdate asks the update feed for a newer version, returning nil
+	// when the app is up to date. main.go points it at mygo's updater,
+	// which works only in a packaged build with updates configured; a test
+	// leaves it nil and the settings page says updates are unavailable.
+	CheckUpdate func(ctx context.Context) (*UpdateInfo, error)
+	// InstallUpdate downloads and installs what CheckUpdate found, and
+	// RelaunchApp restarts the app once it did. Wired beside CheckUpdate,
+	// and nil together with it.
+	InstallUpdate func(ctx context.Context, progress func(fraction float64)) error
+	RelaunchApp   func()
+	// AppVersion is the running version, for the settings page. Set once
+	// in main.go before the window exists.
+	AppVersion string
 	// SaveDialog and OpenDialog ask the user where to put a file and
 	// which files to read. main.go points them at the native dialogs,
 	// which need the running app; a test leaves them nil, and the UI
@@ -164,6 +178,14 @@ type App struct {
 	filterQuery     string
 	filterRationale string
 	filterIDs       map[string]bool
+
+	// The update the last check found, if any, and how far its download
+	// got: negative means unknown or not downloading. updateBusy covers a
+	// check or an install in flight. Written by the check and install
+	// goroutines, read by the settings page.
+	updateAvail    *UpdateInfo
+	updateProgress float64
+	updateBusy     bool
 
 	// UI state: main thread only.
 	page     Page

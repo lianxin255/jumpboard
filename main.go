@@ -3,7 +3,9 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -65,6 +67,35 @@ func main() {
 	// The desktop notifier too: it silently does nothing until the app is
 	// packaged, so the behaviour holds in development and in tests.
 	app.Notify = native.Notify
+	// The updater, when the build carries one: a development build, or one
+	// without updates configured, gets no hooks and the settings page says
+	// so. The install runs on the update the check found, so main keeps it
+	// between the two.
+	app.AppVersion = mygo.App.Version()
+	if mygo.Updater.Enabled() {
+		var found *mygo.Update
+		app.CheckUpdate = func(ctx context.Context) (*appt.UpdateInfo, error) {
+			up, err := mygo.Updater.Check(ctx)
+			if err != nil || up == nil {
+				return nil, err
+			}
+			found = up
+			return &appt.UpdateInfo{Version: up.Version, Notes: up.Notes}, nil
+		}
+		app.InstallUpdate = func(ctx context.Context, progress func(float64)) error {
+			if found == nil {
+				return errors.New("没有已发现的新版本，请先检查更新")
+			}
+			return found.Install(ctx, func(done, total int64) {
+				if total > 0 {
+					progress(float64(done) / float64(total))
+				} else {
+					progress(-1)
+				}
+			})
+		}
+		app.RelaunchApp = mygo.App.Relaunch
+	}
 	// The native file dialogs too.
 	app.SaveDialog = mygo.Dialog.Save
 	app.OpenDialog = mygo.Dialog.Open

@@ -6,5 +6,9 @@
   "out": "build",
   "urlSchemes": [
     "jumpboard"
-  ]
+  ],
+  "updates": {
+    "publicKey": "0SNdmcXWzY4htKcDXdpKyI7Jt2sfEHGsPCrhyKM4bG0=",
+    "github": "lianxin255/jumpboard"
+  }
 }
