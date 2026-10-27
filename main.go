@@ -112,6 +112,10 @@ func main() {
 		// below runs after them through the same OnBeforeQuit list.
 		dock := native.Setup(app, win, appIcon)
 
+		// A deeplink that says "show me" needs the window; it is wired once
+		// the dock exists, so the app never has to know the window does.
+		app.ShowWindow = dock.Show
+
 		// The menu bar the dock's window owns: Chinese labels where the
 		// app writes its own items, the system's own menus where macOS
 		// needs them untouched.
@@ -121,6 +125,19 @@ func main() {
 		// process exits, and close the database after. Closing the window
 		// no longer quits — it hides into the tray — so the real quit
 		// paths are the tray's 退出 and Cmd+Q.
+		// A jumpboard:// URL reaches OnOpenURL: show, or import what it
+		// carries, through the same preview a paste does. Registered before
+		// Run on purpose, so the URL the app was launched with lands too.
+		mygo.App.OnOpenURL(func(raw string) {
+			if err := app.HandleDeeplink(raw); err != nil {
+				dock.Show()
+				app.Fail("%v", err)
+			}
+		})
+		// The scheme has to exist before the first URL can arrive; this is
+		// the cheap registration that also makes the app the default handler.
+		_ = mygo.App.RegisterURLScheme("jumpboard")
+
 		mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 			app.Close()
 		})

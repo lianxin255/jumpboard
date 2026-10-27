@@ -65,6 +65,22 @@ func (a *App) StartPasteImport() error {
 	return nil
 }
 
+// StartPasteFromText puts a text on the import preview without reading the
+// clipboard, which is the deeplink's path: a URL can carry the same JSON
+// or nginx.conf a paste does, and goes through the same preview and
+// confirmation. The refusal for unrecognized text is the same one.
+func (a *App) StartPasteFromText(text string) error {
+	pv, ok := sniffPaste(text)
+	if !ok {
+		return fmt.Errorf("链接内容无法识别：支持 JumpBoard 备份（JSON）或 nginx 配置")
+	}
+	a.mu.Lock()
+	a.pastePending = pv
+	a.mu.Unlock()
+	a.notify()
+	return nil
+}
+
 // CancelPasteImport folds the preview away without importing.
 func (a *App) CancelPasteImport() {
 	a.mu.Lock()

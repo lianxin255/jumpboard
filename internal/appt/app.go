@@ -85,6 +85,11 @@ type App struct {
 	// Clipboard, for 粘贴导入. main.go wires it to mygo's; a test sets it
 	// to a string it holds, mirroring Copied's memory stance.
 	ReadClipboard func() (string, error)
+	// ShowWindow brings the main window to the front, for a deeplink
+	// that asks to be seen. main.go points it at the dock's Show, which
+	// needs the window; a test leaves it nil and a deeplink without it
+	// just does nothing about the window.
+	ShowWindow func()
 	// SaveDialog and OpenDialog ask the user where to put a file and
 	// which files to read. main.go points them at the native dialogs,
 	// which need the running app; a test leaves them nil, and the UI

@@ -3,5 +3,8 @@
   "identifier": "dev.lianxin.jumpboard",
   "version": "1.2.0",
   "copyright": "© 2026 lianxin",
-  "out": "build"
+  "out": "build",
+  "urlSchemes": [
+    "jumpboard"
+  ]
 }
