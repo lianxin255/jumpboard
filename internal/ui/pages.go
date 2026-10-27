@@ -361,6 +361,21 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					})
 					ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
 						FontSize(11).TextColor(t.Muted).Wrap()
+					// The traffic switch rides the same row as its words, the
+					// whitelist switch's shape: a settings page whose cards
+					// grow one line each would push the cards beside them
+					// below the fold of the window's default size.
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						ui.Column(c).Gap(2).Grow(1).Children(func() {
+							ui.Text(c, "流量显示").FontSize(13).TextColor(t.FG)
+							ui.Text(c, "映射表与详情显示连接数和流量").FontSize(11).TextColor(t.Muted)
+						})
+						on := a.ShowTraffic()
+						if ui.Switch(c, &on).Label("显示流量").
+							Tooltip("关闭后映射表和详情不再显示连接数与流量，转发本身不受影响").Changed() {
+							a.SetShowTraffic(on)
+						}
+					})
 				})
 
 				v.card(c, t, "访问控制", func() {

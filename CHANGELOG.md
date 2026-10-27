@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **多标签**：终端页可同时开多个会话标签（本地终端 / 端口探测 / 串口），切换与关闭互不影响；「全部关闭」与 ⌘Q 一并挂断
 - **串口**：列出本机串行设备，选定波特率打开，原始 8-N-1 读写；打不开或没设备时给出可读提示（不涉及 SSH/凭据/远程主机）
 
+### Added — 自启与排序
+
+- **开机自启**：设置页新增「登录时启动」开关（默认关）；已运行时再次启动不再弹第二个实例，而是唤起既有窗口
+- **多选拖拽**：映射表支持多选（单击 / ⌘ 点选 / ⇧ 连选 / ⌘A 全选），拖拽任一选中行即整块排序（此前仅单行拖拽）
+
 ## [1.2.0] — 2026-10-26
 
 （1.0.0 之后的全部内容：mygo 原生化重构 + P1/P2 批次，随 1.2.0 号码入库）
@@ -90,5 +95,6 @@ Tauri 方案在 Windows 上遇到 WebView2 Runtime 缺失和 VCRUNTIME 依赖问
 - Windows 绿色版打包
 - 215 个测试
 
-[Unreleased]: https://github.com/lianxin255/jumpboard/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/lianxin255/jumpboard/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/lianxin255/jumpboard/releases/tag/v1.2.0
 [1.0.0]: https://github.com/lianxin255/jumpboard/releases/tag/v1.0.0

@@ -826,13 +826,6 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 			ui.Text(c, "→").FontSize(12).TextColor(t.Meta)
 			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(12).TextColor(t.FG2).
 				Tooltip("上游目标")
-			if info.Connections > 0 {
-				ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
-					Tooltip("这条规则累计转发的连接数")
-			}
-			if info.Active > 0 {
-				ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success)
-			}
 			// The group rides at the end of the row: a label, not a
 			// control — the chips above the table are where a group is
 			// picked, this only says which one the rule belongs to.
@@ -842,14 +835,28 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 					Padding(2, 6).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border)
 			}
 		})
-		// The rule's bytes join the other counters on this cell's second
-		// line rather than in a column of their own: the table has one
-		// flexible column — this one — and a fixed-width traffic column
-		// would clip the addresses at the window's default size.
-		if info.BytesIn > 0 || info.BytesOut > 0 {
-			ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
-				FontSize(10).TextColor(t.Meta).
-				Tooltip("这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端")
+		// All the counters share the cell's second line, and the line is
+		// drawn whenever the traffic display is on — at zero counts too.
+		// Both are geometry, not style: the address line above fills the
+		// cell's width as it is, so a counter appearing there would wrap it
+		// and grow the row, and a second line appearing on the first packet
+		// would grow it too — either way every button below the row moves
+		// under a pointer that is already down, and the click dies.
+		if a.ShowTraffic() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if info.Active > 0 {
+					ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success).
+						Tooltip("这条规则此刻正开着的连接数")
+				}
+				ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
+					Tooltip("这条规则累计转发的连接数")
+				tooltip := "这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端"
+				if !info.LastCloseAt.IsZero() {
+					tooltip += "；最近断开 " + info.LastCloseAt.Format("15:04:05")
+				}
+				ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
+					FontSize(10).TextColor(t.Meta).Tooltip(tooltip)
+			})
 		}
 	})
 }
@@ -970,7 +977,22 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 		} else {
 			ui.Text(c, "健康检查未启用").FontSize(11).TextColor(t.Meta)
 		}
-		v.throughputBlock(c, t, m.ID)
+		// The traffic section is the same display the table carries, so the
+		// setting quiets both. What it adds over the row is the recent
+		// history: when a connection last ended, and the last refusal of
+		// the upstream when there was one.
+		if a.ShowTraffic() {
+			v.throughputBlock(c, t, m.ID)
+			info := a.RuleInfo(m.ID)
+			if !info.LastCloseAt.IsZero() {
+				ui.Textf(c, "最近断开 %s", info.LastCloseAt.Format("15:04:05")).
+					FontSize(11).TextColor(t.Meta)
+			}
+			if info.LastErr != "" {
+				ui.Textf(c, "最近错误 %s", info.LastErr).FontSize(11).TextColor(t.Danger).
+					Tooltip(info.LastErrAt.Format("15:04:05")).Wrap()
+			}
+		}
 		ui.Row(c).Gap(8).Children(func() {
 			if ui.Button(c, "编辑").Clicked() {
 				v.detailID = ""

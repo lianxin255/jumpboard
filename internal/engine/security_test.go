@@ -53,7 +53,7 @@ func TestWhitelistBlocksStreamRules(t *testing.T) {
 // be resolved drops datagrams instead of writing to a nil socket, which
 // used to panic the whole process from a goroutine.
 func TestUDPBadUpstreamDoesNotPanic(t *testing.T) {
-	listen := freePort(t)
+	listen := freeUDPPort(t)
 	e := NewLocal()
 	defer e.Stop()
 	if _, err := e.Apply(Spec{Mappings: []model.Mapping{{

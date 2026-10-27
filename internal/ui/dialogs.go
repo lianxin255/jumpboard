@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,7 +18,7 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 	a := v.App
 
 	if open, editing, f, errs := a.FormState(); open {
-		v.formDialog(c, t, editing, f, errs)
+		v.formDialog(c, t, editing, f, errs, a.FormPortFix())
 	}
 	if a.TemplatePickerOpen() {
 		v.templateDialog(c, t)
@@ -48,7 +49,7 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 // checklist. Groups (转发 / 反向代理 / 健康检查) carry a small heading;
 // the protocol is a segmented control, and the extra-directives box gets
 // quick-insert chips for the directives people ask for most.
-func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f appt.FormValues, errs map[string]string) {
+func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f appt.FormValues, errs map[string]string, portFix int) {
 	a := v.App
 	open := true
 	title := "新建映射"
@@ -142,6 +143,33 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 									})
 								}
 							})
+							// A save that found the port taken comes back with the
+							// nearest free port: one button fills the field, so
+							// "who holds the port" leads to "move to this one"
+							// without retyping or investigating further.
+							if portFix != 0 {
+								port := strconv.Itoa(portFix)
+								ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+									ui.Textf(c, "或改用 %d：", portFix).FontSize(11).TextColor(t.Muted)
+									if ui.Button(c, "改用 "+port).FontSize(11).Clicked() {
+										// f is this frame's copy of the form;
+										// the app holds its own. Writing only
+										// the app's would not do: the input
+										// built this frame against f writes f
+										// back over the app's at the frame's
+										// end, and the editor, mid-input, can
+										// still prefer its own text. Both
+										// sides get the port: the app's, and
+										// the copy the next frame builds from.
+										f.ListenPort = port
+										a.UseFormPortFix()
+										a.SetForm(f)
+									}
+									if ui.Button(c, "忽略").FontSize(11).Clicked() {
+										a.ClearFormPortFix()
+									}
+								})
+							}
 							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 								if isWeb(f.Protocol) {
 									fld("location 路径", "", func() {

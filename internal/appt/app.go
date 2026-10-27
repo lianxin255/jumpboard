@@ -71,6 +71,10 @@ type App struct {
 	// rates samples the rules' byte counters once a second, for the detail
 	// popover's throughput curve.
 	rates *rateSampler
+	// watch keeps the table's rule counters fresh: it rereads the engine
+	// when a rule's traffic moves and once a second besides, and asks for
+	// a frame only when what the table shows changed.
+	watch *ruleWatcher
 	// conf watches the exported nginx.conf for edits made outside the app.
 	conf *confWatch
 
@@ -210,7 +214,10 @@ type App struct {
 	form     FormValues
 	// formErrs are the fields the last save found wrong, cleared when the
 	// form is saved or reopened.
-	formErrs     map[string]string
+	formErrs map[string]string
+	// formPortFix is the free port offered when ListenPort is taken, 0
+	// when no fix was found or the port is valid.
+	formPortFix  int
 	templateOpen bool
 	confirm      *Confirm
 	snapshotView *model.Snapshot
@@ -221,6 +228,10 @@ type App struct {
 	whitelistOn  bool
 	nginxLogRead bool
 	openAtLogin  bool
+	// showTraffic says the table carries each rule's counters. Off is only
+	// quieter: the engine still counts, the detail popover simply stops
+	// showing it.
+	showTraffic bool
 
 	// The last draft the model proposed, kept for the AI panel.
 	lastAIDraft *model.Mapping
@@ -264,6 +275,7 @@ func New(p paths.Paths) (*App, error) {
 	a.whitelistOn = st.WhitelistOn()
 	a.nginxLogRead = st.SettingBool(store.SettingNginxLogRead, true)
 	a.openAtLogin = st.SettingBool(store.SettingOpenAtLogin, false)
+	a.showTraffic = st.SettingBool(store.SettingShowTraffic, true)
 	if name, err := st.HostName(); err == nil && name != "" {
 		a.hostName = name
 	}
@@ -296,6 +308,11 @@ func New(p paths.Paths) (*App, error) {
 	// The sampler runs beside the checker: the popover's chart reads it, and
 	// it asks for a frame each tick that lands a sample.
 	a.rates.Start()
+	// The rule watcher runs beside it: the table's counters read it, and it
+	// asks for a frame when traffic moved them — at once when the engine
+	// pokes, and within a second when nothing did.
+	a.watch = newRuleWatcher(a.Eng, a.refreshRules, a.notify)
+	a.watch.Start()
 	// The exported configuration is watched from the start, so an edit made
 	// while the app was closed is noticed at the first look too.
 	a.conf.start()
@@ -333,6 +350,9 @@ func (a *App) runClosers() {
 func (a *App) Close() {
 	a.runClosers()
 	a.Check.Stop()
+	if a.watch != nil {
+		a.watch.Stop()
+	}
 	if a.rates != nil {
 		a.rates.Stop()
 	}
