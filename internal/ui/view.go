@@ -69,12 +69,12 @@ type View struct {
 	// write the fields behind termMu and the frame reads a snapshot, the
 	// AI settings card's pattern. Each tab carries its own mutable state,
 	// which is what keeps two sessions from tripping over each other.
-	termMu       sync.Mutex
-	termTabs     []*tabSession
-	termActive   int
-	termSeq      int
-	termNewKind  int
-	termInit     sync.Once
+	termMu      sync.Mutex
+	termTabs    []*tabSession
+	termActive  int
+	termSeq     int
+	termNewKind int
+	termInit    sync.Once
 
 	ai aiState
 
