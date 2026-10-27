@@ -195,6 +195,62 @@ func (a *App) SetNginxLogRead(on bool) {
 	a.notify()
 }
 
+// OpenAtLogin reports whether the app starts when the user logs in.
+func (a *App) OpenAtLogin() bool { return a.openAtLogin }
+
+// SetOpenAtLogin turns the start-at-login choice on or off.
+//
+// Setting it to what it already is does nothing, as with the whitelist: a
+// repeated call would log a flip that never happened. The desktop is asked
+// first, and its refusal — a development build has no app bundle to
+// register — leaves both the switch and the store untouched; a store that
+// cannot take the mirror is healed by the next launch's sync.
+func (a *App) SetOpenAtLogin(on bool) error {
+	if a.openAtLogin == on {
+		return nil
+	}
+	if a.OnOpenAtLogin != nil {
+		if err := a.OnOpenAtLogin(on); err != nil {
+			a.Fail("开机自启未设置：%v", err)
+			return err
+		}
+	}
+	v := "0"
+	if on {
+		v = "1"
+	}
+	if err := a.Store.SetSetting(store.SettingOpenAtLogin, v); err != nil {
+		a.Fail("开机自启未设置：%v", err)
+		return err
+	}
+	a.openAtLogin = on
+	if on {
+		a.Log.Info("开机自启已开启，登录后自动启动")
+	} else {
+		a.Log.Info("开机自启已关闭")
+	}
+	a.notify()
+	return nil
+}
+
+// SyncOpenAtLogin adopts what the desktop's login items actually say, at
+// startup. The desktop is the source of truth — the user can flip the entry
+// in System Settings or the Task Manager, and a development build without a
+// bundle honestly reports false — so a difference is taken over silently:
+// it is not a user action. A store that cannot take the new mirror is
+// ignored; the field keeps the desktop's state either way.
+func (a *App) SyncOpenAtLogin(on bool) {
+	if a.openAtLogin == on {
+		return
+	}
+	a.openAtLogin = on
+	v := "0"
+	if on {
+		v = "1"
+	}
+	_ = a.Store.SetSetting(store.SettingOpenAtLogin, v)
+}
+
 // SnapshotView returns the snapshot opened for reading.
 func (a *App) SnapshotView() *model.Snapshot { return a.snapshotView }
 

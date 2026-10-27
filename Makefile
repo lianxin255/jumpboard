@@ -20,11 +20,11 @@ test-race:
 
 # The UI tests are the windowless end-to-end ones plus the appt-layer and
 # serial-layer behavior tests they lean on (forms, deeplinks, updates,
-# reorder, terminal, serial, …); together the -run families below cover
-# every test those packages hold, so a new one that escapes the pattern is
-# a gap to fix here, not a test that silently never runs.
+# reorder, terminal, serial, login items, …); together the -run families
+# below cover every test those packages hold, so a new one that escapes
+# the pattern is a gap to fix here, not a test that silently never runs.
 test-ui:
-	$(GO) test ./e2e/ ./internal/appt/ ./internal/serial/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLog|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestAskAI|TestAIFilter|TestClearAIFilter|TestKeyboard|TestToast|TestCopyAddress|TestEngineSwitch|TestAppLog|TestAccessLog|TestHistoryRollback|TestDataRoundTrip|TestBatch|TestConf|TestExternalConfEdit|TestDiagnose|TestDirective|TestDrag|TestMultiSelect|TestMoveMapping|TestReorder|TestDrop|TestFilter|TestForm|TestGroup|TestHotkey|TestSetHotkey|TestInstallUpdate|TestCheckUpdate|TestInterpret|TestOnClose|TestApplyNotifies|TestPaste|TestParseDeeplink|TestHandleDeeplink|TestRate|TestSampler|TestThroughput|TestTruncate|TestSearch|TestSettings|TestSetTheme|TestSidebar|TestTerminal|TestSerial|TestTraffic' -count=1 -v
+	$(GO) test ./e2e/ ./internal/appt/ ./internal/serial/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLog|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestAskAI|TestAIFilter|TestClearAIFilter|TestKeyboard|TestToast|TestCopyAddress|TestEngineSwitch|TestAppLog|TestAccessLog|TestHistoryRollback|TestDataRoundTrip|TestBatch|TestConf|TestExternalConfEdit|TestDiagnose|TestDirective|TestDrag|TestMultiSelect|TestMoveMapping|TestReorder|TestDrop|TestFilter|TestForm|TestGroup|TestHotkey|TestSetHotkey|TestInstallUpdate|TestCheckUpdate|TestInterpret|TestOnClose|TestOpenAtLogin|TestSetOpenAtLogin|TestSyncOpenAtLogin|TestApplyNotifies|TestPaste|TestParseDeeplink|TestHandleDeeplink|TestRate|TestSampler|TestThroughput|TestTruncate|TestSearch|TestSettings|TestSetTheme|TestSidebar|TestTerminal|TestSerial|TestTraffic' -count=1 -v
 
 # The engine tests: the forwarding engine's own package plus the
 # end-to-end ones that drive traffic through a real app. The families
