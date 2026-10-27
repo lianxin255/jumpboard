@@ -147,8 +147,8 @@ type App struct {
 	// closers hold the cleanups OnClose registered — the UI's terminal
 	// sessions hang up here — run once, before the store closes. Guarded
 	// by closeMu, which its own is: a terminal lands from a goroutine.
-	closers  []func()
-	closeMu  sync.Mutex
+	closers []func()
+	closeMu sync.Mutex
 	// applied is set once a rule set has been started, so that the table
 	// can tell "not started yet" from "started and not listening".
 	applied bool

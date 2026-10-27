@@ -25,9 +25,9 @@ func termLibReady(t *testing.T) {
 	}
 }
 
-// TestTerminalShellRuns waits for the shell the page starts, types at it
+// TestTerminalShellRuns opens a shell tab the page offers, types at it
 // through the view, and reads the echo back — the whole terminal path:
-// page, lazy session, plugin view.
+// page, tab, lazy session, plugin view.
 func TestTerminalShellRuns(t *testing.T) {
 	termLibReady(t)
 	a := testApp(t)
@@ -35,6 +35,9 @@ func TestTerminalShellRuns(t *testing.T) {
 	tt := ui.NewTester(v.Draw, 1200, 760)
 
 	if err := tt.Click("终端"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("新建会话"); err != nil {
 		t.Fatal(err)
 	}
 	// The shell starts off the frame (the library may be a first-run
@@ -121,10 +124,13 @@ func TestTerminalProbeConnects(t *testing.T) {
 	if err := tt.Click("终端"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
 	if err := tt.Click("端口探测"); err != nil {
 		t.Fatal(err)
 	}
+	if err := tt.Click("新建会话"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	waitFor(t, tt, "the picker to offer the rule", func() bool {
 		return tt.HasText("探测目标 — 127.0.0.1:" + strconv.Itoa(m.ListenPort))
 	})
