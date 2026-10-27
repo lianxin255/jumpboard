@@ -75,8 +75,8 @@ type View struct {
 	// download, and a dial to a dead port takes a moment — so the
 	// goroutines write the fields behind termMu and the frame reads a
 	// snapshot, the AI settings card's pattern.
-	termMode  int
-	probePick string
+	termMode      int
+	probePick     string
 	termMu        sync.Mutex
 	shell         *terminal.Terminal
 	shellStarting bool
@@ -440,6 +440,21 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		}
 		filtered = kept
 	}
+	// Rows the store no longer holds leave the choice. A delete runs on a
+	// background goroutine, which must not touch the frame's own state,
+	// so the frame that first sees the rows gone drops their ids — a
+	// row's own delete, a batch, and a wipe all land here.
+	if v.chosen.Len() > 0 {
+		live := make(map[string]bool, len(mappings))
+		for _, m := range mappings {
+			live[m.ID] = true
+		}
+		for id := range v.chosen.All() {
+			if !live[id] {
+				v.chosen.Remove(id)
+			}
+		}
+	}
 	enabled := 0
 	for _, m := range mappings {
 		if m.Enabled {
@@ -529,6 +544,9 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		// The rows keep their state by ID as the list changes, so the
 		// choice below follows its rows as they are filtered, reordered
 		// and reloaded, and a row dragged away stays itself.
+		// What the choice holds on screen: the rows the bar's batch
+		// buttons and the chosen rows' context menu act on.
+		chosenFiltered := v.chosenInFiltered(filtered)
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
 		// Rows can be chosen together: a click chooses one, ⌘-click adds
@@ -587,7 +605,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				m := filtered[row]
 				switch col {
 				case 0:
-					v.nameCell(c, t, m)
+					v.nameCell(c, t, m, chosenFiltered)
 				case 1:
 					v.protoCell(c, t, m)
 				case 2:
@@ -634,13 +652,54 @@ func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
 // nameCell shows the mapping's name and the host under it. The protocol
 // has its own column, so it is not repeated here. The cell carries the
 // row's context menu: everything the 修改 column does as buttons, plus
-// copy, one right-click away.
-func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
+// copy, one right-click away. When the row is one of several chosen, the
+// menu speaks for the whole choice instead, with the batch actions the
+// bar offers.
+func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered []model.Mapping) {
 	a := v.App
 	id := m.ID
 	listening, problem := v.App.RuleState(m.ID)
 	cell := ui.Column(c).Gap(2)
 	cell.ContextMenu(func(menu *ui.Menu) {
+		// The menu names what the choice holds, not the row under it,
+		// while several rows are chosen and this row is one of them. A
+		// rule the search hid stays out of the batch: the choice is cut
+		// to what the table shows, as the bar's buttons cut it.
+		if v.chosen.Has(m.ID) && len(chosenFiltered) > 1 {
+			var ids, onIDs, offIDs []string
+			for _, cm := range chosenFiltered {
+				ids = append(ids, cm.ID)
+				if cm.Enabled {
+					onIDs = append(onIDs, cm.ID)
+				} else {
+					offIDs = append(offIDs, cm.ID)
+				}
+			}
+			if menu.Item("批量启用").Disabled(len(offIDs) == 0).Chosen() {
+				a.RunBackground(func() error { return a.SetMappingsEnabled(offIDs, true) })
+			}
+			if menu.Item("批量停用").Disabled(len(onIDs) == 0).Chosen() {
+				a.RunBackground(func() error { return a.SetMappingsEnabled(onIDs, false) })
+			}
+			menu.Separator()
+			if menu.Item("批量删除…").Chosen() {
+				a.Ask(&appt.Confirm{
+					Title:       "批量删除",
+					Body:        fmt.Sprintf("将删除选中的 %d 条规则，删除后无法恢复，需要重新创建。", len(ids)),
+					Label:       "确认删除",
+					Destructive: true,
+					// The choice is the frame's own state, so the rows it
+					// names are pruned by the frame once the store lets
+					// them go, never from this background action.
+					Run: func() error { return a.DeleteMappings(ids) },
+				})
+			}
+			menu.Separator()
+			if menu.Item("取消选择").Chosen() {
+				v.chosen.Clear()
+			}
+			return
+		}
 		if menu.Item("编辑").Chosen() {
 			mm := m
 			a.OpenForm(&mm)
@@ -672,8 +731,19 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 				Body:        fmt.Sprintf("「%s」将被删除，需要重新创建。", name),
 				Label:       "确认删除",
 				Destructive: true,
-				Run:         func() error { return a.DeleteMapping(id) },
+				// As with the batch delete: the frame drops the row's id
+				// from the choice when the store lets it go.
+				Run: func() error { return a.DeleteMapping(id) },
 			})
+		}
+		// A row of the choice — the only one chosen, or one among several
+		// whose menu fell to the single-row branch above — can hand the
+		// choice back.
+		if v.chosen.Has(m.ID) {
+			menu.Separator()
+			if menu.Item("取消选择").Chosen() {
+				v.chosen.Clear()
+			}
 		}
 	})
 	cell.Children(func() {
@@ -849,7 +919,9 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 				Body:        fmt.Sprintf("「%s」将被删除，需要重新创建。", name),
 				Label:       "确认删除",
 				Destructive: true,
-				Run:         func() error { return a.DeleteMapping(id) },
+				// The row's id leaves the choice when the store lets the
+				// row go: the frame prunes it, never this background action.
+				Run: func() error { return a.DeleteMapping(id) },
 			})
 		}
 	})
@@ -1098,9 +1170,55 @@ func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	})
 }
 
-// batchBar offers enable/disable for the rules currently on screen.
+// batchBar offers enable/disable for the rules currently on screen — or,
+// while rows are chosen, for the choice alone.
 func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy bool) {
 	a := v.App
+	// A choice narrows the bar's reach as surely as a filter does: only
+	// the chosen rows the table still shows take the batch, so a search
+	// hiding part of the choice leaves those rows untouched.
+	if chosen := v.chosenInFiltered(filtered); len(chosen) > 0 {
+		var ids, onIDs, offIDs []string
+		for _, m := range chosen {
+			ids = append(ids, m.ID)
+			if m.Enabled {
+				onIDs = append(onIDs, m.ID)
+			} else {
+				offIDs = append(offIDs, m.ID)
+			}
+		}
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Textf(c, "已选 %d 条 · 启用 %d · 停用 %d", len(chosen), len(onIDs), len(offIDs)).
+				FontSize(11).Bold().TextColor(t.FG)
+			ui.Spacer(c)
+			if ui.Button(c, "批量启用").FontSize(11).Disabled(busy || len(offIDs) == 0).
+				Tooltip("启用选中的停用规则").Clicked() {
+				a.RunBackground(func() error { return a.SetMappingsEnabled(offIDs, true) })
+			}
+			if ui.Button(c, "批量停用").FontSize(11).Disabled(busy || len(onIDs) == 0).
+				Tooltip("停用选中的启用规则").Clicked() {
+				a.RunBackground(func() error { return a.SetMappingsEnabled(onIDs, false) })
+			}
+			if ui.Button(c, "批量删除").FontSize(11).Disabled(busy).
+				Tooltip("删除选中的规则").Clicked() {
+				a.Ask(&appt.Confirm{
+					Title:       "批量删除",
+					Body:        fmt.Sprintf("将删除选中的 %d 条规则，删除后无法恢复，需要重新创建。", len(ids)),
+					Label:       "确认删除",
+					Destructive: true,
+					// The choice is the frame's own state, so the rows it
+					// names are pruned by the frame once the store lets
+					// them go, never from this background action.
+					Run: func() error { return a.DeleteMappings(ids) },
+				})
+			}
+			if ui.Button(c, "取消选择").FontSize(11).Disabled(busy).
+				Tooltip("清空当前选择").Clicked() {
+				v.chosen.Clear()
+			}
+		})
+		return
+	}
 	var onIDs, offIDs []string
 	for _, m := range filtered {
 		if m.Enabled {
@@ -1144,6 +1262,19 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 			}
 		}
 	})
+}
+
+// chosenInFiltered keeps the chosen rules the table is showing. A choice
+// can hold rows a filter or a search has hidden; the batch actions take
+// only what is on screen, the same scope the bar's 全部启用/全部停用 take.
+func (v *View) chosenInFiltered(filtered []model.Mapping) []model.Mapping {
+	out := make([]model.Mapping, 0, len(filtered))
+	for _, m := range filtered {
+		if v.chosen.Has(m.ID) {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // filterEmpty is the card shown when search/filter matches nothing.
