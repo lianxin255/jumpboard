@@ -23,6 +23,40 @@ func freePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
+// freeUDPPort returns a port a UDP rule can listen on.
+//
+// freePort's TCP probe is not proof for UDP: Windows reserves Hyper-V's
+// port ranges per protocol, so a port the TCP probe took freely can be
+// one UDP is forbidden to touch, and the apply dies with "an attempt was
+// made to access a socket in a way forbidden". Here the port is picked
+// by a UDP bind of its own — the OS hands out nothing from an excluded
+// range — and proven by binding it a second time after the first socket
+// closed, so a stray grabber in between earns a fresh pick instead of a
+// failed test.
+func freeUDPPort(t *testing.T) int {
+	t.Helper()
+	for try := 0; try < 10; try++ {
+		c, err := net.ListenPacket("udp", ":0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := c.LocalAddr().(*net.UDPAddr).Port
+		if err := c.Close(); err != nil {
+			t.Fatal(err)
+		}
+		p, err := net.ListenPacket("udp", ":"+itoa(port))
+		if err != nil {
+			continue // taken between the two binds: another pick is cheap
+		}
+		if err := p.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return port
+	}
+	t.Fatal("no UDP port stayed free through a rebind")
+	return 0
+}
+
 // upstream starts an HTTP server that answers with its own name.
 func upstream(t *testing.T, name string) (int, func()) {
 	t.Helper()
@@ -349,7 +383,7 @@ func TestUDPForward(t *testing.T) {
 			_, _ = up.WriteTo(append([]byte("echo:"), buf[:n]...), addr)
 		}
 	}()
-	listen := freePort(t)
+	listen := freeUDPPort(t)
 
 	e := NewLocal()
 	defer e.Stop()

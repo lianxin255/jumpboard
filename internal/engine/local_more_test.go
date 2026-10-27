@@ -31,7 +31,7 @@ func TestUDPIdleSessionsAreReaped(t *testing.T) {
 		}
 	}()
 
-	listen := freePort(t)
+	listen := freeUDPPort(t)
 	e := NewLocal()
 	defer e.Stop()
 	if _, err := e.Apply(Spec{
@@ -235,7 +235,7 @@ func TestStopClosesEveryListener(t *testing.T) {
 	}()
 
 	listen := freePort(t)
-	udp := freePort(t)
+	udp := freeUDPPort(t)
 	e := NewLocal()
 	if _, err := e.Apply(Spec{Mappings: []model.Mapping{
 		{ID: "1", Name: "h", Protocol: model.HTTP, Enabled: true, ListenPort: listen,
