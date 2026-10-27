@@ -260,6 +260,24 @@ func (a *App) SetSnapshotView(s *model.Snapshot) {
 	a.notify()
 }
 
+// ConfViewOpen reports whether the read-only current-configuration
+// viewer is open on the settings page.
+func (a *App) ConfViewOpen() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.confViewOpen
+}
+
+// SetConfViewOpen opens or closes the configuration viewer. The config it
+// shows is generated fresh each frame from the rules as they are, so
+// nothing is cached here.
+func (a *App) SetConfViewOpen(open bool) {
+	a.mu.Lock()
+	a.confViewOpen = open
+	a.mu.Unlock()
+	a.notify()
+}
+
 // Status returns the toast to show, if any.
 func (a *App) Status() (Status, bool) {
 	a.mu.Lock()
@@ -388,6 +406,88 @@ func (a *App) SetMappingEnabled(id string, on bool) error {
 	} else {
 		a.Log.Info("停用映射「%s」", m.Name)
 	}
+	return nil
+}
+
+// MoveMapping swaps one mapping with its neighbour, up or down, so the
+// table's order is what the user arranges it to be. Only the sort order
+// changes: the rules themselves are the same, so the engine and the
+// configuration it generates are untouched and nothing is marked dirty.
+func (a *App) MoveMapping(id string, up bool) error {
+	m, err := a.Store.GetMapping(id)
+	if err != nil {
+		return err
+	}
+	ids, err := a.Store.MappingIDs()
+	if err != nil {
+		return err
+	}
+	at := -1
+	for i, v := range ids {
+		if v == id {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return fmt.Errorf("映射「%s」不在排序列表中", m.Name)
+	}
+	to := at + 1
+	if up {
+		to = at - 1
+	}
+	if to < 0 || to >= len(ids) {
+		// Already at the edge: nothing to do, and no toast either — the
+		// action cannot fail, only do nothing.
+		return nil
+	}
+	ids[at], ids[to] = ids[to], ids[at]
+	if err := a.Store.ReorderMappings(ids); err != nil {
+		return err
+	}
+	dir := "下移"
+	if up {
+		dir = "上移"
+	}
+	a.Log.Info("%s映射「%s」", dir, m.Name)
+	return nil
+}
+
+// ReorderFilteredMappings applies the order a drag of the table left the
+// rows it shows in: shown holds those ids, in their new order. A filter or
+// a search may narrow the table, so the rows the drag could not see keep
+// their places, and the shown ones take the shown slots in the order the
+// drag left them — the table the user watches moves exactly as it lands.
+// Like 上移/下移, only the sort order changes: the engine and the
+// configuration it generates are untouched and nothing is marked dirty.
+func (a *App) ReorderFilteredMappings(shown []string) error {
+	ids, err := a.Store.MappingIDs()
+	if err != nil {
+		return err
+	}
+	shownAt := make(map[string]int, len(shown))
+	for i, id := range shown {
+		shownAt[id] = i
+	}
+	next := make([]string, len(ids))
+	j := 0
+	for pos, id := range ids {
+		if _, ok := shownAt[id]; !ok {
+			next[pos] = id // a row the drag could not see stays put
+			continue
+		}
+		next[pos] = shown[j]
+		j++
+	}
+	if j != len(shown) {
+		// The table the drag came from was narrower than the store thinks,
+		// or wider: acting on it would silently drop or duplicate rows.
+		return fmt.Errorf("拖动排序时表里的映射与配置不一致，请刷新后再试")
+	}
+	if err := a.Store.ReorderMappings(next); err != nil {
+		return err
+	}
+	a.Log.Info("拖动调整了映射顺序")
 	return nil
 }
 
@@ -539,7 +639,12 @@ func (a *App) Apply() error {
 	_ = a.Store.AddSnapshot(conf, "apply")
 	_ = a.Store.TrimSnapshots(50)
 	// The export is written for anyone who wants the same rules in nginx.
+	// The watch takes the file's mtime as the app's own, so this write is
+	// never reported as a foreign edit.
 	_ = os.WriteFile(filepath.Join(a.Paths.ExportDir, "nginx.conf"), []byte(conf), 0o644)
+	if a.conf != nil {
+		a.conf.noteSelfWrite()
+	}
 
 	a.mu.Lock()
 	a.dirty = false
@@ -629,6 +734,14 @@ func (a *App) RollbackSnapshot(sn model.Snapshot) error {
 	if err != nil {
 		return fmt.Errorf("快照无法解析：%v", err)
 	}
+	// Keep a record of what the rollback replaces, so the history grows
+	// instead of being the thing a rollback throws away. The snapshot of
+	// the rules as they stand now is what a second rollback returns to.
+	if current, _, genErr := a.NginxExport(); genErr != nil {
+		a.Log.Warn("回滚前保存当前配置失败：%v", genErr)
+	} else if err := a.Store.AddSnapshot(current, "rollback"); err != nil {
+		return fmt.Errorf("保存回滚前的配置失败：%v", err)
+	}
 	if err := a.Store.ReplaceAllMappings(mappings); err != nil {
 		return err
 	}
@@ -705,6 +818,16 @@ func (a *App) ReadImportFile(path string) ([]byte, error) {
 
 // NginxExport is the current rules as a standard nginx.conf, for someone
 // who wants to run them on a real nginx.
+// NginxExportOrEmpty is NginxExport's shape for a frame that only wants
+// the text: the error is not worth failing a read-only view over.
+func (a *App) NginxExportOrEmpty() string {
+	conf, _, err := a.NginxExport()
+	if err != nil {
+		return ""
+	}
+	return conf
+}
+
 func (a *App) NginxExport() (string, int, error) {
 	spec, err := a.Spec()
 	if err != nil {
@@ -886,6 +1009,34 @@ func (a *App) ClearNginxLogs() error {
 	}
 	a.Log.Info("访问日志已清空")
 	return nil
+}
+
+// AppLogExport is the operation log as plain text, oldest first, for the
+// export button. The page shows the newest five hundred; a file someone
+// keeps should hold everything there is.
+func (a *App) AppLogExport() ([]byte, int, error) {
+	logs, err := a.Store.ListLogs(10000)
+	if err != nil {
+		return nil, 0, err
+	}
+	var b strings.Builder
+	for i := len(logs) - 1; i >= 0; i-- {
+		l := logs[i]
+		fmt.Fprintf(&b, "%s %s %s\n",
+			time.UnixMilli(l.Timestamp).Format("2006-01-02 15:04:05"),
+			strings.ToUpper(string(l.Level)), l.Message)
+	}
+	return []byte(b.String()), len(logs), nil
+}
+
+// AccessLogExport is the engine's access log as it stands on disk. A log
+// that was never written exports as an empty file — that is what it is.
+func (a *App) AccessLogExport() ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join(a.Paths.LogsDir, "access.log"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return data, err
 }
 
 // ClearAppLogs empties the operation log.

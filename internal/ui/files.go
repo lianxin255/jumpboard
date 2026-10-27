@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -80,6 +81,72 @@ func (v *View) exportNginx() {
 		return
 	}
 	a.Info("已导出 %d 条规则的 nginx 配置", n)
+}
+
+// exportAppLogs asks where to save the operation log and writes it.
+func (v *View) exportAppLogs() {
+	a := v.App
+	data, n, err := a.AppLogExport()
+	if err != nil {
+		a.Fail("导出失败：%v", err)
+		return
+	}
+	if a.SaveDialog == nil {
+		return
+	}
+	name := "jumpboard-logs-" + time.Now().Format("2006-01-02") + ".txt"
+	path, err := a.SaveDialog(mygo.SaveDialogOptions{
+		Title:       "导出操作日志",
+		DefaultPath: filepath.Join(homeDir(), "Downloads", name),
+		Filters:     []mygo.FileFilter{{Name: "Text", Extensions: []string{"txt", "log"}}},
+	})
+	if err != nil || path == "" {
+		return
+	}
+	if err := a.WriteExportFile(path, data); err != nil {
+		a.Fail("写入失败：%v", err)
+		return
+	}
+	a.Info("已导出 %d 条操作日志", n)
+}
+
+// exportAccessLog asks where to save the engine's access log and writes it.
+func (v *View) exportAccessLog() {
+	a := v.App
+	data, err := a.AccessLogExport()
+	if err != nil {
+		a.Fail("读取访问日志失败：%v", err)
+		return
+	}
+	if a.SaveDialog == nil {
+		return
+	}
+	path, err := a.SaveDialog(mygo.SaveDialogOptions{
+		Title:       "导出访问日志",
+		DefaultPath: filepath.Join(homeDir(), "Downloads", "jumpboard-access.log"),
+		Filters:     []mygo.FileFilter{{Name: "Log", Extensions: []string{"log", "txt"}}},
+	})
+	if err != nil || path == "" {
+		return
+	}
+	if err := a.WriteExportFile(path, data); err != nil {
+		a.Fail("写入失败：%v", err)
+		return
+	}
+	a.Info("已导出访问日志（%s）", filesizeLabel(len(data)))
+}
+
+// filesizeLabel renders a byte count the way the rest of the app does.
+func filesizeLabel(n int) string {
+	const kb, mb = 1 << 10, 1 << 20
+	switch {
+	case n >= mb:
+		return fmt.Sprintf("%.1f MB", float64(n)/mb)
+	case n >= kb:
+		return fmt.Sprintf("%.1f KB", float64(n)/kb)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 // homeDir returns the user's home, for the save dialog's default folder.

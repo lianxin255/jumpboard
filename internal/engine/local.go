@@ -58,21 +58,22 @@ func (l *Local) Rules() []RuleStatus {
 		row := entry.status
 		// An HTTP rule is served by its port's server, which the key
 		// names; a stream rule by its own listener.
-		if f, ok := l.running[entry.key]; ok {
-			n, active := f.stats()
-			row.Connections, row.Active, row.Listening = n, active, true
-		} else if entry.key.proto == model.HTTP || entry.key.proto == model.HTTPS {
+		f, ok := l.running[entry.key]
+		if !ok && (entry.key.proto == model.HTTP || entry.key.proto == model.HTTPS) {
 			// The port's server holds several routes: it is found by the
 			// listen address alone.
-			for key, f := range l.running {
+			for key, other := range l.running {
 				if key.listen == entry.key.listen && (key.proto == model.HTTP || key.proto == model.HTTPS) {
-					// The counters belong to the port, so the first route
-					// of it reports them.
-					n, active := f.stats()
-					row.Connections, row.Active, row.Listening = n, active, true
+					f, ok = other, true
 					break
 				}
 			}
+		}
+		if ok {
+			st := f.stats(entry.status.MappingID)
+			row.Connections, row.Active = st.connections, st.active
+			row.BytesIn, row.BytesOut = st.bytesIn, st.bytesOut
+			row.Listening = true
 		}
 		out = append(out, row)
 	}
@@ -383,7 +384,10 @@ func statuses(mappings []model.Mapping, broken map[string]string) []ruleEntry {
 
 // buildRoute prepares one HTTP mapping.
 func buildRoute(m model.Mapping, spec Spec) (route, error) {
-	proxy, u, tr, err := newProxy(m, spec)
+	// The traffic counters are allocated here, so the route value can be
+	// copied into the port's table while the counters stay shared.
+	r := route{mapping: m, traffic: &ruleTraffic{}}
+	proxy, u, tr, err := newProxy(m, spec, r.traffic)
 	if err != nil {
 		return route{}, err
 	}
@@ -391,14 +395,12 @@ func buildRoute(m model.Mapping, spec Spec) (route, error) {
 	if path == "" {
 		path = "/"
 	}
-	return route{
-		mapping:     m,
-		upstream:    u,
-		proxy:       proxy,
-		serverNames: splitNames(m.ServerNames),
-		path:        path,
-		transport:   tr,
-	}, nil
+	r.upstream = u
+	r.proxy = proxy
+	r.serverNames = splitNames(m.ServerNames)
+	r.path = path
+	r.transport = tr
+	return r, nil
 }
 
 // idleFor returns how long a rule keeps a quiet connection.

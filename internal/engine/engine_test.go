@@ -56,6 +56,24 @@ func doGet(t *testing.T, url string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
+// echoUpstream answers with the request's body, so a test knows exactly
+// which bytes came back.
+func echoUpstream(t *testing.T) (int, func()) {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read the whole body first: a copy that writes as it reads can be
+		// cut short when the client stops reading the response.
+		body, _ := io.ReadAll(r.Body)
+		_, _ = w.Write(body)
+	})}
+	go srv.Serve(l)
+	return l.Addr().(*net.TCPAddr).Port, func() { _ = srv.Close() }
+}
+
 // TestHTTPProxy applies one HTTP mapping and requests through it.
 func TestHTTPProxy(t *testing.T) {
 	up, stop := upstream(t, "upstream-ok")
@@ -194,6 +212,108 @@ func TestTCPForward(t *testing.T) {
 	}
 	if string(buf) != "hello" {
 		t.Errorf("echo = %q", buf)
+	}
+}
+
+// TestTCPCountsBytes checks the rule's byte counters: what the clients sent
+// counts as traffic in, what came back as out, and two connections open at
+// once both count.
+func TestTCPCountsBytes(t *testing.T) {
+	up := tcpEchoServer(t)
+	listen := freePort(t)
+
+	e := NewLocal()
+	defer e.Stop()
+	if _, err := e.Apply(Spec{Mappings: []model.Mapping{{
+		ID: "1", Name: "回显", Protocol: model.TCP, Enabled: true,
+		ListenPort:   listen,
+		UpstreamHost: "127.0.0.1", UpstreamPort: up,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both connections stay open while they talk, so their pipes run at
+	// the same time and add to the same counters.
+	var conns []net.Conn
+	for range 2 {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", listen), 2*time.Second)
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		conns = append(conns, c)
+	}
+	payload := []byte("0123456789")
+	for _, c := range conns {
+		_ = c.SetDeadline(time.Now().Add(3 * time.Second))
+		if _, err := c.Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range conns {
+		buf := make([]byte, len(payload))
+		if _, err := io.ReadFull(c, buf); err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if string(buf) != string(payload) {
+			t.Errorf("echo = %q", buf)
+		}
+		_ = c.Close()
+	}
+
+	rules := e.Rules()
+	if len(rules) != 1 {
+		t.Fatalf("one rule: %+v", rules)
+	}
+	want := int64(2 * len(payload))
+	if rules[0].BytesIn < want || rules[0].BytesOut < want {
+		t.Errorf("bytes = ↓%d ↑%d, want at least ↓%d ↑%d",
+			rules[0].BytesIn, rules[0].BytesOut, want, want)
+	}
+	if rules[0].Connections < 2 {
+		t.Errorf("both connections should count: %+v", rules[0])
+	}
+}
+
+// TestHTTPCountsBytes checks the proxy's byte counters: the request body
+// counts as traffic in, the response body as out.
+func TestHTTPCountsBytes(t *testing.T) {
+	up, stop := echoUpstream(t)
+	defer stop()
+	listen := freePort(t)
+
+	e := NewLocal()
+	defer e.Stop()
+	if _, err := e.Apply(Spec{Mappings: []model.Mapping{{
+		ID: "1", Name: "回显站", Protocol: model.HTTP, Enabled: true,
+		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: up,
+		ListenPath: "/", ProxyMode: model.ProxyStandard,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := strings.Repeat("x", 4096)
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/", listen), strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST through the proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if string(b) != body {
+		t.Fatalf("echo = %d bytes, want %d", len(b), len(body))
+	}
+
+	rules := e.Rules()
+	if len(rules) != 1 {
+		t.Fatalf("one rule: %+v", rules)
+	}
+	if rules[0].BytesIn < int64(len(body)) || rules[0].BytesOut < int64(len(body)) {
+		t.Errorf("bytes = ↓%d ↑%d, want at least ↓%d ↑%d",
+			rules[0].BytesIn, rules[0].BytesOut, len(body), len(body))
 	}
 }
 

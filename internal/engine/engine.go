@@ -45,6 +45,10 @@ type RuleStatus struct {
 	Connections int64
 	// Active is how many are open now.
 	Active int
+	// BytesIn is how many bytes the rule read from its clients.
+	BytesIn int64
+	// BytesOut is how many bytes the rule wrote back to them.
+	BytesOut int64
 	// Err is why the rule is not running, empty when it is.
 	Err string
 	// Warning is what the rule asked for and the engine could not honor.

@@ -287,6 +287,16 @@ func TestSnapshotRollback(t *testing.T) {
 	if len(list) != 1 || list[0].Name != "站点" {
 		t.Errorf("the rollback should restore one rule: %+v", list)
 	}
+	// The rollback must not erase the history it rolled back through: the
+	// original snapshot stays, and the rules it replaced are kept as a new
+	// one, so a second rollback can undo the first.
+	after, err := a.Store.ListSnapshots(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) < 2 {
+		t.Errorf("rollback wiped the snapshot history: %d left, want at least 2", len(after))
+	}
 	if body, err := httpGet(t, fmt.Sprintf("http://127.0.0.1:%d/", listen)); err != nil || body != "upstream-ok" {
 		t.Errorf("the restored rule should serve: %q %v", body, err)
 	}

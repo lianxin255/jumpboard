@@ -87,8 +87,11 @@ const (
 
 // Mapping is one forwarding rule.
 type Mapping struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Group is an optional short free-text label, such as "数据库" or
+	// "内网"; empty means ungrouped.
+	Group    string   `json:"group"`
 	Enabled  bool     `json:"enabled"`
 	Protocol Protocol `json:"protocol"`
 

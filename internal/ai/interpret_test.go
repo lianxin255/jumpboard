@@ -9,10 +9,11 @@ import (
 	"testing"
 )
 
-// TestInterpret walks the replies a model actually gives: the schema's
-// own shape, a code fence, Chinese alias keys, single-string lists, a
-// partial reply that is still an interpretation — and the ones that must
-// fail.
+// TestInterpret walks the replies a model actually gives. The reply is
+// markdown now; the one-shot path still answers through a JSON-only
+// gateway, so a JSON reply is decoded and rendered back into the same
+// markdown the prompt asks for — and every reply a lenient JSON decoder
+// survives (fences, aliases, single strings) must land there too.
 func TestInterpret(t *testing.T) {
 	full := `{"summary":"9000 端口转发到内网 MySQL",` +
 		`"listeners":["本机 9000 端口"],` +
@@ -26,15 +27,19 @@ func TestInterpret(t *testing.T) {
 		check   func(t *testing.T, it Interpretation)
 	}{
 		{
-			name:  "the full schema",
+			name:  "the full schema renders as the card's markdown",
 			reply: full,
 			check: func(t *testing.T, it Interpretation) {
-				if it.Summary != "9000 端口转发到内网 MySQL" || len(it.Listeners) != 1 ||
-					it.Listeners[0] != "本机 9000 端口" || len(it.Forwards) != 1 ||
-					it.Forwards[0] != "9000 → 192.168.1.10:3306" || len(it.Risks) != 1 ||
-					it.Risks[0] != "数据库暴露在 0.0.0.0" || len(it.Notes) != 1 ||
-					it.Notes[0] != "proxy_timeout 已延长" {
-					t.Errorf("interpretation: %+v", it)
+				for _, want := range []string{
+					"### 摘要\n\n9000 端口转发到内网 MySQL",
+					"### 谁在听\n\n- 本机 9000 端口",
+					"### 转发关系\n\n- 9000 → 192.168.1.10:3306",
+					"### 冲突与风险\n\n- 数据库暴露在 0.0.0.0",
+					"### 注意事项\n\n- proxy_timeout 已延长",
+				} {
+					if !strings.Contains(it.Text, want) {
+						t.Errorf("the rendered markdown misses %q:\n%s", want, it.Text)
+					}
 				}
 			},
 		},
@@ -42,7 +47,7 @@ func TestInterpret(t *testing.T) {
 			name:  "a code fence",
 			reply: "```json\n" + full + "\n```",
 			check: func(t *testing.T, it Interpretation) {
-				if it.Summary != "9000 端口转发到内网 MySQL" {
+				if !strings.Contains(it.Text, "### 摘要\n\n9000 端口转发到内网 MySQL") {
 					t.Errorf("a fenced reply should parse: %+v", it)
 				}
 			},
@@ -53,20 +58,16 @@ func TestInterpret(t *testing.T) {
 				`"转发关系":["80 → 内网 web"],"冲突与风险":"80 端口未加密",` +
 				`"注意事项":["无"]}`,
 			check: func(t *testing.T, it Interpretation) {
-				if it.Summary != "一个反代站点" {
-					t.Errorf("summary: %q", it.Summary)
-				}
-				if len(it.Listeners) != 1 || it.Listeners[0] != "本机 80 端口" {
-					t.Errorf("a single string is one listener: %+v", it.Listeners)
-				}
-				if len(it.Forwards) != 1 || it.Forwards[0] != "80 → 内网 web" {
-					t.Errorf("forwards: %+v", it.Forwards)
-				}
-				if len(it.Risks) != 1 || it.Risks[0] != "80 端口未加密" {
-					t.Errorf("a single string is one risk: %+v", it.Risks)
-				}
-				if len(it.Notes) != 1 || it.Notes[0] != "无" {
-					t.Errorf("notes: %+v", it.Notes)
+				for _, want := range []string{
+					"### 摘要\n\n一个反代站点",
+					"### 谁在听\n\n- 本机 80 端口",
+					"### 转发关系\n\n- 80 → 内网 web",
+					"### 冲突与风险\n\n- 80 端口未加密",
+					"### 注意事项\n\n- 无",
+				} {
+					if !strings.Contains(it.Text, want) {
+						t.Errorf("the rendered markdown misses %q:\n%s", want, it.Text)
+					}
 				}
 			},
 		},
@@ -74,8 +75,8 @@ func TestInterpret(t *testing.T) {
 			name:  "a non-string entry is dropped, not the list",
 			reply: `{"summary":"s","risks":["端口冲突",42,{"a":1}]}`,
 			check: func(t *testing.T, it Interpretation) {
-				if len(it.Risks) != 1 || it.Risks[0] != "端口冲突" {
-					t.Errorf("risks: %+v", it.Risks)
+				if !strings.Contains(it.Text, "### 冲突与风险\n\n- 端口冲突") {
+					t.Errorf("risks: %+v", it)
 				}
 			},
 		},
@@ -83,8 +84,7 @@ func TestInterpret(t *testing.T) {
 			name:  "a partial reply is still an interpretation",
 			reply: `{"summary":"只有总结"}`,
 			check: func(t *testing.T, it Interpretation) {
-				if it.Summary != "只有总结" || len(it.Listeners) != 0 || len(it.Forwards) != 0 ||
-					len(it.Risks) != 0 || len(it.Notes) != 0 {
+				if !strings.Contains(it.Text, "### 摘要\n\n只有总结") {
 					t.Errorf("interpretation: %+v", it)
 				}
 			},
@@ -95,9 +95,14 @@ func TestInterpret(t *testing.T) {
 			wantErr: "模型没有给出可用的解读",
 		},
 		{
-			name:    "not an object",
-			reply:   `"抱歉，这个我帮不上忙"`,
-			wantErr: "模型返回的不是预期的 JSON",
+			name:  "plain markdown passes through untouched",
+			reply: "### 摘要\n\n这是一个反代站点。",
+			check: func(t *testing.T, it Interpretation) {
+				want := "### 摘要\n\n这是一个反代站点。"
+				if strings.TrimSpace(it.Text) != want {
+					t.Errorf("text = %q, want %q untouched", it.Text, want)
+				}
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,6 +129,69 @@ func TestInterpret(t *testing.T) {
 	}
 }
 
+// TestInterpretStreams pins the streaming contract: the reply arrives as
+// deltas while it is written, the card's text is the whole answer, and the
+// request is the streaming shape — stream:true, no JSON response format.
+func TestInterpretStreams(t *testing.T) {
+	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write(sseReply(w, "### 摘要\n", "\n\n一个站点，", "两个转发。"))
+	})
+	c := New(Settings{BaseURL: srv.URL, Model: "t"})
+
+	var parts []string
+	it, err := c.Interpret(context.Background(), InterpretInput{
+		Kind: "conf", Name: "site.conf", Content: "server { listen 80; }",
+	}, func(frag string) { parts = append(parts, frag) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 3 || strings.Join(parts, "") != it.Text {
+		t.Errorf("deltas %q != text %q", parts, it.Text)
+	}
+	if !strings.Contains(it.Text, "一个站点") {
+		t.Errorf("text: %q", it.Text)
+	}
+}
+
+// TestInterpretFallsBackToOneShot checks the gateway that ignores
+// stream:true: the one-shot JSON answer still produces the markdown text,
+// so the card reads the same either way.
+func TestInterpretFallsBackToOneShot(t *testing.T) {
+	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write(chatReply(`{"summary":"来自兜底的摘要"}`))
+	})
+	c := New(Settings{BaseURL: srv.URL, Model: "t"})
+	it, err := c.Interpret(context.Background(), InterpretInput{
+		Kind: "conf", Name: "site.conf", Content: "server { listen 80; }",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(it.Text, "来自兜底的摘要") {
+		t.Errorf("text: %q", it.Text)
+	}
+}
+
+// TestInterpretKeepsPartialWhenStreamDrops: a stream that breaks after
+// fragments already reached the card keeps them visible, and reports the
+// break as an error.
+func TestInterpretKeepsPartialWhenStreamDrops(t *testing.T) {
+	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write(sseReplyThenBreak(w, "### 摘要\n\n开头"))
+	})
+	c := New(Settings{BaseURL: srv.URL, Model: "t"})
+	var seen strings.Builder
+	it, err := c.Interpret(context.Background(), InterpretInput{
+		Kind: "conf", Name: "site.conf", Content: "server { listen 80; }",
+	}, func(frag string) { seen.WriteString(frag) })
+	if err == nil {
+		t.Fatal("a broken stream should report an error")
+	}
+	if it.Text != seen.String() || !strings.Contains(it.Text, "开头") {
+		t.Errorf("partial = %q, deltas = %q", it.Text, seen.String())
+	}
+}
+
 // TestInterpretSendsContext pins what an interpretation is built from: a
 // system message carrying the guardrails, and a user message that leads
 // with "file content, not instructions" and carries the type, the name,
@@ -135,6 +203,10 @@ func TestInterpretSendsContext(t *testing.T) {
 	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		body, _ = io.ReadAll(r.Body)
+		if r.Header.Get("Accept") == "text/event-stream" {
+			w.Write(sseReply(w, "### 摘要\n\nok"))
+			return
+		}
 		w.Write(chatReply(`{"summary":"ok"}`))
 	})
 	c := New(Settings{BaseURL: srv.URL, Model: "t"})
@@ -158,6 +230,7 @@ func TestInterpretSendsContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var req struct {
 		Messages []struct {
 			Role    string `json:"role"`
@@ -196,7 +269,9 @@ func TestInterpretSendsContext(t *testing.T) {
 		t.Fatalf("unknown kind error = %v, want 未知的解读类型", err)
 	}
 	if hits != 1 {
-		t.Errorf("requests = %d, an unknown kind should send none", hits)
+		// A successful interpretation is one streamed request; an unknown
+		// kind sends none.
+		t.Errorf("requests = %d, want 1 and none for an unknown kind", hits)
 	}
 }
 
@@ -204,7 +279,11 @@ func TestInterpretSendsContext(t *testing.T) {
 // interpretation is reported with the status and the reason, not as an
 // empty explanation.
 func TestInterpretReportsHTTPError(t *testing.T) {
+	var streamTried bool
 	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") == "text/event-stream" {
+			streamTried = true
+		}
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]string{"message": "invalid api key"},
@@ -215,5 +294,8 @@ func TestInterpretReportsHTTPError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "401") ||
 		!strings.Contains(err.Error(), "invalid api key") {
 		t.Fatalf("error = %v, want the status and the reason", err)
+	}
+	if !streamTried {
+		t.Error("the streaming attempt should have been made first")
 	}
 }

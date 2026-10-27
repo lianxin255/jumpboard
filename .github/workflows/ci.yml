@@ -17,6 +17,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        # The packaging step builds the app the release workflow ships, on
+        # the platform it ships it for — a PR that compiles but cannot be
+        # packaged is caught here, before a tag ever runs the real thing.
+        include:
+          - os: macos-latest
+            mygo-platform: darwin/universal
+          - os: windows-latest
+            mygo-platform: windows/amd64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,3 +38,6 @@ jobs:
       - name: Build the app
         run: |
           go build ./...
+      - name: Package the app
+        run: go tool mygo build -platform ${{ matrix.mygo-platform }}
+

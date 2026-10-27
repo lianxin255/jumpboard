@@ -21,8 +21,21 @@ type forwarder interface {
 	// key says what the rule is bound to, so that a reapply can tell an
 	// unchanged rule from a changed one.
 	key() ruleKey
-	// stats reports the counters the UI shows.
-	stats() (connections int64, active int)
+	// stats reports the counters the UI shows. mappingID names the rule
+	// asked about: an HTTP port serves several rules and counts each one's
+	// bytes apart, while a stream listener serves one rule and ignores the
+	// name.
+	stats(mappingID string) ruleStats
+}
+
+// ruleStats is what a forwarder reports about the rule it serves.
+type ruleStats struct {
+	connections int64
+	active      int
+	// bytesIn and bytesOut are the body or payload bytes the rule moved,
+	// clients in and back out again.
+	bytesIn  int64
+	bytesOut int64
 }
 
 // ruleKey identifies what a listener is bound to and what it does, so that
@@ -51,6 +64,11 @@ type tcpForwarder struct {
 	idle     time.Duration
 	conns    atomic.Int64
 	active   atomic.Int32
+	// bytesIn and bytesOut are the bytes the rule moved, accumulated by
+	// every pipe it served. They live on the forwarder so a retarget —
+	// which keeps the listener — keeps the rule's totals, like conns.
+	bytesIn  atomic.Int64
+	bytesOut atomic.Int64
 	closing  atomic.Bool
 	wg       sync.WaitGroup
 	// access logs each connection, as nginx's stream access_log does.
@@ -88,8 +106,13 @@ func (f *tcpForwarder) key() ruleKey {
 	return ruleKey{proto: model.TCP, listen: f.ln.Addr().String(), upstream: f.target()}
 }
 
-func (f *tcpForwarder) stats() (int64, int) {
-	return f.conns.Load(), int(f.active.Load())
+func (f *tcpForwarder) stats(string) ruleStats {
+	return ruleStats{
+		connections: f.conns.Load(),
+		active:      int(f.active.Load()),
+		bytesIn:     f.bytesIn.Load(),
+		bytesOut:    f.bytesOut.Load(),
+	}
 }
 
 func (f *tcpForwarder) serve() {
@@ -119,7 +142,8 @@ func (f *tcpForwarder) serve() {
 			_ = client.Close()
 			continue
 		}
-		p := &tcpPipe{client: client, upstream: f.target(), idle: f.idle}
+		p := &tcpPipe{client: client, upstream: f.target(), idle: f.idle,
+			in: &f.bytesIn, out: &f.bytesOut}
 		f.mu.Lock()
 		if f.closing.Load() {
 			f.mu.Unlock()
@@ -172,6 +196,11 @@ type tcpPipe struct {
 	client   net.Conn
 	upstream string
 	idle     time.Duration
+	// in and out are the rule's counters: what this pipe reads from the
+	// client counts as traffic in, what it reads from the upstream as
+	// traffic out.
+	in  *atomic.Int64
+	out *atomic.Int64
 
 	mu     sync.Mutex
 	server net.Conn
@@ -211,7 +240,7 @@ func (p *tcpPipe) run() {
 	defer server.Close()
 
 	done := make(chan struct{}, 2)
-	copyHalf := func(dst, src net.Conn) {
+	copyHalf := func(dst, src net.Conn, counter *atomic.Int64) {
 		buf := make([]byte, 32<<10)
 		for {
 			// Only the read side carries the idle deadline, renewed each
@@ -223,6 +252,7 @@ func (p *tcpPipe) run() {
 			}
 			n, err := src.Read(buf)
 			if n > 0 {
+				counter.Add(int64(n))
 				if _, werr := dst.Write(buf[:n]); werr != nil {
 					break
 				}
@@ -238,8 +268,8 @@ func (p *tcpPipe) run() {
 		}
 		done <- struct{}{}
 	}
-	go copyHalf(server, p.client)
-	go copyHalf(p.client, server)
+	go copyHalf(server, p.client, p.in)
+	go copyHalf(p.client, server, p.out)
 	<-done
 	<-done
 }

@@ -170,6 +170,7 @@ func sanitizeImported(m model.Mapping) (model.Mapping, bool) {
 	out := model.Mapping{
 		ID:           "",
 		Name:         truncate(model.StripInject(m.Name), 100),
+		Group:        truncate(model.StripInject(m.Group), 50),
 		Enabled:      m.Enabled,
 		Protocol:     m.Protocol,
 		ListenPort:   m.ListenPort,

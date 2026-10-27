@@ -24,8 +24,20 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 	// One snapshot of what the fetch goroutine may have changed, so the
 	// frame never reads a field it is writing.
 	v.aiMu.Lock()
-	models, fetching, listErr := v.aiModels, v.aiFetching, v.aiListErr
+	models, fetching, listErr, suggest := v.aiModels, v.aiFetching, v.aiListErr, v.aiSuggest
 	v.aiMu.Unlock()
+	// The fetch's suggestion is applied here, on the frame's own thread:
+	// the goroutine never touches aiModel, the field the TextInput
+	// buffers. It fills the field once, only while it is still empty, so
+	// a user who typed meanwhile keeps what they typed.
+	if suggest != "" {
+		v.aiMu.Lock()
+		v.aiSuggest = ""
+		v.aiMu.Unlock()
+		if v.aiModel == "" {
+			v.aiModel = suggest
+		}
+	}
 
 	v.card(c, t, "AI 配置", func() {
 		ui.Field(c, "接口地址", func() {
@@ -149,13 +161,12 @@ func (v *View) fetchModels() {
 			v.aiModels = nil
 		} else {
 			v.aiModels = models
-			// Suggest the first model once, as the fetch lands, so that a
+			// Offer the first model once, as the fetch lands, so that a
 			// user who only wanted a working default has one step left:
-			// 保存. Doing it in the frame instead would refill the field
-			// every time someone cleared it to turn the feature off.
-			if v.aiModel == "" {
-				v.aiModel = models[0]
-			}
+			// 保存. The offer rides aiSuggest and the frame fills the
+			// field itself; writing aiModel here would race the
+			// TextInput's buffer.
+			v.aiSuggest = models[0]
 		}
 		v.aiMu.Unlock()
 		a.Change()

@@ -148,4 +148,10 @@ func main() {
 	shoot("form-dark", appt.PageMappings, appt.ThemeDark, true, func() {
 		a.OpenForm(nil)
 	})
+	// The terminal page with no session open: the kind picker, the create
+	// button and the card that says what each kind is for. A session's grid
+	// needs the emulator library, so it is left to the e2e assertions rather
+	// than a shot — this is the page a first run shows.
+	shoot("terminal-dark", appt.PageTerminal, appt.ThemeDark, true, nil)
+	shoot("terminal-light", appt.PageTerminal, appt.ThemeLight, false, nil)
 }

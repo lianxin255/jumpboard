@@ -3,7 +3,9 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -69,9 +71,42 @@ func main() {
 	// The clipboard needs the running app, so it is wired here rather than
 	// inside the app's own code.
 	app.Clipboard = mygo.Clipboard.WriteText
+	// The clipboard's reader too, for 粘贴导入. mygo's ReadText returns
+	// only the text, so the hook's error slot is for the shape the app
+	// expects, and a read the app cannot do fails as one.
+	app.ReadClipboard = func() (string, error) { return mygo.Clipboard.ReadText(), nil }
 	// The desktop notifier too: it silently does nothing until the app is
 	// packaged, so the behaviour holds in development and in tests.
 	app.Notify = native.Notify
+	// The updater, when the build carries one: a development build, or one
+	// without updates configured, gets no hooks and the settings page says
+	// so. The install runs on the update the check found, so main keeps it
+	// between the two.
+	app.AppVersion = mygo.App.Version()
+	if mygo.Updater.Enabled() {
+		var found *mygo.Update
+		app.CheckUpdate = func(ctx context.Context) (*appt.UpdateInfo, error) {
+			up, err := mygo.Updater.Check(ctx)
+			if err != nil || up == nil {
+				return nil, err
+			}
+			found = up
+			return &appt.UpdateInfo{Version: up.Version, Notes: up.Notes}, nil
+		}
+		app.InstallUpdate = func(ctx context.Context, progress func(float64)) error {
+			if found == nil {
+				return errors.New("没有已发现的新版本，请先检查更新")
+			}
+			return found.Install(ctx, func(done, total int64) {
+				if total > 0 {
+					progress(float64(done) / float64(total))
+				} else {
+					progress(-1)
+				}
+			})
+		}
+		app.RelaunchApp = mygo.App.Relaunch
+	}
 	// The native file dialogs too.
 	app.SaveDialog = mygo.Dialog.Save
 	app.OpenDialog = mygo.Dialog.Open
@@ -117,7 +152,18 @@ func main() {
 		// The tray, the close-to-tray behaviour and the global shortcut.
 		// Dock.Setup installs its own quit hooks; the engine shutdown
 		// below runs after them through the same OnBeforeQuit list.
+		// Assigned, not declared: the second-instance guard above holds the
+		// same variable, so a second launch can bring this window forward.
 		dock = native.Setup(app, win, appIcon)
+
+		// A deeplink that says "show me" needs the window; it is wired once
+		// the dock exists, so the app never has to know the window does.
+		app.ShowWindow = dock.Show
+
+		// The menu bar the dock's window owns: Chinese labels where the
+		// app writes its own items, the system's own menus where macOS
+		// needs them untouched.
+		native.SetupAppMenu(dock)
 
 		// The desktop's login items are the source of truth — the user can
 		// flip them in System Settings too — and the store only mirrors
@@ -129,6 +175,19 @@ func main() {
 		// process exits, and close the database after. Closing the window
 		// no longer quits — it hides into the tray — so the real quit
 		// paths are the tray's 退出 and Cmd+Q.
+		// A jumpboard:// URL reaches OnOpenURL: show, or import what it
+		// carries, through the same preview a paste does. Registered before
+		// Run on purpose, so the URL the app was launched with lands too.
+		mygo.App.OnOpenURL(func(raw string) {
+			if err := app.HandleDeeplink(raw); err != nil {
+				dock.Show()
+				app.Fail("%v", err)
+			}
+		})
+		// The scheme has to exist before the first URL can arrive; this is
+		// the cheap registration that also makes the app the default handler.
+		_ = mygo.App.RegisterURLScheme("jumpboard")
+
 		mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 			app.Close()
 		})
