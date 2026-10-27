@@ -14,7 +14,7 @@ func TestAIPanelWalkthrough(t *testing.T) {
 	a := testApp(t)
 	srv := fakeOpenAI(t, `{"name":"面板里的 MySQL","protocol":"tcp","listenPort":9001,
 		"upstreamHost":"192.168.1.10","upstreamPort":3306,"explanation":"明白"}`)
-	tt := tester(t, a, 1200, 760)
+	tt := tester(t, a, 1200, 900)
 
 	// Configure the endpoint through the settings card.
 	if err := tt.Click("设置"); err != nil {
