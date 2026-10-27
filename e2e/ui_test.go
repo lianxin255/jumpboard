@@ -48,7 +48,7 @@ func TestMappingLifecycle(t *testing.T) {
 	waitFor(t, tt, "the mapping in the table", func() bool { return tt.HasText("MySQL 内网") })
 
 	// It is in the database, disabled from running until applied.
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %v", list, err)
 	}
@@ -82,7 +82,7 @@ func TestMappingLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if list, _ := a.Store.ListMappings(); len(list) != 1 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 1 {
 		t.Fatal("canceling the confirmation should keep the mapping")
 	}
 	if err := tt.Click("删除"); err != nil {
@@ -96,7 +96,7 @@ func TestMappingLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the mapping gone", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 0
 	})
 }
@@ -202,7 +202,7 @@ func TestValidationBlocksBadInput(t *testing.T) {
 	if !tt.HasText("端口应为 1-65535") {
 		t.Errorf("the port error should show: %v", tt.Texts())
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("an invalid mapping was saved: %+v", list)
 	}
 }

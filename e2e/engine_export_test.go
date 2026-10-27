@@ -19,7 +19,7 @@ func TestExportWritesAnNginxConfig(t *testing.T) {
 	defer stop()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "导出用", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, ServerNames: "export.example.com",
 		UpstreamHost: "127.0.0.1", UpstreamPort: up, ListenPath: "/",
@@ -56,7 +56,7 @@ func TestExportWritesAnNginxConfig(t *testing.T) {
 func TestRuleStateIsVisible(t *testing.T) {
 	a := testApp(t)
 	listen := freePort(t)
-	created, err := a.Store.CreateMapping(model.Mapping{
+	created, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "状态", Protocol: model.TCP, Enabled: true, ListenPort: listen,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	})

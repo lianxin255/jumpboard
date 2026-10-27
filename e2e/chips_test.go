@@ -67,7 +67,7 @@ func TestFormCloseButton(t *testing.T) {
 	if a.FormOpen() {
 		t.Error("the × should close the form")
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("closing saves nothing: %+v", list)
 	}
 }

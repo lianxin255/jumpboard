@@ -136,6 +136,21 @@ type App struct {
 	engine    string
 	dirty     bool
 	busy      bool
+	// workspaces is the scene list and activeWS the one whose rules the
+	// app runs and shows; both live behind the mutex because CRUD and
+	// switches write them from the background goroutines.
+	workspaces []model.Workspace
+	activeWS   string
+	// The settings mirrored into memory — theme, host name, whitelist
+	// switch, nginx log reading — sit behind the mutex for the same reason
+	// the scene list does: the frame reads them every draw, and Wipe writes
+	// them from a background goroutine. A theme the window has been showing
+	// all along, changed under it by a wipe, is as much shared state as a
+	// scene switch.
+	theme        ThemeChoice
+	hostName     string
+	whitelistOn  bool
+	nginxLogRead bool
 	// applyErr is why the last apply failed, shown next to the button.
 	applyErr string
 	// applyErrPort is the port a bind failure named, 0 when the failure
@@ -218,10 +233,6 @@ type App struct {
 	snapshotView *model.Snapshot
 	confViewOpen bool
 	pastePending *PastePreview
-	theme        ThemeChoice
-	hostName     string
-	whitelistOn  bool
-	nginxLogRead bool
 	openAtLogin  bool
 	// showTraffic says the table carries each rule's counters. Off is only
 	// quieter: the engine still counts, the detail popover simply stops
@@ -252,6 +263,10 @@ func New(p paths.Paths) (*App, error) {
 		st.Close()
 		return nil, fmt.Errorf("初始化本机主机: %w", err)
 	}
+	if err := st.EnsureWorkspaces(); err != nil {
+		st.Close()
+		return nil, fmt.Errorf("初始化场景: %w", err)
+	}
 
 	a := &App{
 		Paths: p,
@@ -270,6 +285,10 @@ func New(p paths.Paths) (*App, error) {
 	if name, err := st.HostName(); err == nil && name != "" {
 		a.hostName = name
 	}
+	// The active scene is healed by the store — a stale pointer falls
+	// back to the first scene — so what the app holds is always one that
+	// exists.
+	a.activeWS = st.ActiveWorkspace()
 
 	if err := a.Reload(); err != nil {
 		return nil, err
@@ -476,7 +495,11 @@ func (a *App) Fail(format string, args ...any) { a.setStatus(fmt.Sprintf(format,
 
 // Reload rereads everything the UI shows and asks for a frame.
 func (a *App) Reload() error {
-	mappings, err := a.Store.ListMappings()
+	// The active scene is the store's word: a switch wrote it there, and
+	// a stale in-memory id — after a wipe, say — must not outlive the
+	// rows it named.
+	active := a.Store.ActiveWorkspace()
+	mappings, err := a.Store.ListMappings(active)
 	if err != nil {
 		return err
 	}
@@ -492,8 +515,14 @@ func (a *App) Reload() error {
 	if err != nil {
 		return err
 	}
+	workspaces, err := a.Store.ListWorkspaces()
+	if err != nil {
+		return err
+	}
 	a.mu.Lock()
+	a.activeWS = active
 	a.mappings, a.logs, a.snapshots, a.whitelist = mappings, logs, snaps, wl
+	a.workspaces = workspaces
 	a.mu.Unlock()
 	a.refreshEngine()
 	a.notify()
@@ -519,7 +548,7 @@ func (a *App) spec() (engine.Spec, error) {
 		}
 		wl = ips
 	}
-	mappings, err := a.Store.ListEnabledMappings()
+	mappings, err := a.Store.ListEnabledMappings(a.ActiveWorkspace())
 	if err != nil {
 		return engine.Spec{}, err
 	}

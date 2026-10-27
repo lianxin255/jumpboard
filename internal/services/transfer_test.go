@@ -20,12 +20,15 @@ func testStore(t *testing.T) *store.Store {
 	if err := s.EnsureLocalHost(); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.EnsureWorkspaces(); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 
 func TestExportImportRoundTrip(t *testing.T) {
 	s := testStore(t)
-	created, err := s.CreateMapping(model.Mapping{
+	created, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "mysql", Protocol: model.TCP, ListenPort: 9000, Enabled: true,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306,
 	})
@@ -36,7 +39,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := Export(s)
+	p, err := Export(s, store.DefaultWorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +52,14 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if err := s.Wipe(); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Import(s, data)
+	res, err := Import(s, store.DefaultWorkspaceID, data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.MappingsImported != 1 || res.Skipped != 0 {
 		t.Fatalf("import result: %+v", res)
 	}
-	list, _ := s.ListMappings()
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
 	if len(list) != 1 || list[0].Name != "mysql" || list[0].ListenPort != 9000 {
 		t.Fatalf("roundtrip mismatch: %+v", list)
 	}
@@ -78,7 +81,7 @@ func TestImportSanitizesHostileBackup(t *testing.T) {
 			{"name":"bad url inject","protocol":"http","enabled":true,"listenPort":9004,"upstreamHost":"h","upstreamPort":80,"proxyPassUrl":"http://x/;}"}
 		]
 	}`)
-	res, err := Import(s, payload)
+	res, err := Import(s, store.DefaultWorkspaceID, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +92,7 @@ func TestImportSanitizesHostileBackup(t *testing.T) {
 	if res.MappingsImported != 4 || res.Skipped != 2 {
 		t.Fatalf("应导入 4 条、跳过 2 条，实际导入 %d 跳过 %d", res.MappingsImported, res.Skipped)
 	}
-	list, _ := s.ListMappings()
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
 	for _, m := range list {
 		if m.Name == "bad; } server { listen 6666;" {
 			t.Error("注入字符没被清洗")
@@ -107,10 +110,10 @@ func TestImportSanitizesHostileBackup(t *testing.T) {
 
 func TestImportRejectsWrongVersion(t *testing.T) {
 	s := testStore(t)
-	if _, err := Import(s, []byte(`{"version":99,"mappings":[]}`)); err == nil {
+	if _, err := Import(s, store.DefaultWorkspaceID, []byte(`{"version":99,"mappings":[]}`)); err == nil {
 		t.Fatal("应拒绝版本不匹配的备份")
 	}
-	if _, err := Import(s, []byte(`not json`)); err == nil {
+	if _, err := Import(s, store.DefaultWorkspaceID, []byte(`not json`)); err == nil {
 		t.Fatal("应拒绝非 JSON")
 	}
 }
@@ -129,7 +132,7 @@ func contains(s, sub string) bool {
 // unlike a backup, which replaces.
 func TestImportNginxConf(t *testing.T) {
 	s := testStore(t)
-	if _, err := s.CreateMapping(model.Mapping{
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
 		Name: "已有", Protocol: model.TCP, Enabled: true, ListenPort: 15001,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -143,14 +146,14 @@ func TestImportNginxConf(t *testing.T) {
 			ServerNames: "in.example", UpstreamHost: "10.0.0.3", UpstreamPort: 8080},
 	}, nginx.GenOptions{})
 
-	added, skipped, err := ImportNginxConf(s, []byte(conf))
+	added, skipped, err := ImportNginxConf(s, store.DefaultWorkspaceID, []byte(conf))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if added != 2 || skipped != 0 {
 		t.Fatalf("added %d skipped %d, want 2/0", added, skipped)
 	}
-	list, _ := s.ListMappings()
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
 	if len(list) != 3 {
 		t.Fatalf("the conf should merge beside the existing mapping, have %d", len(list))
 	}
@@ -167,10 +170,10 @@ func TestImportNginxConf(t *testing.T) {
 // importing: nothing recognizable is an error, not an empty success.
 func TestImportNginxConfRefusesRubbish(t *testing.T) {
 	s := testStore(t)
-	if _, _, err := ImportNginxConf(s, []byte("user nginx;\n")); err == nil {
+	if _, _, err := ImportNginxConf(s, store.DefaultWorkspaceID, []byte("user nginx;\n")); err == nil {
 		t.Error("a conf with no server block should be refused")
 	}
-	if _, _, err := ImportNginxConf(s, []byte("")); err == nil {
+	if _, _, err := ImportNginxConf(s, store.DefaultWorkspaceID, []byte("")); err == nil {
 		t.Error("an empty conf should be refused")
 	}
 }

@@ -132,6 +132,15 @@ type Mapping struct {
 // IsHTTP reports whether the mapping is proxied at the HTTP level.
 func (m Mapping) IsHTTP() bool { return m.Protocol == HTTP || m.Protocol == HTTPS }
 
+// Workspace is one named scene: a set of mappings of its own, so 公司 and
+// 家里 keep their rules apart and a switch is one click instead of an
+// export and an import.
+type Workspace struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
 // Snapshot is one saved nginx configuration.
 type Snapshot struct {
 	ID        string `json:"id"`

@@ -36,7 +36,8 @@ func (a *App) AskAIFilter(query string) error {
 	// The whole table is read from the store, not from what the search
 	// box has already hidden: a condition like "上游 192.168" has to see
 	// every row the user means, including the ones a search folded away.
-	mappings, err := a.Store.ListMappings()
+	// The table is the active scene's, which is the one on screen.
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	var res ai.FilterResult
 	if err == nil {
 		rows := make([]ai.MappingSummary, 0, len(mappings))

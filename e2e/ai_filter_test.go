@@ -16,7 +16,7 @@ func TestAIFilterNarrowsTable(t *testing.T) {
 	a := testApp(t)
 	var ids []string
 	for i, name := range []string{"筛选库甲", "筛选库乙", "筛选库丙"} {
-		m, err := a.Store.CreateMapping(model.Mapping{
+		m, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 			Name: name, Protocol: model.TCP, ListenPort: 19501 + i,
 			UpstreamHost: "127.0.0.1", UpstreamPort: 3306, Enabled: false,
 		})
@@ -66,7 +66,7 @@ func TestAIFilterNarrowsTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the one row enabled", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		for _, m := range list {
 			if m.ID == ids[1] && !m.Enabled {
 				return false
@@ -74,7 +74,7 @@ func TestAIFilterNarrowsTable(t *testing.T) {
 		}
 		return true
 	})
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	for _, m := range list {
 		if want := m.ID == ids[1]; m.Enabled != want {
 			t.Errorf("batch enable must act on the filtered list: %s enabled=%v", m.Name, m.Enabled)
@@ -97,7 +97,7 @@ func TestAIFilterNarrowsTable(t *testing.T) {
 func TestAIFilterEmptyAnswer(t *testing.T) {
 	a := testApp(t)
 	for i, name := range []string{"空答甲", "空答乙"} {
-		if _, err := a.Store.CreateMapping(model.Mapping{
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 			Name: name, Protocol: model.TCP, ListenPort: 19601 + i,
 			UpstreamHost: "127.0.0.1", UpstreamPort: 3306, Enabled: true,
 		}); err != nil {

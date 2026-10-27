@@ -11,7 +11,7 @@ func TestPasteImportConf(t *testing.T) {
 	a := testApp(t)
 	// A rule already there, so the toolbar with 粘贴导入 draws at all: the
 	// button lives in the row that only appears once rules exist.
-	if _, err := a.Store.CreateMapping(streamRule(t, "已有规则")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "已有规则")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Reload(); err != nil {
@@ -38,7 +38,7 @@ func TestPasteImportConf(t *testing.T) {
 	// not a label the tester reads; the header's rule count is.
 	waitFor(t, tt, "the second rule in the header", func() bool { return tt.HasText("2 条规则") })
 
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 2 {
 		t.Fatalf("after a conf paste: %d %v", len(list), err)
 	}
@@ -56,7 +56,7 @@ func TestPasteImportBackupReplaces(t *testing.T) {
 	// A rule already in the store, so the toolbar is shown at all: the
 	// 粘贴导入 button sits in the row that only draws when rules exist.
 	old := streamRule(t, "会被替换的旧规则")
-	if _, err := a.Store.CreateMapping(old); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), old); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Reload(); err != nil {
@@ -83,7 +83,7 @@ func TestPasteImportBackupReplaces(t *testing.T) {
 	}
 	waitFor(t, tt, "the preview gone", func() bool { return a.PastePreview() == nil })
 
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatalf("after a backup paste: %d %v", len(list), err)
 	}
@@ -96,7 +96,7 @@ func TestPasteImportBackupReplaces(t *testing.T) {
 // dialog is left behind.
 func TestPasteImportRefusesGarbage(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "占位规则")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "占位规则")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Reload(); err != nil {

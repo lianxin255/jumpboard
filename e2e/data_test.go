@@ -13,7 +13,7 @@ import (
 // app, and checks the mappings survive.
 func TestExportImportThroughFiles(t *testing.T) {
 	source := testApp(t)
-	if _, err := source.Store.CreateMapping(model.Mapping{
+	if _, err := source.Store.CreateMapping(source.ActiveWorkspace(), model.Mapping{
 		Name: "要备份的", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "10.0.0.5", UpstreamPort: 3306,
 	}); err != nil {
@@ -40,7 +40,7 @@ func TestExportImportThroughFiles(t *testing.T) {
 	if err := target.Import(read); err != nil {
 		t.Fatal(err)
 	}
-	list, err := target.Store.ListMappings()
+	list, err := target.Store.ListMappings(target.ActiveWorkspace())
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %v", list, err)
 	}
@@ -66,7 +66,7 @@ func TestImportHostileBackupThroughApp(t *testing.T) {
 	if err := a.Import(hostile); err != nil {
 		t.Fatal(err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestImportHostileBackupThroughApp(t *testing.T) {
 // TestWipeRebuilds checks that clearing the data leaves a working app.
 func TestWipeRebuilds(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "x", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -104,12 +104,12 @@ func TestWipeRebuilds(t *testing.T) {
 	if err := a.Wipe(); err != nil {
 		t.Fatal(err)
 	}
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(list) != 0 {
 		t.Fatalf("after a wipe: %v %v", list, err)
 	}
 	// The app still works: a mapping can be added and applied.
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "新", Protocol: model.TCP, Enabled: true, ListenPort: freePort(t),
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {

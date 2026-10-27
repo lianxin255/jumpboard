@@ -17,7 +17,7 @@ import (
 // interpretation writes nothing back, ever.
 func TestAIInterpretDroppedConf(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "已有", Protocol: model.TCP, Enabled: true, ListenPort: 16001,
 		UpstreamHost: "10.9.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -38,7 +38,7 @@ func TestAIInterpretDroppedConf(t *testing.T) {
 	a.SetAI(srv.URL, "test-model")
 
 	dropAndAwait(t, a, 2, path)
-	before, err := a.Store.ListMappings()
+	before, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(before) != 2 {
 		t.Fatalf("the drop should leave two rules: %v %v", before, err)
 	}
@@ -61,7 +61,7 @@ func TestAIInterpretDroppedConf(t *testing.T) {
 
 	// The interpretation is display only: the rule set is exactly what the
 	// drop saved, field for field.
-	after, err := a.Store.ListMappings()
+	after, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil || len(after) != 2 {
 		t.Fatalf("the interpretation must not touch the rules: %v %v", after, err)
 	}

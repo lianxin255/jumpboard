@@ -124,13 +124,21 @@ func (a *App) ResolveConfirm(ok bool) {
 	a.RunBackground(c.Run)
 }
 
-// Theme returns the chosen appearance.
-func (a *App) Theme() ThemeChoice { return a.theme }
+// Theme returns the chosen appearance. The lock is the one the frame's
+// reads of the shared state take: Wipe rewrites this from a background
+// goroutine, and a theme read while that lands is a torn read.
+func (a *App) Theme() ThemeChoice {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.theme
+}
 
 // SetTheme stores the appearance and applies it at once, to the widgets on
 // the next frame and to the window's material now.
 func (a *App) SetTheme(t ThemeChoice) {
+	a.mu.Lock()
 	a.theme = t
+	a.mu.Unlock()
 	_ = a.Store.SetSetting(store.SettingTheme, string(t))
 	if a.OnTheme != nil {
 		a.OnTheme(t)
@@ -139,20 +147,30 @@ func (a *App) SetTheme(t ThemeChoice) {
 }
 
 // HostName returns the local host's name.
-func (a *App) HostName() string { return a.hostName }
+func (a *App) HostName() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.hostName
+}
 
 // SetHostName renames the local host.
 func (a *App) SetHostName(name string) {
 	if name == "" {
 		return
 	}
+	a.mu.Lock()
 	a.hostName = name
+	a.mu.Unlock()
 	_ = a.Store.SetHostName(name)
 	a.notify()
 }
 
 // WhitelistOn reports whether access is limited to the whitelist.
-func (a *App) WhitelistOn() bool { return a.whitelistOn }
+func (a *App) WhitelistOn() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.whitelistOn
+}
 
 // SetWhitelistOn turns the whitelist on or off.
 //
@@ -161,17 +179,22 @@ func (a *App) WhitelistOn() bool { return a.whitelistOn }
 // the operation log for a flip that never happened, which reads like an
 // access-control change.
 func (a *App) SetWhitelistOn(on bool) error {
-	if a.whitelistOn == on {
+	a.mu.Lock()
+	prev := a.whitelistOn
+	if prev == on {
+		a.mu.Unlock()
 		return nil
 	}
-	prev := a.whitelistOn
 	a.whitelistOn = on
+	a.mu.Unlock()
 	// An access-control switch that reports success without reaching the
 	// database is worse than an error: the window would say "已开启" while
 	// the next launch — and any other reader of the store — sees it off,
 	// allowing every address. A failed write rolls the mirror back.
 	if err := a.Store.SetWhitelistOn(on); err != nil {
+		a.mu.Lock()
 		a.whitelistOn = prev
+		a.mu.Unlock()
 		a.Fail("白名单设置未保存：%v", err)
 		return err
 	}
@@ -185,11 +208,17 @@ func (a *App) SetWhitelistOn(on bool) error {
 }
 
 // NginxLogRead reports whether the app reads the engine's access log.
-func (a *App) NginxLogRead() bool { return a.nginxLogRead }
+func (a *App) NginxLogRead() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.nginxLogRead
+}
 
 // SetNginxLogRead stores the setting.
 func (a *App) SetNginxLogRead(on bool) {
+	a.mu.Lock()
 	a.nginxLogRead = on
+	a.mu.Unlock()
 	v := "0"
 	if on {
 		v = "1"
@@ -377,7 +406,7 @@ func (a *App) SaveForm() error {
 		}
 		a.Log.Info("修改映射「%s」", m.Name)
 	} else {
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			return err
 		}
 		a.Log.Info("新建映射「%s」", m.Name)
@@ -462,7 +491,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 	if err != nil {
 		return err
 	}
-	ids, err := a.Store.MappingIDs()
+	ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 	if err != nil {
 		return err
 	}
@@ -486,7 +515,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 		return nil
 	}
 	ids[at], ids[to] = ids[to], ids[at]
-	if err := a.Store.ReorderMappings(ids); err != nil {
+	if err := a.Store.ReorderMappings(a.ActiveWorkspace(), ids); err != nil {
 		return err
 	}
 	dir := "下移"
@@ -505,7 +534,7 @@ func (a *App) MoveMapping(id string, up bool) error {
 // Like 上移/下移, only the sort order changes: the engine and the
 // configuration it generates are untouched and nothing is marked dirty.
 func (a *App) ReorderFilteredMappings(shown []string) error {
-	ids, err := a.Store.MappingIDs()
+	ids, err := a.Store.MappingIDs(a.ActiveWorkspace())
 	if err != nil {
 		return err
 	}
@@ -528,7 +557,7 @@ func (a *App) ReorderFilteredMappings(shown []string) error {
 		// or wider: acting on it would silently drop or duplicate rows.
 		return fmt.Errorf("拖动排序时表里的映射与配置不一致，请刷新后再试")
 	}
-	if err := a.Store.ReorderMappings(next); err != nil {
+	if err := a.Store.ReorderMappings(a.ActiveWorkspace(), next); err != nil {
 		return err
 	}
 	a.Log.Info("拖动调整了映射顺序")
@@ -630,7 +659,7 @@ func (a *App) CloneMapping(id string) error {
 	// The listen port would collide with the original's, so clear it and
 	// let the user pick one.
 	m.ListenPort = 0
-	if _, err := a.Store.CreateMapping(m); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 		return err
 	}
 	a.Log.Info("克隆映射「%s」", m.Name)
@@ -813,7 +842,7 @@ func (a *App) RollbackSnapshot(sn model.Snapshot) error {
 	} else if err := a.Store.AddSnapshot(current, "rollback"); err != nil {
 		return fmt.Errorf("保存回滚前的配置失败：%v", err)
 	}
-	if err := a.Store.ReplaceAllMappings(mappings); err != nil {
+	if err := a.Store.ReplaceAllMappings(a.ActiveWorkspace(), mappings); err != nil {
 		return err
 	}
 	if err := a.Reload(); err != nil {
@@ -860,8 +889,12 @@ func (a *App) ToggleWhitelist(id int64, on bool) error {
 }
 
 // Example shows how an export looks: the app keeps the format compatible
-// with the Electron build's backups.
-func (a *App) Export() (services.Payload, error) { return services.Export(a.Store) }
+// with the Electron build's backups. What is exported is the active
+// scene's rules — a backup of 公司 carries 公司's mappings, and 家里's
+// stay home.
+func (a *App) Export() (services.Payload, error) {
+	return services.Export(a.Store, a.ActiveWorkspace())
+}
 
 // ExportBackupJSON is the backup the UI saves. The dialog stays in the UI;
 // the payload and its formatting live here.
@@ -908,9 +941,9 @@ func (a *App) NginxExport() (string, int, error) {
 	return conf, len(spec.Mappings), nil
 }
 
-// Import replaces the data with a backup.
+// Import replaces the active scene's rules with a backup's.
 func (a *App) Import(data []byte) error {
-	res, err := services.Import(a.Store, data)
+	res, err := services.Import(a.Store, a.ActiveWorkspace(), data)
 	if err != nil {
 		return err
 	}
@@ -988,7 +1021,7 @@ func (a *App) ImportDroppedFiles(paths []string) error {
 // mappings, for a conf dragged onto the window. Unlike Import — a
 // backup, which replaces everything — a conf is additions.
 func (a *App) ImportNginxConf(data []byte) (int, error) {
-	added, skipped, err := services.ImportNginxConf(a.Store, data)
+	added, skipped, err := services.ImportNginxConf(a.Store, a.ActiveWorkspace(), data)
 	if err != nil {
 		return 0, err
 	}
@@ -999,9 +1032,11 @@ func (a *App) ImportNginxConf(data []byte) (int, error) {
 
 // UpstreamHostSuggestions lists the upstream hosts already in use, for
 // the form's autocomplete: an internal network has a handful of servers
-// and typing their names by hand is the form's most repetitive step.
+// and typing their names by hand is the form's most repetitive step. The
+// suggestions come from the active scene — a rule written in one scene
+// is no reason for another scene's form to whisper its hosts.
 func (a *App) UpstreamHostSuggestions() []string {
-	mappings, err := a.Store.ListMappings()
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		return nil
 	}
@@ -1030,27 +1065,43 @@ func (a *App) Wipe() error {
 	if err := a.Store.EnsureLocalHost(); err != nil {
 		return err
 	}
+	if err := a.Store.EnsureWorkspaces(); err != nil {
+		return err
+	}
 	a.refreshEngine()
 	a.Log.Warn("已清空所有数据")
 	// The settings live in the store and are mirrored in memory; a wipe
 	// resets the store, so the mirror has to be reloaded or the window
 	// keeps showing the old theme and, worse, an "enabled" whitelist that
 	// the next apply reads as off — which would allow every address.
-	a.theme = ThemeChoice(a.Store.Setting(store.SettingTheme, string(ThemeSystem)))
-	a.whitelistOn = a.Store.WhitelistOn()
-	a.nginxLogRead = a.Store.SettingBool(store.SettingNginxLogRead, true)
+	theme := ThemeChoice(a.Store.Setting(store.SettingTheme, string(ThemeSystem)))
+	whitelistOn := a.Store.WhitelistOn()
+	nginxLogRead := a.Store.SettingBool(store.SettingNginxLogRead, true)
+	// The name is read from the store it was just wiped from — the old
+	// mirror is being replaced, not consulted.
+	var hostName string
 	if name, err := a.Store.HostName(); err == nil {
-		a.hostName = name
+		hostName = name
 	}
 	a.mu.Lock()
+	// The scenes are data too: what the wipe leaves is the one scene a
+	// fresh database starts with, active and with no edits waiting.
+	a.activeWS = store.DefaultWorkspaceID
 	a.dirty = false
+	// The mirror is written behind the same lock the accessors read with:
+	// a wipe runs on a background goroutine, and the frame may be drawing
+	// the theme and the whitelist switch it is replacing.
+	a.theme, a.whitelistOn, a.nginxLogRead, a.hostName = theme, whitelistOn, nginxLogRead, hostName
 	a.mu.Unlock()
+	if err := a.Reload(); err != nil {
+		return err
+	}
 	return nil
 }
 
 // NginxLogs reads the engine's access log.
 func (a *App) NginxLogs(lines int) (access, errs []string) {
-	if !a.nginxLogRead {
+	if !a.NginxLogRead() {
 		return nil, nil
 	}
 	got, err := services.TailFile(filepath.Join(a.Paths.LogsDir, "access.log"), lines)

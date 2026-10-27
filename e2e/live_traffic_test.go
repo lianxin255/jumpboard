@@ -15,7 +15,7 @@ func applyOneRule(t *testing.T, a *appt.App, name string) (listen int) {
 	upPort, stopUp := upstream(t)
 	t.Cleanup(stopUp)
 	listen = freePort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: name, Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,

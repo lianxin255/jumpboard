@@ -35,7 +35,7 @@ func TestProxyHeadersAndStreaming(t *testing.T) {
 	listen := freePort(t)
 
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "头与流", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, ServerNames: "h.example.com",
 		UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
@@ -95,7 +95,7 @@ func TestMinimalModeAddsNoHeaders(t *testing.T) {
 	listen := freePort(t)
 
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "精简", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: portOf(t, up.URL),
 		ListenPath: "/", ProxyMode: model.ProxyMinimal,

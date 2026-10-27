@@ -53,6 +53,12 @@ type View struct {
 	logTab        int
 	logLevel      int
 	logQuery      string
+	// The scene card's own state: the name a new scene would take, and
+	// the row being renamed with the text its field holds. Main thread
+	// only, like the whitelist's fields.
+	wsNewName    string
+	wsRenameID   string
+	wsRenameName string
 	// The log and history lists keep their scroll position in the view:
 	// a ListState built inside a frame forgets it every frame, so the
 	// list could never be scrolled past its first page.
@@ -493,6 +499,11 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				})
 			}
 		})
+		// The scene switcher sits between the title and the group chips:
+		// switching is the one-click answer to 公司 / 家里, so it belongs
+		// on the page the rules live on, above everything that narrows
+		// them.
+		v.workspaceChips(c, t, busy)
 		// The group filter sits under the search box's row: the same row of
 		// the page that narrows the table, one chip per group in use. It is
 		// absent while no rule carries a group, so an ungrouped rule book
@@ -1090,6 +1101,42 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 				}
 			}
 		})
+	})
+}
+
+// workspaceChips is the scene switcher: one chip per workspace, the
+// active one accented the way the group chips accent a choice. A click
+// switches — through the confirmation a dirty scene asks for — and the
+// trailing 管理 chip opens the settings page, where a scene is created,
+// renamed and deleted. The row shows with a single scene too: a switcher
+// nobody can see is a feature nobody finds.
+func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	list, active := a.WorkspacesState()
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+		ui.Text(c, "场景").FontSize(11).TextColor(t.Muted)
+		for _, w := range list {
+			w := w
+			on := w.ID == active
+			chip := ui.Text(c, w.Name).FontSize(11).SingleLine().
+				Label("场景 "+w.Name).
+				Tooltip("切换到这个场景的映射；有未应用的改动会先确认").
+				Padding(3, 8).Radius(RadiusChip)
+			if on {
+				chip.Bold().TextColor(t.Accent).
+					Background(t.Accent.Alpha(0.12)).Border(1, t.Accent.Alpha(0.45))
+			} else {
+				chip.TextColor(t.FG2).Background(t.Chip).Border(1, t.Border)
+			}
+			if chip.Clicked() && !on && !busy {
+				a.RequestSwitchWorkspace(w.ID)
+			}
+		}
+		if ui.Text(c, "管理").FontSize(11).TextColor(t.Muted).
+			Label("管理场景").Tooltip("在设置里新建、改名、删除场景").
+			Padding(3, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
+			a.SetPage(appt.PageSettings)
+		}
 	})
 }
 

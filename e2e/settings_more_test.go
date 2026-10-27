@@ -90,7 +90,7 @@ func TestOpenAtLoginSwitch(t *testing.T) {
 // package.
 func TestSnapshotViewDialog(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "快照里的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "快照里的站")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {
@@ -139,7 +139,7 @@ func TestSnapshotViewDialog(t *testing.T) {
 // bytes to the path the dialog returned.
 func TestExportActionsBuildTheFiles(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "导出动作的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "导出动作的站")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,7 +178,7 @@ func TestExportActionsBuildTheFiles(t *testing.T) {
 // with a path, and the file holds the rules.
 func TestExportNginxButton(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "导出按钮的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "导出按钮的站")); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Apply(); err != nil {
@@ -212,7 +212,7 @@ func TestExportNginxButton(t *testing.T) {
 // everything the app holds.
 func TestImportBackupButton(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(streamRule(t, "要被替换的站")); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), streamRule(t, "要被替换的站")); err != nil {
 		t.Fatal(err)
 	}
 	// The backup to import: what the app exports, with the rule renamed so
@@ -221,7 +221,7 @@ func TestImportBackupButton(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	list[0].Name = "备份里的站"
 	payload.Mappings = list
 	file := filepath.Join(t.TempDir(), "backup.json")
@@ -243,7 +243,7 @@ func TestImportBackupButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the import to land", func() bool {
-		got, err := a.Store.ListMappings()
+		got, err := a.Store.ListMappings(a.ActiveWorkspace())
 		return err == nil && len(got) == 1 && got[0].Name == "备份里的站"
 	})
 }

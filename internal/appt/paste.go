@@ -102,14 +102,14 @@ func (a *App) ConfirmPasteImport() error {
 
 	switch pv.Kind {
 	case pasteBackup:
-		res, err := services.Import(a.Store, pv.Data)
+		res, err := services.Import(a.Store, a.ActiveWorkspace(), pv.Data)
 		if err != nil {
 			return err
 		}
 		a.Log.Info("从剪贴板导入备份：%d 条映射，%d 个快照，跳过 %d 条",
 			res.MappingsImported, res.SnapshotsImported, res.Skipped)
 	case pasteConf:
-		added, skipped, err := services.ImportNginxConf(a.Store, pv.Data)
+		added, skipped, err := services.ImportNginxConf(a.Store, a.ActiveWorkspace(), pv.Data)
 		if err != nil {
 			return err
 		}

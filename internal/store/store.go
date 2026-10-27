@@ -70,6 +70,7 @@ func (s *Store) migrate() error {
 		{"health_check_target_path", `ALTER TABLE mappings ADD COLUMN health_check_target_path TEXT`},
 		{"health_check_expected_status", `ALTER TABLE mappings ADD COLUMN health_check_expected_status INTEGER`},
 		{"group_name", `ALTER TABLE mappings ADD COLUMN group_name TEXT NOT NULL DEFAULT ''`},
+		{"workspace_id", `ALTER TABLE mappings ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default'`},
 	} {
 		if cols[c.name] {
 			continue
@@ -77,6 +78,12 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(c.ddl); err != nil {
 			return fmt.Errorf("adding mappings.%s: %w", c.name, err)
 		}
+	}
+	// The workspace index comes after the column it covers: on a database
+	// from before workspaces, the ALTER above has only just added it, and
+	// an index in the schema above would run first and fail.
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_mappings_workspace ON mappings(workspace_id)`); err != nil {
+		return fmt.Errorf("indexing mappings.workspace_id: %w", err)
 	}
 	// app_settings gained no schema of its own; the rows are defaults.
 	return nil
@@ -180,6 +187,12 @@ CREATE TABLE IF NOT EXISTS ip_whitelist (
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL
 );
 `
 

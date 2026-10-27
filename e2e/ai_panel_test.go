@@ -78,10 +78,10 @@ func TestAIPanelWalkthrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the mapping in the table", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1
 	})
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	if list[0].Name != "面板里的 MySQL" || list[0].ListenPort != 9001 {
 		t.Errorf("stored wrongly: %+v", list[0])
 	}
@@ -108,7 +108,7 @@ func TestAIPanelShowsAnError(t *testing.T) {
 	if tt.HasText("采用") {
 		t.Errorf("no draft card should show: %v", tt.Texts())
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Errorf("nothing should have been saved: %+v", list)
 	}
 }

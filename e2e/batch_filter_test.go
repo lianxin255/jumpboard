@@ -14,7 +14,7 @@ func TestBatchEnableDisable(t *testing.T) {
 			Name: name, Protocol: model.TCP, ListenPort: 18101 + i,
 			UpstreamHost: "127.0.0.1", UpstreamPort: 3306, Enabled: false,
 		}
-		if _, err := a.Store.CreateMapping(m); err != nil {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -38,7 +38,7 @@ func TestBatchEnableDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "all enabled", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		for _, m := range list {
 			if !m.Enabled {
 				return false
@@ -59,7 +59,7 @@ func TestBatchEnableDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "all disabled", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		for _, m := range list {
 			if m.Enabled {
 				return false
@@ -76,7 +76,7 @@ func TestFilterEmptyClear(t *testing.T) {
 		Name: "仅此一条", Protocol: model.TCP, ListenPort: 19001,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 80, Enabled: true,
 	}
-	if _, err := a.Store.CreateMapping(m); err != nil {
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), m); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Reload(); err != nil {

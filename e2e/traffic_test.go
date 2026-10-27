@@ -15,7 +15,7 @@ func TestTrafficCounterShowsInTheTable(t *testing.T) {
 	defer stopUp()
 	listen := freePort(t)
 
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "流量站", Protocol: model.HTTP, Enabled: true,
 		ListenPort: listen, UpstreamHost: "127.0.0.1", UpstreamPort: upPort,
 		ListenPath: "/", ProxyMode: model.ProxyStandard,

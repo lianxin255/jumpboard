@@ -11,7 +11,7 @@ import (
 // address on the clipboard.
 func TestCopyAddress(t *testing.T) {
 	a := testApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "复制", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
 		UpstreamHost: "10.0.0.1", UpstreamPort: 3306,
 	}); err != nil {

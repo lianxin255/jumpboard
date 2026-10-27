@@ -52,7 +52,7 @@ func droppedApp(t *testing.T) *App {
 // and neither stops the other.
 func TestImportDroppedFiles(t *testing.T) {
 	a := droppedApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "已有", Protocol: model.TCP, Enabled: true, ListenPort: 17001,
 		UpstreamHost: "10.8.0.1", UpstreamPort: 3306,
 	}); err != nil {
@@ -76,7 +76,7 @@ func TestImportDroppedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := a.Store.ListMappings()
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestImportDroppedFiles(t *testing.T) {
 // through the ordinary backup import, which replaces the rule set.
 func TestImportDroppedJSON(t *testing.T) {
 	a := droppedApp(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "旧规则", Protocol: model.TCP, Enabled: true, ListenPort: 17003,
 		UpstreamHost: "10.8.0.3", UpstreamPort: 80,
 	}); err != nil {
@@ -116,7 +116,7 @@ func TestImportDroppedJSON(t *testing.T) {
 	if err := a.ImportDroppedFiles([]string{path}); err != nil {
 		t.Fatal(err)
 	}
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	if len(list) != 1 || list[0].Name != "备份规则" {
 		t.Fatalf("a dropped backup replaces the rules: %+v", list)
 	}

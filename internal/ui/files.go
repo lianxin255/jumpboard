@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -54,6 +55,35 @@ func (v *View) importBackup() {
 		return
 	}
 	a.RunBackground(func() error { return a.Import(data) })
+}
+
+// importBackupAsWorkspace asks for a backup and lands it in a scene of
+// its own, named after the file: the colleague's 公司 backup can be
+// looked at without replacing what is running.
+func (v *View) importBackupAsWorkspace() {
+	a := v.App
+	if a.OpenDialog == nil {
+		return
+	}
+	paths, err := a.OpenDialog(mygo.OpenDialogOptions{
+		Title:   "导入为新场景",
+		Filters: []mygo.FileFilter{{Name: "JSON", Extensions: []string{"json"}}},
+	})
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	data, err := a.ReadImportFile(paths[0])
+	if err != nil {
+		a.Fail("读取失败：%v", err)
+		return
+	}
+	// The scene takes the file's name — what the user called the backup is
+	// the best guess at what they will call the scene.
+	name := strings.TrimSuffix(filepath.Base(paths[0]), filepath.Ext(paths[0]))
+	a.RunBackground(func() error {
+		_, err := a.ImportAsNewWorkspace(data, name)
+		return err
+	})
 }
 
 // exportNginx writes the current rules as an nginx.conf, for someone who
