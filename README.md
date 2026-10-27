@@ -51,6 +51,15 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 | macOS | `JumpBoard.app`、`JumpBoard 1.2.0.dmg` |
 | Windows | `JumpBoard.exe`、`icon.png`、`icon.svg` |
 
+## 分发（未签名版）
+
+GitHub Releases 提供免构建的安装包（mac 通用 / Windows x64）。产物**没有代码签名**：macOS 是 ad hoc 签名、未公证，Windows 无签名，所以换一台机器首次打开会被系统拦，属预期而非损坏：
+
+- **macOS**：装进 `/Applications` 后终端跑一次 `xattr -cr /Applications/JumpBoard.app`（提示「已损坏，建议移到废纸篓」也是这个原因）；或系统设置 → 隐私与安全性 → 「仍要打开」。
+- **Windows**：SmartScreen 弹「已保护你的电脑」→ 点「更多信息」→ 「仍要运行」。
+
+应用内自动更新换上的新版本同样未公证，首次打开可能再拦一次，处理方式相同。签名 / 公证 / 自动更新的细节见 [docs/release-and-updates.md](docs/release-and-updates.md)。
+
 ## 数据在哪
 
 数据跟着程序走，方便整个目录拷贝迁移：

@@ -6,8 +6,8 @@
 
 - 先建一个 **draft** GitHub Release；
 - macOS runner 构建 `darwin/universal`，Windows runner 构建 `windows/amd64`；
-- 各自附带 `SHA256SUMS`，上传到同一个 draft；
-- 构建带 `MYGO_UPDATER_PRIVATE_KEY`（来自仓库 secret）：**配了 secret 就同时产出签名更新包**（`jumpboard-x.y.z-<platform>.tar.gz` + `update-<platform>.json` 清单 + 增量包），**没配则跳过更新文件**，流水线照常绿。
+- 各自附带 `SHA256SUMS-macOS` / `SHA256SUMS-Windows` 校验和，上传到同一个 draft；
+- 构建带 `MYGO_UPDATER_PRIVATE_KEY`（来自仓库 secret）：**配了 secret 就同时产出签名更新包**（`jumpboard-x.y.z-<platform>.tar.gz` + `update-<platform>.json` 清单 + 增量包；增量包要拿已发布的旧版做底，**首个发布没有**），**没配则跳过更新文件**，流水线照常绿。
 
 **macOS 最低系统 13.0**（`mygo.json` 的 `macos.minimumSystemVersion`）：终端功能随包带 1–2 MB 的 `libghostty-vt`，需要 macOS 13+；Windows 侧要求 10 1809+（ConPTY）。低于下限的系统应用其余功能不受影响，只是终端页不可用。
 
