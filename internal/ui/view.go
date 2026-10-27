@@ -462,6 +462,10 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
+				if ui.Button(c, "粘贴导入").Disabled(busy).Label("粘贴导入").
+					Tooltip("把剪贴板里的 JumpBoard 备份（JSON）或 nginx 配置导入进来").Clicked() {
+					a.RunBackground(a.StartPasteImport)
+				}
 			}
 			v.aiEntry(c, t)
 			v.aiFilterBar(c, t)
@@ -576,6 +580,13 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping) {
 		if menu.Item("复制转发地址").Chosen() {
 			mm := m
 			a.RunBackground(func() error { return a.CopyAddress(mm) })
+		}
+		menu.Separator()
+		if menu.Item("上移").Chosen() {
+			a.RunBackground(func() error { return a.MoveMapping(id, true) })
+		}
+		if menu.Item("下移").Chosen() {
+			a.RunBackground(func() error { return a.MoveMapping(id, false) })
 		}
 		menu.Separator()
 		if menu.Item("删除…").Chosen() {

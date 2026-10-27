@@ -31,6 +31,9 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 	if a.ConfViewOpen() {
 		v.confViewDialog(c, t)
 	}
+	if pv := a.PastePreview(); pv != nil {
+		v.pasteDialog(c, t, pv)
+	}
 	v.aiDialog(c, t)
 }
 
@@ -650,5 +653,54 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 	})
 	if !open {
 		a.SetConfViewOpen(false)
+	}
+}
+
+// pasteDialog shows what a 粘贴导入 would do before it does it: the kind
+// the clipboard text turned out to be, how many mappings it touches, and
+// for a backup, the plain warning that everything now in the app is
+// replaced. Nothing is imported until 导入 runs, so a copy of the wrong
+// thing costs nothing.
+func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
+	a := v.App
+	open := true
+	title := "粘贴导入"
+	ui.Modal(c, &open, func() {
+		ui.Column(c).Width(520).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+			ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
+			kind := "nginx 配置"
+			if pv.Replace {
+				kind = "JumpBoard 备份"
+			}
+			ui.Text(c, "剪贴板内容是 "+kind).FontSize(12).TextColor(t.FG2)
+			ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
+				Background(t.Surface2).Border(1, t.Border).Children(func() {
+				ui.Text(c, pv.Detail).FontSize(12).TextColor(t.FG).Wrap()
+			})
+			if pv.Replace {
+				ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
+					FontSize(11).TextColor(t.Warning).Wrap()
+			} else {
+				ui.Text(c, "与现有规则合并，只新增，不改动已有的映射。").
+					FontSize(11).TextColor(t.Muted).Wrap()
+			}
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if ui.Button(c, "取消").Clicked() {
+					a.CancelPasteImport()
+				}
+				btn := ui.PrimaryButton(c, "导入").Label("导入粘贴内容")
+				if pv.Replace {
+					btn.Background(t.Warning)
+				}
+				if btn.Clicked() {
+					a.RunBackground(a.ConfirmPasteImport)
+				}
+			})
+		})
+	})
+	if !open {
+		a.CancelPasteImport()
 	}
 }

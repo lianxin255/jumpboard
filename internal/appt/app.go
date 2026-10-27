@@ -81,6 +81,10 @@ type App struct {
 	// mygo's clipboard, which needs the running app; a test leaves it nil
 	// and reads Copied instead.
 	Clipboard func(string)
+	// ReadClipboard takes text off the system clipboard, the inverse of
+	// Clipboard, for 粘贴导入. main.go wires it to mygo's; a test sets it
+	// to a string it holds, mirroring Copied's memory stance.
+	ReadClipboard func() (string, error)
 	// SaveDialog and OpenDialog ask the user where to put a file and
 	// which files to read. main.go points them at the native dialogs,
 	// which need the running app; a test leaves them nil, and the UI
@@ -168,6 +172,7 @@ type App struct {
 	confirm      *Confirm
 	snapshotView *model.Snapshot
 	confViewOpen bool
+	pastePending *PastePreview
 	theme        ThemeChoice
 	hostName     string
 	whitelistOn  bool

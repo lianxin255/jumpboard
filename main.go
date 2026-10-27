@@ -58,6 +58,10 @@ func main() {
 	// The clipboard needs the running app, so it is wired here rather than
 	// inside the app's own code.
 	app.Clipboard = mygo.Clipboard.WriteText
+	// The clipboard's reader too, for 粘贴导入. mygo's ReadText returns
+	// only the text, so the hook's error slot is for the shape the app
+	// expects, and a read the app cannot do fails as one.
+	app.ReadClipboard = func() (string, error) { return mygo.Clipboard.ReadText(), nil }
 	// The desktop notifier too: it silently does nothing until the app is
 	// packaged, so the behaviour holds in development and in tests.
 	app.Notify = native.Notify

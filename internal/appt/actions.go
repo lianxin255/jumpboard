@@ -353,6 +353,50 @@ func (a *App) SetMappingEnabled(id string, on bool) error {
 	return nil
 }
 
+// MoveMapping swaps one mapping with its neighbour, up or down, so the
+// table's order is what the user arranges it to be. Only the sort order
+// changes: the rules themselves are the same, so the engine and the
+// configuration it generates are untouched and nothing is marked dirty.
+func (a *App) MoveMapping(id string, up bool) error {
+	m, err := a.Store.GetMapping(id)
+	if err != nil {
+		return err
+	}
+	ids, err := a.Store.MappingIDs()
+	if err != nil {
+		return err
+	}
+	at := -1
+	for i, v := range ids {
+		if v == id {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return fmt.Errorf("映射「%s」不在排序列表中", m.Name)
+	}
+	to := at + 1
+	if up {
+		to = at - 1
+	}
+	if to < 0 || to >= len(ids) {
+		// Already at the edge: nothing to do, and no toast either — the
+		// action cannot fail, only do nothing.
+		return nil
+	}
+	ids[at], ids[to] = ids[to], ids[at]
+	if err := a.Store.ReorderMappings(ids); err != nil {
+		return err
+	}
+	dir := "下移"
+	if up {
+		dir = "上移"
+	}
+	a.Log.Info("%s映射「%s」", dir, m.Name)
+	return nil
+}
+
 // SetMappingsEnabled turns every listed mapping on or off in one pass.
 //
 // It stops on the first failure so a partial batch leaves a clear toast;

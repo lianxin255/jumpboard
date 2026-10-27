@@ -247,6 +247,27 @@ func (s *Store) SetMappingHealth(id string, status model.HealthStatus, at int64)
 	return err
 }
 
+// MappingIDs lists the mappings' ids in the order the table shows them,
+// which is the order a move reorders. It is the cheap shape of
+// ListMappings: a reorder only needs the ids, and pulling every field of
+// every rule to move one is the sort of waste this list exists to skip.
+func (s *Store) MappingIDs() ([]string, error) {
+	rows, err := s.db.Query(`SELECT id FROM mappings ORDER BY sort_order, created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ReorderMappings applies a new sort order: ids[i] gets position i.
 func (s *Store) ReorderMappings(ids []string) error {
 	s.writeMu.Lock()
