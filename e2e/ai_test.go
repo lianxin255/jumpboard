@@ -200,7 +200,7 @@ func TestAITestConnectionButton(t *testing.T) {
 	t.Cleanup(srv.Close)
 	a.SetAI(srv.URL, "test-model")
 
-	tt := tester(t, a, 1200, 760)
+	tt := tester(t, a, 1200, 900)
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func fakeModels(t *testing.T, models ...string) *httptest.Server {
 func TestAIListModels(t *testing.T) {
 	a := testApp(t)
 	srv := fakeModels(t, "deepseek-chat", "gpt-4o-mini")
-	tt := tester(t, a, 1200, 760)
+	tt := tester(t, a, 1200, 900)
 
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
@@ -312,7 +312,7 @@ func TestAIListModelsReportsFailure(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	tt := tester(t, a, 1200, 760)
+	tt := tester(t, a, 1200, 900)
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}

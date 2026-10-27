@@ -532,6 +532,29 @@ func (a *App) SetMappingsEnabled(ids []string, on bool) error {
 	return nil
 }
 
+// DeleteMappings removes every listed mapping in one pass.
+//
+// Like SetMappingsEnabled it stops on the first failure so a partial
+// batch leaves a clear toast; successful deletions already mark the
+// configuration dirty.
+func (a *App) DeleteMappings(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	n := 0
+	for _, id := range ids {
+		if err := a.DeleteMapping(id); err != nil {
+			if n > 0 {
+				a.markDirty()
+			}
+			return fmt.Errorf("已处理 %d 条，第 %d 条失败：%w", n, n+1, err)
+		}
+		n++
+	}
+	a.setStatus(fmt.Sprintf("已删除 %d 条规则", n), false)
+	return nil
+}
+
 // CopyAddress puts a mapping's public address on the clipboard, which is
 // what someone sharing a rule actually needs.
 func (a *App) CopyAddress(m model.Mapping) error {
