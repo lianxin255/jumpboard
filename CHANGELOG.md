@@ -5,7 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-26
+
+（1.0.0 之后的全部内容：mygo 原生化重构 + P1/P2 批次，随 1.2.0 号码入库）
+
+### Added — P1/P2 批次
+
+- **流量计数**：映射表每条规则显示累计 ↓/↑ 字节数（TCP/UDP/HTTP 三路，按规则归集）
+- **吞吐曲线**：规则详情弹层显示近 60 秒的吞吐折线与当前速率
+- **分组**：映射可归入一个短标签；表格 chip、分组过滤、表单输入与建议
+- **快照 diff**：快照弹层改为与当前配置的统一 diff 视图（+N/−N 摘要），弹层内回滚需确认
+- **AI 解读**：导入的 nginx 配置可让模型用中文解读，流式渲染 Markdown
+- **配置查看**：设置页可只读查看应用实际生成的 nginx.conf；导出的配置被外部修改后表格上方出现提示条
+- **粘贴导入**：剪贴板里的备份 JSON 或 nginx 配置可直接粘贴导入，先预览再决定
+- **排序**：映射右键菜单可上移/下移，调整规则在配置中的顺序
+- **deeplink**：`jumpboard://` 链接可唤起窗口，`jumpboard://import?data=…` 直接进入导入预览
+- **应用内更新**：设置页「更新」卡片，手动检查、查看发布说明、安装并重启（mygo 签名更新器；开发构建显示不支持）
+- **终端**：应用内跑本地 shell，或对转发端口做 TCP/HTTP 探测会话（mygo 终端插件，随包分发 libghostty-vt，macOS 最低系统升至 13.0；SSH/串口/多标签不在本版）
+- **发布流水线**：`v*` tag 自动构建 macOS/Windows 产物并挂到 draft release，配好 secret 后同时产出签名更新包（见 `docs/release-and-updates.md`）
+
+### Fixed — P1/P2 批次
+
+- 回滚不再清空全部快照历史；回滚前先把当前配置存为一条 `rollback` 快照，二次回滚可撤销第一次
 
 ### Removed — Electron / Node 壳
 

@@ -276,8 +276,8 @@ func TestDraftAcceptsBothBaseForms(t *testing.T) {
 
 // TestDraftToleratesLooseFieldShapes checks the shapes a model actually
 // sends: ports quoted as strings, extraDirectives as a list, enum aliases
-// and casings, a group field the schema does not have. None of them may
-// void the draft; what cannot be mapped is dropped with a note.
+// and casings, a group label. None of them may void the draft; what cannot
+// be mapped is dropped with a note.
 func TestDraftToleratesLooseFieldShapes(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -325,12 +325,15 @@ func TestDraftToleratesLooseFieldShapes(t *testing.T) {
 			},
 		},
 		{
-			name: "group is dropped with a note",
+			name: "group is kept on the mapping",
 			reply: `{"name":"x","protocol":"tcp","upstreamHost":"1.2.3.4","upstreamPort":80,` +
 				`"group":"数据库"}`,
 			check: func(t *testing.T, m model.Mapping, explanation string) {
-				if !strings.Contains(explanation, "分组") || !strings.Contains(explanation, "数据库") {
-					t.Errorf("the dropped group should be said: %q", explanation)
+				if m.Group != "数据库" {
+					t.Errorf("group = %q, want 数据库", m.Group)
+				}
+				if strings.Contains(explanation, "分组") {
+					t.Errorf("a kept group must not be reported as dropped: %q", explanation)
 				}
 			},
 		},

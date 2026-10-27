@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -41,6 +42,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(280)
 			ui.Spacer(c)
 			if v.logTab == 0 {
+				if ui.Button(c, "导出").Disabled(busy).
+					Tooltip("把操作日志全量导出为文本文件").Clicked() {
+					v.exportAppLogs()
+				}
 				if ui.Button(c, "清空操作日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
 						Title: "清空操作日志", Body: "所有操作记录都会被删除。",
@@ -60,6 +65,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 						Tooltip("把当前 access.log 的尾部交给模型总结").Clicked() {
 						a.RunBackground(a.InterpretAccessLog)
 					}
+				}
+				if ui.Button(c, "导出").Disabled(busy).
+					Tooltip("把 access.log 全量导出").Clicked() {
+					v.exportAccessLog()
 				}
 				if ui.Button(c, "清空访问日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
@@ -272,6 +281,32 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 	})
 }
 
+// hotkeyDraft is what the shortcut card holds between frames: the
+// accelerator typed into its field, and why the last save was refused.
+type hotkeyDraft struct {
+	text string
+	err  string
+}
+
+// hotkeyCards holds every app's shortcut-card draft.
+//
+// The natural home is a View field, like v.whitelistIP, but the View
+// struct is declared in view.go and this slice leaves that file alone.
+// Keyed by the app, a fresh view — the tests build one per app — starts
+// from a clean card, exactly as a View field would. Frames run on one
+// thread, so the map needs no lock.
+var hotkeyCards = map[*appt.App]*hotkeyDraft{}
+
+// hotkeyCard returns the shortcut card's draft for the app.
+func hotkeyCard(a *appt.App) *hotkeyDraft {
+	d, ok := hotkeyCards[a]
+	if !ok {
+		d = &hotkeyDraft{}
+		hotkeyCards[a] = d
+	}
+	return d
+}
+
 // settingsPage holds the appearance, the access control and the data tools.
 func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	a := v.App
@@ -398,6 +433,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							FontSize(11).TextColor(t.Muted).Wrap()
 					})
 					ui.Divider(c)
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						if ui.Button(c, "查看当前配置").Clicked() {
+							a.SetConfViewOpen(true)
+						}
+						ui.Text(c, "只读查看应用实际生成的 nginx.conf。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+					})
+					ui.Divider(c)
 					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).
 						TextColor(t.Muted).Wrap().Selectable()
 					if a.Paths.Fallback {
@@ -407,6 +450,39 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				})
 
 				v.card(c, t, "快捷键", func() {
+					// The global binding is a setting; the in-app
+					// shortcuts below it are not — they are wired in the
+					// view and stay as they are. The current accelerator
+					// is read from the store each frame: frames are drawn
+					// on demand, and the card must say what is stored, not
+					// what it remembers.
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
+							Border(1, t.Border).Children(func() {
+							ui.Text(c, a.Hotkey()).FontSize(11).Bold().TextColor(t.FG).Font("monospace")
+						})
+						ui.Text(c, "全局显示/隐藏主窗口").FontSize(12).TextColor(t.FG2)
+					})
+					// A typed accelerator, not a key recorder: the string
+					// is validated by trying to register it, which is what
+					// the save reports.
+					d := hotkeyCard(a)
+					ui.Row(c).Gap(6).Children(func() {
+						ui.TextInput(c, &d.text).Placeholder("CmdOrCtrl+Shift+Alt+K").Grow(1).
+							Label("新快捷键").
+							Tooltip("输入组合键文本（本版不录制按键）：修饰键写 CmdOrCtrl、Ctrl、Alt 或 Shift，用 + 连接，末尾是主键（字母、数字或 F1-F24 等功能键），例如 CmdOrCtrl+Shift+Alt+K。保存时尝试注册，组合被占用或格式不对会提示。")
+						if ui.Button(c, "保存快捷键").Clicked() {
+							if err := a.SetHotkey(d.text); err != nil {
+								d.err = err.Error()
+							} else {
+								d.text, d.err = "", ""
+							}
+						}
+					})
+					if d.err != "" {
+						ui.Text(c, d.err).FontSize(11).TextColor(t.Danger).Wrap()
+					}
+					ui.Divider(c)
 					rows := [][2]string{
 						{"⌘N", "新建映射"},
 						{"⌘F", "聚焦搜索"},
@@ -424,6 +500,42 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						})
 					}
 					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(11).TextColor(t.Muted)
+				})
+
+				v.card(c, t, "更新", func() {
+					ui.Text(c, "当前版本 "+a.AppVersion).FontSize(11).TextColor(t.Muted)
+					if !a.UpdatesEnabled() {
+						ui.Text(c, "开发构建不支持自动更新，新版本请从 GitHub Releases 下载。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+						return
+					}
+					if up := a.UpdateAvail(); up != nil {
+						ui.Text(c, "发现新版本 "+up.Version).FontSize(13).Bold().TextColor(t.FG)
+						markdown.View(c, up.Notes, &markdown.Options{})
+						if a.UpdateBusy() {
+							if p := a.UpdateProgress(); p >= 0 {
+								ui.Text(c, fmt.Sprintf("正在下载更新…%d%%", int(p*100))).
+									FontSize(11).TextColor(t.Muted)
+							} else {
+								ui.Text(c, "正在下载更新…").FontSize(11).TextColor(t.Muted)
+							}
+						}
+						if ui.PrimaryButton(c, "安装并重启").Disabled(a.UpdateBusy()).Clicked() {
+							a.InstallFoundUpdate()
+						}
+						ui.Text(c, "下载校验通过后自动重启到新版本。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+						return
+					}
+					if ui.Button(c, "检查更新").Disabled(a.UpdateBusy()).Clicked() {
+						a.CheckForUpdates()
+					}
+					if a.UpdateBusy() {
+						ui.Text(c, "正在检查…").FontSize(11).TextColor(t.Muted)
+					} else {
+						ui.Text(c, "更新包经签名校验，只有检查后才会下载。").
+							FontSize(11).TextColor(t.Muted).Wrap()
+					}
 				})
 			})
 

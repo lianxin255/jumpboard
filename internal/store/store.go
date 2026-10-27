@@ -69,6 +69,7 @@ func (s *Store) migrate() error {
 		{"proxy_pass_url", `ALTER TABLE mappings ADD COLUMN proxy_pass_url TEXT`},
 		{"health_check_target_path", `ALTER TABLE mappings ADD COLUMN health_check_target_path TEXT`},
 		{"health_check_expected_status", `ALTER TABLE mappings ADD COLUMN health_check_expected_status INTEGER`},
+		{"group_name", `ALTER TABLE mappings ADD COLUMN group_name TEXT NOT NULL DEFAULT ''`},
 	} {
 		if cols[c.name] {
 			continue

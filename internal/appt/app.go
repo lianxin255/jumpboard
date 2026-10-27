@@ -14,6 +14,7 @@
 package appt
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -37,6 +38,7 @@ const (
 	PageMappings Page = iota
 	PageLogs
 	PageHistory
+	PageTerminal
 	PageSettings
 )
 
@@ -66,6 +68,11 @@ type App struct {
 	Tpl   *services.Templates
 	Log   *services.Logger
 	Check *services.Checker
+	// rates samples the rules' byte counters once a second, for the detail
+	// popover's throughput curve.
+	rates *rateSampler
+	// conf watches the exported nginx.conf for edits made outside the app.
+	conf *confWatch
 
 	// OnChange asks the window for a frame. Set by the UI.
 	OnChange func()
@@ -76,6 +83,28 @@ type App struct {
 	// mygo's clipboard, which needs the running app; a test leaves it nil
 	// and reads Copied instead.
 	Clipboard func(string)
+	// ReadClipboard takes text off the system clipboard, the inverse of
+	// Clipboard, for 粘贴导入. main.go wires it to mygo's; a test sets it
+	// to a string it holds, mirroring Copied's memory stance.
+	ReadClipboard func() (string, error)
+	// ShowWindow brings the main window to the front, for a deeplink
+	// that asks to be seen. main.go points it at the dock's Show, which
+	// needs the window; a test leaves it nil and a deeplink without it
+	// just does nothing about the window.
+	ShowWindow func()
+	// CheckUpdate asks the update feed for a newer version, returning nil
+	// when the app is up to date. main.go points it at mygo's updater,
+	// which works only in a packaged build with updates configured; a test
+	// leaves it nil and the settings page says updates are unavailable.
+	CheckUpdate func(ctx context.Context) (*UpdateInfo, error)
+	// InstallUpdate downloads and installs what CheckUpdate found, and
+	// RelaunchApp restarts the app once it did. Wired beside CheckUpdate,
+	// and nil together with it.
+	InstallUpdate func(ctx context.Context, progress func(fraction float64)) error
+	RelaunchApp   func()
+	// AppVersion is the running version, for the settings page. Set once
+	// in main.go before the window exists.
+	AppVersion string
 	// SaveDialog and OpenDialog ask the user where to put a file and
 	// which files to read. main.go points them at the native dialogs,
 	// which need the running app; a test leaves them nil, and the UI
@@ -115,6 +144,11 @@ type App struct {
 	copied string
 	// bg tracks RunBackground's goroutines, so Close can wait them out.
 	bg sync.WaitGroup
+	// closers hold the cleanups OnClose registered — the UI's terminal
+	// sessions hang up here — run once, before the store closes. Guarded
+	// by closeMu, which its own is: a terminal lands from a goroutine.
+	closers  []func()
+	closeMu  sync.Mutex
 	// applied is set once a rule set has been started, so that the table
 	// can tell "not started yet" from "started and not listening".
 	applied bool
@@ -130,11 +164,12 @@ type App struct {
 	// interpretTarget names the file, interpretSource says which entry
 	// asked ("import", "logs" or "panel"), so the card draws where the
 	// question came from.
-	interpretBusy   bool
-	interpretErr    string
-	interpretation  *ai.Interpretation
-	interpretTarget string
-	interpretSource string
+	interpretBusy      bool
+	interpretStreaming bool
+	interpretErr       string
+	interpretation     *ai.Interpretation
+	interpretTarget    string
+	interpretSource    string
 	// confImport remembers the last dropped .conf that merged in, so the
 	// mappings page can offer to interpret it after the import.
 	confImport *ConfImport
@@ -150,6 +185,14 @@ type App struct {
 	filterRationale string
 	filterIDs       map[string]bool
 
+	// The update the last check found, if any, and how far its download
+	// got: negative means unknown or not downloading. updateBusy covers a
+	// check or an install in flight. Written by the check and install
+	// goroutines, read by the settings page.
+	updateAvail    *UpdateInfo
+	updateProgress float64
+	updateBusy     bool
+
 	// UI state: main thread only.
 	page     Page
 	formOpen bool
@@ -161,6 +204,8 @@ type App struct {
 	templateOpen bool
 	confirm      *Confirm
 	snapshotView *model.Snapshot
+	confViewOpen bool
+	pastePending *PastePreview
 	theme        ThemeChoice
 	hostName     string
 	whitelistOn  bool
@@ -198,6 +243,8 @@ func New(p paths.Paths) (*App, error) {
 		Log:   services.NewLogger(st),
 		Check: services.NewChecker(st),
 	}
+	a.rates = newRateSampler(a.Eng, a.notify)
+	a.conf = newConfWatch(p.ExportDir, a.notify)
 	a.theme = ThemeChoice(st.Setting(store.SettingTheme, string(ThemeSystem)))
 	a.whitelistOn = st.WhitelistOn()
 	a.nginxLogRead = st.SettingBool(store.SettingNginxLogRead, true)
@@ -226,8 +273,36 @@ func New(p paths.Paths) (*App, error) {
 		_ = a.Reload()
 		a.notifyHealthChanges(changed)
 	}
+	// The sampler runs beside the checker: the popover's chart reads it, and
+	// it asks for a frame each tick that lands a sample.
+	a.rates.Start()
+	// The exported configuration is watched from the start, so an edit made
+	// while the app was closed is noticed at the first look too.
+	a.conf.start()
 	_ = st.TrimLogs(10000)
 	return a, nil
+}
+
+// OnClose registers a cleanup to run once, before the store closes, when
+// the app quits. The UI registers the sessions it owns here — a terminal
+// is a program the app started, and quitting should hang it up even
+// though this package knows nothing of terminals. Safe from any
+// goroutine.
+func (a *App) OnClose(fn func()) {
+	a.closeMu.Lock()
+	a.closers = append(a.closers, fn)
+	a.closeMu.Unlock()
+}
+
+// runClosers runs the registered cleanups once, first come first run.
+func (a *App) runClosers() {
+	a.closeMu.Lock()
+	fns := a.closers
+	a.closers = nil
+	a.closeMu.Unlock()
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 // Close stops the background work and closes the database.
@@ -236,7 +311,14 @@ func New(p paths.Paths) (*App, error) {
 // or an Import still writing rows would otherwise race the store closing
 // underneath them at quit.
 func (a *App) Close() {
+	a.runClosers()
 	a.Check.Stop()
+	if a.rates != nil {
+		a.rates.Stop()
+	}
+	if a.conf != nil {
+		a.conf.Stop()
+	}
 	_ = a.Eng.Stop()
 	a.bg.Wait()
 	if a.Store != nil {
@@ -292,6 +374,24 @@ func (a *App) RuleStatus() []engine.RuleStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return append([]engine.RuleStatus(nil), a.ruleStatus...)
+}
+
+// Throughput returns a rule's throughput history, one sample per second
+// oldest-first, for the popover's chart.
+func (a *App) Throughput(mappingID string) []float64 {
+	if a.rates == nil {
+		return nil
+	}
+	return a.rates.throughput(mappingID)
+}
+
+// CurrentRate is a rule's latest throughput in bytes per second, 0 with no
+// sample yet.
+func (a *App) CurrentRate(mappingID string) float64 {
+	if a.rates == nil {
+		return 0
+	}
+	return a.rates.current(mappingID)
 }
 
 // notify asks for a frame after the state changed.

@@ -1,0 +1,106 @@
+# Release builds: a tag v* builds the macOS and Windows apps and attaches
+# them, with SHA256 checksums, to a draft GitHub release.
+#
+# Unsigned on purpose. Signing and notarization need secrets this
+# repository does not have yet (a Developer ID certificate, Apple notary
+# credentials, a Windows code-signing certificate) — see
+# docs/release-and-updates.md for what to add when they exist. Until then
+# the artifacts are ad hoc signed on macOS, which Gatekeeper blocks on
+# other Macs, and unsigned on Windows, which SmartScreen warns about.
+# They are for the maintainer to install and to hand out, not for the
+# public.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # the draft release and the uploads to it
+
+jobs:
+  # The draft exists before the builds start, so both platforms upload to
+  # the same release instead of each creating one of its own.
+  draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+
+  build:
+    needs: draft-release
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, platform: darwin/universal, dir: build/darwin-universal }
+          - { name: Windows, os: windows-latest, platform: windows/amd64, dir: build/windows-amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The tag must name the version mygo.json carries: the release page
+      # and the file names both come from it, and a mismatch would ship
+      # one version under another's tag.
+      - name: Check the tag matches the version
+        shell: bash
+        run: |
+          version="$(grep -o '"version": *"[^"]*"' mygo.json | grep -o '[0-9][^"]*')"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match mygo.json version $version" >&2
+            exit 1
+          fi
+      - name: Build
+        # The key signs the update manifests and archives; without the
+        # secret the build skips them and the release is installers only,
+        # so the pipeline works before the secret exists too. See
+        # docs/release-and-updates.md for how the secret is set.
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform ${{ matrix.platform }}
+      # A release asset is a file; the macOS bundle is a directory. ditto
+      # zips it the way macOS unpacks bundles (resource forks, symlinks and
+      # the ad hoc signature intact), and the directory itself leaves the
+      # build folder so the upload below never meets it. The checksums file
+      # carries the platform's name, because both platforms write one and
+      # the second upload would clobber the first. Names with spaces are
+      # renamed before checksumming: GitHub dots the spaces in an asset's
+      # name, so a manifest naming "Setup 1.2.0.exe" never matches the file
+      # a download produces. The icon sources are build inputs, not
+      # release artifacts.
+      - name: Bundle and checksums
+        shell: bash
+        env:
+          LEG: ${{ matrix.name }}
+        run: |
+          cd "${{ matrix.dir }}"
+          if ls -d *.app >/dev/null 2>&1; then
+            app=$(ls -d *.app | head -1)
+            ditto -c -k --keepParent "$app" "${app%.app}-macos.zip"
+            rm -rf "$app"
+          fi
+          rm -f icon.png icon.svg
+          for f in *" "*; do
+            if [ -f "$f" ]; then
+              mv "$f" "${f// /-}"
+            fi
+          done
+          if command -v shasum >/dev/null; then
+            shasum -a 256 * > "SHA256SUMS-$LEG"
+          else
+            sha256sum * > "SHA256SUMS-$LEG"
+          fi
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" ${{ matrix.dir }}/* --repo "$GITHUB_REPOSITORY" --clobber

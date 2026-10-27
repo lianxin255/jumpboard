@@ -14,6 +14,7 @@ import (
 // of silently clearing it.
 type FormValues struct {
 	Name         string
+	Group        string // optional label, "" for ungrouped
 	Protocol     string // TCP / UDP / HTTP / HTTPS
 	ListenPort   string
 	ServerNames  string
@@ -117,6 +118,7 @@ func NewForm() FormValues {
 func FormFromMapping(m model.Mapping) FormValues {
 	f := NewForm()
 	f.Name = m.Name
+	f.Group = m.Group
 	f.Protocol = ProtocolLabel(m.Protocol)
 	f.ListenPort = itoa(m.ListenPort)
 	f.ServerNames = m.ServerNames
@@ -176,6 +178,7 @@ func (f *FormValues) Validate() (model.Mapping, map[string]string, bool) {
 	proto := protocolFromLabel(f.Protocol)
 	m := model.Mapping{
 		Name:                  strings.TrimSpace(f.Name),
+		Group:                 sanitizeGroup(f.Group),
 		Protocol:              proto,
 		Enabled:               true,
 		ServerNames:           strings.TrimSpace(f.ServerNames),
@@ -270,6 +273,40 @@ func (f FormValues) ListenPortSuggest() int {
 		return 8443
 	}
 	return 9000
+}
+
+// sanitizeGroup readies the group label for the store: trimmed, and no
+// longer than fifty runes — the length the import path caps groups at, so
+// a typed group and an imported one obey the same limit. The name gets
+// the same trim in Validate; the group adds the cap because the store's
+// column and the table's filter chips assume a short label.
+func sanitizeGroup(s string) string {
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > 50 {
+		return string(r[:50])
+	}
+	return s
+}
+
+// GroupSuggestions lists the group labels already in use, for the form's
+// autocomplete: the groups the rule book has are the ones the next rule
+// is most likely to join. First-seen order — the order the mappings page's
+// filter chips show them in.
+func (a *App) GroupSuggestions() []string {
+	mappings, err := a.Store.ListMappings()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, 8)
+	for _, m := range mappings {
+		if m.Group == "" || seen[m.Group] {
+			continue
+		}
+		seen[m.Group] = true
+		out = append(out, m.Group)
+	}
+	return out
 }
 
 func itoa(n int) string {

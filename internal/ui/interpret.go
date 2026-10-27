@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/lianxin255/jumpboard/internal/ai"
 )
@@ -81,35 +82,18 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 	})
 }
 
-// interpretBody draws the interpretation itself: the summary, then the
-// four sections, each only when the model filled it. The risks are the
-// one section painted in warning — it is the part meant to stop a
-// copy-paste.
+// interpretBody draws the interpretation itself: the markdown document
+// the model wrote (or the JSON fallback rendered into one), shown as it
+// streams and kept when it is finished. A streaming card mid-sentence and
+// a finished document are different renders — Stream paints progressively
+// for the arriving text, View lays the finished document out.
 func (v *View) interpretBody(c *ui.Context, t Tokens, ip ai.Interpretation) {
-	if ip.Summary != "" {
-		ui.Text(c, ip.Summary).FontSize(12).Bold().TextColor(t.FG).Wrap()
+	if ip.Text == "" {
+		return
 	}
-	sections := []struct {
-		title string
-		lines []string
-		warn  bool
-	}{
-		{"谁在听", ip.Listeners, false},
-		{"转发关系", ip.Forwards, false},
-		{"冲突与风险", ip.Risks, true},
-		{"注意事项", ip.Notes, false},
+	if v.App.InterpretStreaming() {
+		markdown.Stream(c, ip.Text, &markdown.Options{})
+		return
 	}
-	for _, s := range sections {
-		if len(s.lines) == 0 {
-			continue
-		}
-		ui.Text(c, s.title).FontSize(11).Bold().TextColor(t.Muted)
-		for _, line := range s.lines {
-			color := t.FG2
-			if s.warn {
-				color = t.Warning
-			}
-			ui.Text(c, "• "+line).FontSize(11).TextColor(color).Wrap()
-		}
-	}
+	markdown.View(c, ip.Text, &markdown.Options{})
 }

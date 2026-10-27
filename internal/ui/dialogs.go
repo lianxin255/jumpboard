@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -25,6 +27,12 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 	}
 	if sn := a.SnapshotView(); sn != nil {
 		v.snapshotDialog(c, t, sn)
+	}
+	if a.ConfViewOpen() {
+		v.confViewDialog(c, t)
+	}
+	if pv := a.PastePreview(); pv != nil {
+		v.pasteDialog(c, t, pv)
 	}
 	v.aiDialog(c, t)
 }
@@ -49,12 +57,14 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 
 	// fld is one labelled field: the label above the control, the error
-	// under it. Outside a ui.Form, Field draws exactly that.
-	fld := func(label, errKey string, fn func()) {
+	// under it. Outside a ui.Form, Field draws exactly that. The element
+	// comes back so a field can share a row and still take its share of it.
+	fld := func(label, errKey string, fn func()) ui.Element {
 		e := ui.Field(c, label, fn)
 		if msg := errs[errKey]; msg != "" {
 			e.Error(msg)
 		}
+		return e
 	}
 	// groupHead is the small heading above a set of fields.
 	groupHead := func(label string) {
@@ -96,8 +106,18 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 					ui.Scroll(c).Fill().Children(func() {
 						ui.Column(c).Gap(16).Children(func() {
 
-							fld("名称", "Name", func() {
-								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL")
+							// The name and its group share a row: the group is
+							// the name's qualifier, a label beside a label. The
+							// groups already in use suggest themselves, the way
+							// the upstream hosts do.
+							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+								fld("名称", "Name", func() {
+									ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
+								}).Grow(1)
+								fld("分组", "", func() {
+									ui.Autocomplete(c, &f.Group, v.App.GroupSuggestions()).
+										Placeholder("可选，如 数据库").Width(220)
+								})
 							})
 							ui.Field(c, "协议", func() {
 								protoIdx := appt.ProtocolIndex(f.Protocol)
@@ -431,37 +451,89 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	}
 }
 
-// snapshotDialog shows a saved configuration, read only.
+// snapshotDialog shows what rolling back to a saved configuration would
+// change: the rules as they stand against the snapshot, as a diff. The
+// generated header carries the time it was written, which would show as a
+// change on every snapshot, so that one line is blanked on both sides
+// before they are compared.
 func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
+	a := v.App
+	current, _, err := a.NginxExport()
+	if err != nil {
+		current = ""
+	}
+	diff := &editor.DiffState{
+		Old:          editor.NewBuffer(stripConfTimestamp(current)),
+		New:          editor.NewBuffer(stripConfTimestamp(sn.Content)),
+		Layout:       editor.DiffUnified,
+		Inline:       editor.DiffInlineWordAlt,
+		ContextLines: 3,
+	}
+	added, deleted := diff.Stats()
+
 	open := true
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(760).Gap(12).Padding(20).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "配置快照").FontSize(15).Bold().TextColor(t.FG)
+				ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(11).TextColor(t.Meta)
 				ui.Spacer(c)
 				ui.Text(c, formatTime(sn.CreatedAt)).FontSize(11).TextColor(t.Muted)
 			})
 			ui.Scroll(c).Height(460).Children(func() {
-				ui.Text(c, sn.Content).Font("monospace").FontSize(11).
-					TextColor(t.FG2).Selectable()
+				editor.DiffView(c, diff)
 			})
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if ui.Button(c, "关闭").Clicked() {
-					v.App.SetSnapshotView(nil)
+					a.SetSnapshotView(nil)
 				}
+				// The button used to roll back the moment it was clicked, with
+				// nothing to confirm against. The diff above is what the
+				// question refers to.
 				if ui.PrimaryButton(c, "回滚到此配置").Clicked() {
 					snap := *sn
-					v.App.SetSnapshotView(nil)
-					v.App.RunBackground(func() error { return v.App.RollbackSnapshot(snap) })
+					a.SetSnapshotView(nil)
+					a.Ask(&appt.Confirm{
+						Title: "回滚配置",
+						Body: fmt.Sprintf("回滚到 %s 的配置，相对当前 %+d −%d 行。当前配置会先存为一条快照。",
+							formatTime(snap.CreatedAt), added, deleted),
+						Label: "回滚",
+						Run:   func() error { return a.RollbackSnapshot(snap) },
+					})
 				}
 			})
 		})
 	})
-	if !open && v.App.SnapshotView() != nil {
-		v.App.SetSnapshotView(nil)
+	if !open && a.SnapshotView() != nil {
+		a.SetSnapshotView(nil)
 	}
+}
+
+// stripConfTimestamp blanks the generated header's timestamp, which changes
+// on every write and would otherwise be the only difference between two
+// identical rule sets. The line is kept, so the rest of the file stays on
+// the same line numbers.
+
+// snapshotDiffStats is the added and deleted line count the dialog shows,
+// computed the same way, so a test can check the numbers without a window.
+func snapshotDiffStats(current, snapshot string) (added, deleted int) {
+	d := &editor.DiffState{
+		Old: editor.NewBuffer(stripConfTimestamp(current)),
+		New: editor.NewBuffer(stripConfTimestamp(snapshot)),
+	}
+	return d.Stats()
+}
+func stripConfTimestamp(conf string) string {
+	const prefix = "# 生成时间: "
+	lines := strings.Split(conf, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			lines[i] = prefix
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // toast draws the last action's outcome.
@@ -522,4 +594,113 @@ func formatTime(ms int64) string {
 		return "—"
 	}
 	return timeAt(ms).Format("2006-01-02 15:04")
+}
+
+// confViewDialog shows the rules as they stand, as the configuration the
+// engine runs, in a read-only editor. It is the "what is my nginx.conf
+// right now" answer on the settings page: the text is regenerated each
+// frame from the mappings, so nothing is cached and a change made while
+// the viewer is open shows on the next frame. The buffer is the view's
+// own, so the caret and scroll survive the refresh; the language is
+// LanguageNamed("shell") — .conf is the syntax this file really is, not
+// the TOML that LanguageFor aliases it to.
+func (v *View) confViewDialog(c *ui.Context, t Tokens) {
+	a := v.App
+	if v.confEditor == nil {
+		v.confEditor = &editor.State{
+			Buffer:   editor.NewBuffer(""),
+			ReadOnly: true,
+			Label:    "当前 nginx 配置",
+		}
+		v.confEditor.Buffer.SetLanguage(editor.LanguageNamed("shell"))
+	}
+	conf, n, err := a.NginxExport()
+	if err != nil {
+		conf = "# " + err.Error() + "\n"
+	} else if conf == "" {
+		conf = "# 还没有映射，应用一次配置后这里才有内容。\n"
+	}
+	if v.confEditor.Buffer.String() != conf {
+		buf := editor.NewBuffer(conf)
+		buf.SetLanguage(editor.LanguageNamed("shell"))
+		v.confEditor.Buffer = buf
+	}
+
+	open := true
+	ui.Modal(c, &open, func() {
+		ui.Column(c).Width(860).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "当前配置").FontSize(15).Bold().TextColor(t.FG)
+				ui.Textf(c, "%d 条规则", n).FontSize(11).TextColor(t.Meta)
+				ui.Spacer(c)
+				ui.Text(c, "只读").FontSize(10).TextColor(t.Muted)
+				if ui.Button(c, "复制全文").FontSize(11).
+					Tooltip("把这份配置复制到剪贴板").Clicked() {
+					a.RunBackground(func() error { return a.CopyText(conf) })
+				}
+			})
+			ui.Box(c).Height(520).Clip().Children(func() {
+				editor.View(c, v.confEditor).Grow(1).FillWidth()
+			})
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if ui.Button(c, "关闭").Clicked() {
+					a.SetConfViewOpen(false)
+				}
+			})
+		})
+	})
+	if !open {
+		a.SetConfViewOpen(false)
+	}
+}
+
+// pasteDialog shows what a 粘贴导入 would do before it does it: the kind
+// the clipboard text turned out to be, how many mappings it touches, and
+// for a backup, the plain warning that everything now in the app is
+// replaced. Nothing is imported until 导入 runs, so a copy of the wrong
+// thing costs nothing.
+func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
+	a := v.App
+	open := true
+	title := "粘贴导入"
+	ui.Modal(c, &open, func() {
+		ui.Column(c).Width(520).Gap(12).Padding(20).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+			ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
+			kind := "nginx 配置"
+			if pv.Replace {
+				kind = "JumpBoard 备份"
+			}
+			ui.Text(c, "剪贴板内容是 "+kind).FontSize(12).TextColor(t.FG2)
+			ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
+				Background(t.Surface2).Border(1, t.Border).Children(func() {
+				ui.Text(c, pv.Detail).FontSize(12).TextColor(t.FG).Wrap()
+			})
+			if pv.Replace {
+				ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
+					FontSize(11).TextColor(t.Warning).Wrap()
+			} else {
+				ui.Text(c, "与现有规则合并，只新增，不改动已有的映射。").
+					FontSize(11).TextColor(t.Muted).Wrap()
+			}
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if ui.Button(c, "取消").Clicked() {
+					a.CancelPasteImport()
+				}
+				btn := ui.PrimaryButton(c, "导入").Label("导入粘贴内容")
+				if pv.Replace {
+					btn.Background(t.Warning)
+				}
+				if btn.Clicked() {
+					a.RunBackground(a.ConfirmPasteImport)
+				}
+			})
+		})
+	})
+	if !open {
+		a.CancelPasteImport()
+	}
 }

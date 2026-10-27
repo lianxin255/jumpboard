@@ -52,19 +52,19 @@ func (s *Store) SetHostName(name string) error {
 
 // mappingColumns is the SELECT list, in scanMapping's order. Inserts name
 // host_id as well, which a local-only build always sets to localHostID.
-const mappingColumns = `id, name, enabled, protocol, listen_port, server_names, listen_path,
+const mappingColumns = `id, name, group_name, enabled, protocol, listen_port, server_names, listen_path,
 	upstream_host, upstream_port, tls_cert_path, tls_key_path, redirect_http, extra_directives,
 	proxy_mode, proxy_headers, proxy_pass_url,
 	health_check_enabled, health_check_interval_sec, health_check_target_path, health_check_expected_status,
 	health_status, last_checked_at, sort_order, created_at, updated_at`
 
 // insertMapping writes one mapping, with the local host.
-const insertMapping = `INSERT INTO mappings (id, host_id, name, enabled, protocol, listen_port,
+const insertMapping = `INSERT INTO mappings (id, host_id, name, group_name, enabled, protocol, listen_port,
 	server_names, listen_path, upstream_host, upstream_port, tls_cert_path, tls_key_path,
 	redirect_http, extra_directives, proxy_mode, proxy_headers, proxy_pass_url,
 	health_check_enabled, health_check_interval_sec, health_check_target_path,
 	health_check_expected_status, health_status, last_checked_at, sort_order, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // scanMapping reads one mapping row.
 func scanMapping(sc interface{ Scan(...any) error }) (model.Mapping, error) {
@@ -81,7 +81,7 @@ func scanMapping(sc interface{ Scan(...any) error }) (model.Mapping, error) {
 		health                   string
 		lastChecked              sql.NullInt64
 	)
-	err := sc.Scan(&m.ID, &m.Name, &enabled, &m.Protocol, &listenPort, &serverNames, &listenPath,
+	err := sc.Scan(&m.ID, &m.Name, &m.Group, &enabled, &m.Protocol, &listenPort, &serverNames, &listenPath,
 		&m.UpstreamHost, &upstreamPort, &cert, &key, &redirect, &extra,
 		&proxyMode, &headers, &pass,
 		&hcEnabled, &hcInterval, &hcPath, &hcCode,
@@ -184,7 +184,7 @@ func (s *Store) CreateMapping(m model.Mapping) (model.Mapping, error) {
 		m.HealthStatus = model.HealthUnknown
 	}
 	_, err := s.db.Exec(insertMapping,
-		m.ID, localHostID, m.Name, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+		m.ID, localHostID, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 		m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP), m.ExtraDirectives,
 		string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
 		boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath, m.HealthCheckExpectedCode,
@@ -201,13 +201,13 @@ func (s *Store) UpdateMapping(m model.Mapping) error {
 	defer s.writeMu.Unlock()
 	m.UpdatedAt = nowMillis()
 	res, err := s.db.Exec(`UPDATE mappings SET
-		name=?, enabled=?, protocol=?, listen_port=?, server_names=?, listen_path=?,
+		name=?, group_name=?, enabled=?, protocol=?, listen_port=?, server_names=?, listen_path=?,
 		upstream_host=?, upstream_port=?, tls_cert_path=?, tls_key_path=?, redirect_http=?,
 		extra_directives=?, proxy_mode=?, proxy_headers=?, proxy_pass_url=?,
 		health_check_enabled=?, health_check_interval_sec=?, health_check_target_path=?,
 		health_check_expected_status=?, updated_at=?
 		WHERE id=?`,
-		m.Name, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+		m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 		m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP),
 		m.ExtraDirectives, string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
 		boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath,
@@ -247,6 +247,27 @@ func (s *Store) SetMappingHealth(id string, status model.HealthStatus, at int64)
 	return err
 }
 
+// MappingIDs lists the mappings' ids in the order the table shows them,
+// which is the order a move reorders. It is the cheap shape of
+// ListMappings: a reorder only needs the ids, and pulling every field of
+// every rule to move one is the sort of waste this list exists to skip.
+func (s *Store) MappingIDs() ([]string, error) {
+	rows, err := s.db.Query(`SELECT id FROM mappings ORDER BY sort_order, created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ReorderMappings applies a new sort order: ids[i] gets position i.
 func (s *Store) ReorderMappings(ids []string) error {
 	s.writeMu.Lock()
@@ -277,15 +298,17 @@ func (s *Store) ReplaceAllMappings(ms []model.Mapping) error {
 	if _, err := tx.Exec(`DELETE FROM mappings`); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM config_snapshots`); err != nil {
-		return err
-	}
+	// Snapshots are the history of the rules, not part of them: a
+	// rollback and an import both come through here, and wiping the
+	// history on the way in is how a rollback used to erase every
+	// snapshot it was meant to sit beside. The caller that wants a
+	// record of what it replaced saves one itself, before calling.
 	for i, m := range ms {
 		if m.ID == "" {
 			m.ID = newID()
 		}
 		if _, err := tx.Exec(insertMapping,
-			m.ID, localHostID, m.Name, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+			m.ID, localHostID, m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 			m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP), m.ExtraDirectives,
 			string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
 			boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath, m.HealthCheckExpectedCode,

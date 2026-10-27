@@ -33,6 +33,12 @@ type udpForwarder struct {
 	wg       sync.WaitGroup
 	conns    atomic.Int64
 	active   atomic.Int32
+	// bytesIn and bytesOut are the datagram bytes the rule moved, in from
+	// clients and back out to them. They live on the forwarder so a
+	// retarget — which keeps the socket — keeps the rule's totals, like
+	// conns.
+	bytesIn  atomic.Int64
+	bytesOut atomic.Int64
 }
 
 type udpSession struct {
@@ -85,8 +91,13 @@ func (f *udpForwarder) key() ruleKey {
 	return ruleKey{proto: model.UDP, listen: f.conn.LocalAddr().String(), upstream: f.target()}
 }
 
-func (f *udpForwarder) stats() (int64, int) {
-	return f.conns.Load(), int(f.active.Load())
+func (f *udpForwarder) stats(string) ruleStats {
+	return ruleStats{
+		connections: f.conns.Load(),
+		active:      int(f.active.Load()),
+		bytesIn:     f.bytesIn.Load(),
+		bytesOut:    f.bytesOut.Load(),
+	}
 }
 
 func (f *udpForwarder) readClients() {
@@ -113,7 +124,11 @@ func (f *udpForwarder) readClients() {
 		s.lastSeen.Store(time.Now().UnixNano())
 		if _, err := s.upstream.Write(buf[:n]); err != nil {
 			f.dropSession(clientAddr)
+			continue
 		}
+		// Only a datagram the upstream took counts: one dropped on a dead
+		// session moved nowhere.
+		f.bytesIn.Add(int64(n))
 	}
 }
 
@@ -175,6 +190,8 @@ func (f *udpForwarder) readUpstream(s *udpSession, key string) {
 			f.dropSessionByKey(key)
 			return
 		}
+		// What left for the client is the rule's traffic out.
+		f.bytesOut.Add(int64(n))
 	}
 }
 

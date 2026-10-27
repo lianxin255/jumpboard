@@ -3,5 +3,15 @@
   "identifier": "dev.lianxin.jumpboard",
   "version": "1.2.0",
   "copyright": "© 2026 lianxin",
-  "out": "build"
+  "out": "build",
+  "urlSchemes": [
+    "jumpboard"
+  ],
+  "updates": {
+    "publicKey": "0SNdmcXWzY4htKcDXdpKyI7Jt2sfEHGsPCrhyKM4bG0=",
+    "github": "lianxin255/jumpboard"
+  },
+  "macos": {
+    "minimumSystemVersion": "13.0"
+  }
 }

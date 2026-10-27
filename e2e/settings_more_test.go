@@ -61,8 +61,11 @@ func TestWhitelistEntryToggle(t *testing.T) {
 	waitFor(t, tt, "the address enabled again", enabled)
 }
 
-// TestSnapshotViewDialog opens a snapshot read-only and shows the
-// configuration it holds.
+// TestSnapshotViewDialog opens a snapshot as a diff against the rules as
+// they stand, and checks that rolling back from it asks first. The diff
+// itself is drawn rather than laid out as text, so what the test can read
+// is the summary line; the line counts behind it are checked in the ui
+// package.
 func TestSnapshotViewDialog(t *testing.T) {
 	a := testApp(t)
 	if _, err := a.Store.CreateMapping(streamRule(t, "快照里的站")); err != nil {
@@ -89,15 +92,23 @@ func TestSnapshotViewDialog(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("配置快照") || !tt.HasText("server {") || !tt.HasText("快照里的站") {
-		t.Fatalf("the snapshot content should show: %v", tt.Texts())
+	// The dialog names itself and shows how the snapshot differs from the
+	// rules now. The snapshot was just taken, so nothing differs.
+	if !tt.HasText("配置快照") || !tt.HasText("差异 +0") {
+		t.Fatalf("the snapshot dialog should show its diff summary: %v", tt.Texts())
 	}
-	if err := tt.Click("关闭"); err != nil {
+	// Rolling back asks before it acts.
+	if err := tt.Click("回滚到此配置"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	if a.ConfirmState() == nil || !tt.HasText("回滚配置") {
+		t.Fatalf("rollback should ask first: %v", tt.Texts())
+	}
+	a.ResolveConfirm(false)
+	tt.Frame()
 	if a.SnapshotView() != nil {
-		t.Error("closing should clear the snapshot view")
+		t.Error("confirming closed the snapshot view already")
 	}
 }
 
