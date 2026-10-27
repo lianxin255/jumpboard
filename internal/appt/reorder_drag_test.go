@@ -2,6 +2,7 @@ package appt
 
 import (
 	"net"
+	"slices"
 	"testing"
 
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -106,5 +107,25 @@ func TestReorderFilteredMappingsRefusesStale(t *testing.T) {
 	}
 	if got := order(t, a); got[0] != "一号" || got[1] != "二号" {
 		t.Fatalf("a refused drag must not touch the order: %v", got)
+	}
+}
+
+// TestReorderFilteredMappingsMovesSeveral is the multi-select drag: rows
+// that are not neighbours, chosen together, land as one block, and the
+// rows the filter hid keep their slots around it.
+func TestReorderFilteredMappingsMovesSeveral(t *testing.T) {
+	a := newTestApp(t)
+	ids := seedRules(t, a, "甲", "乙", "丙", "丁", "戊")
+	// The table showed 甲, 丙 and 戊 (乙 and 丁 filtered out); 甲 and 戊
+	// were chosen together and dragged to below 丙.
+	if err := a.ReorderFilteredMappings([]string{ids[2], ids[0], ids[4]}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"丙", "乙", "甲", "丁", "戊"}
+	if got := order(t, a); !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+	if a.Dirty() {
+		t.Error("a drag must not mark the configuration dirty")
 	}
 }
