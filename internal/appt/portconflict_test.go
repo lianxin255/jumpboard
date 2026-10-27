@@ -166,7 +166,7 @@ func TestSaveFormPortConflict(t *testing.T) {
 
 	// Another saved rule, so the suggestion has a mapping port to step over.
 	claimed := sparePort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "已占映射", Protocol: model.TCP, Enabled: true,
 		ListenPort: claimed, UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	}); err != nil {
@@ -213,7 +213,7 @@ func TestSaveFormPortConflict(t *testing.T) {
 	}
 	// 已占映射 and the first, saved rule are the only rows: the refused
 	// save wrote nothing.
-	if list, _ := a.Store.ListMappings(); len(list) != 2 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 2 {
 		t.Fatalf("the refused save must not write a row: %d rows", len(list))
 	}
 
@@ -226,7 +226,7 @@ func TestSaveFormPortConflict(t *testing.T) {
 	if err := a.SaveForm(); err != nil {
 		t.Fatalf("saving on the offered port: %v", err)
 	}
-	list, _ := a.Store.ListMappings()
+	list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 	if len(list) != 3 || list[2].ListenPort != fix {
 		t.Fatalf("the resaved rule should sit on %d: %+v", fix, list)
 	}
@@ -238,7 +238,7 @@ func TestSaveFormPortConflict(t *testing.T) {
 func TestSaveFormPortClaimedByMapping(t *testing.T) {
 	a := droppedApp(t)
 	claimed := sparePort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "数据库", Protocol: model.TCP, Enabled: true,
 		ListenPort: claimed, UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 	}); err != nil {
@@ -291,7 +291,7 @@ func TestBindHint(t *testing.T) {
 
 	t.Run("two rules name the pair", func(t *testing.T) {
 		for _, name := range []string{"一", "二"} {
-			if _, err := a.Store.CreateMapping(model.Mapping{
+			if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 				Name: name, Protocol: model.TCP, Enabled: true,
 				ListenPort: held, UpstreamHost: "127.0.0.1", UpstreamPort: 1,
 			}); err != nil {

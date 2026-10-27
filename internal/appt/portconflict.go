@@ -137,7 +137,7 @@ func findFreePort(start int, free func(int) bool) int {
 // would only move the error one save later.
 func (a *App) suggestPort(start int, proto model.Protocol) int {
 	taken := map[int]bool{}
-	if mappings, err := a.Store.ListMappings(); err == nil {
+	if mappings, err := a.Store.ListMappings(a.ActiveWorkspace()); err == nil {
 		for _, m := range mappings {
 			if m.ListenPort != 0 {
 				taken[m.ListenPort] = true
@@ -171,7 +171,7 @@ func (a *App) engineHoldsFor(mappingID string, port int) bool {
 // own port is not a conflict with itself; web rules of one protocol may
 // share a port, so they are no claim on each other either.
 func (a *App) claimant(port int, proto model.Protocol, excludeID string) *model.Mapping {
-	mappings, err := a.Store.ListMappings()
+	mappings, err := a.Store.ListMappings(a.ActiveWorkspace())
 	if err != nil {
 		return nil
 	}
@@ -224,7 +224,7 @@ func (a *App) bindHint(err error) string {
 	// the listener under the port rather than binding against it, so the
 	// holder is someone else and the process lookup says who.
 	var owners []string
-	if mappings, mErr := a.Store.ListMappings(); mErr == nil {
+	if mappings, mErr := a.Store.ListMappings(a.ActiveWorkspace()); mErr == nil {
 		for _, m := range mappings {
 			if m.Enabled && m.ListenPort == bind.Port && clash(m.Protocol, proto) {
 				owners = append(owners, m.Name)

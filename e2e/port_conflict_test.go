@@ -73,7 +73,7 @@ func TestFormPortConflictOffersFix(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the rule saved on the offered port", func() bool {
-		list, _ := a.Store.ListMappings()
+		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		return len(list) == 1 && list[0].ListenPort == fix
 	})
 }
@@ -84,7 +84,7 @@ func TestFormPortConflictOffersFix(t *testing.T) {
 func TestApplyFailureNamesHolder(t *testing.T) {
 	a := testApp(t)
 	held := holdPort(t)
-	if _, err := a.Store.CreateMapping(model.Mapping{
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
 		Name: "占用演示", Protocol: model.TCP, Enabled: true, ListenPort: held,
 		UpstreamHost: "127.0.0.1", UpstreamPort: 3306,
 	}); err != nil {

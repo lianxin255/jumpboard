@@ -140,7 +140,7 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 	if err := a.SaveForm(); err == nil {
 		t.Fatal("saving a draft onto a taken port should be refused")
 	}
-	if list, _ := a.Store.ListMappings(); len(list) != 0 {
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Error("nothing should have been saved")
 	}
 	if fix := a.FormPortFix(); fix == 0 || fix == conflict {
