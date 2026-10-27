@@ -26,8 +26,11 @@ test-race:
 test-ui:
 	$(GO) test ./e2e/ ./internal/appt/ ./internal/serial/ -run 'TestMapping|TestValidation|TestTheme|TestFollow|TestForced|TestForce|TestWhitelist|TestLog|TestTemplate|TestClone|TestToggle|TestHealth|TestExport|TestImport|TestWipe|TestAI|TestAskAI|TestAIFilter|TestClearAIFilter|TestKeyboard|TestToast|TestCopyAddress|TestEngineSwitch|TestAppLog|TestAccessLog|TestHistoryRollback|TestDataRoundTrip|TestBatch|TestConf|TestExternalConfEdit|TestDiagnose|TestDirective|TestDrag|TestMultiSelect|TestMoveMapping|TestReorder|TestDrop|TestFilter|TestForm|TestGroup|TestHotkey|TestSetHotkey|TestInstallUpdate|TestCheckUpdate|TestInterpret|TestOnClose|TestApplyNotifies|TestPaste|TestParseDeeplink|TestHandleDeeplink|TestRate|TestSampler|TestThroughput|TestTruncate|TestSearch|TestSettings|TestSetTheme|TestSidebar|TestTerminal|TestSerial|TestTraffic' -count=1 -v
 
+# The engine tests: the forwarding engine's own package plus the
+# end-to-end ones that drive traffic through a real app. The families
+# cover every test in ./internal/engine/.
 test-engine:
-	$(GO) test ./internal/engine/ ./e2e/ -run 'TestTCP|TestUDP|TestHTTP|TestTLS|TestWhitelist|TestApply|TestCheck|TestSnapshot|TestQuit|TestProxy|TestMinimal|TestCustom|TestStop|TestRuleState' -count=1 -v
+	$(GO) test ./internal/engine/ ./e2e/ -run 'TestTCP|TestUDP|TestHTTP|TestTLS|TestWhitelist|TestApply|TestCheck|TestSnapshot|TestQuit|TestProxy|TestMinimal|TestCustom|TestStop|TestRuleState|TestAccessLog|TestBadCert|TestPathPrefix|TestReapply|TestRetarget|TestPortConflict|TestSamePort|TestTimeout|TestUnknownHost|TestUnsupported' -count=1 -v
 
 # The end-to-end tests exercise most of the app, so the coverage counts
 # every internal package, whichever test touched it.

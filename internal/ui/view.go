@@ -35,6 +35,13 @@ type View struct {
 	// main-thread home.
 	aiFilterPrompt string
 	table          ui.ListState
+	// chosen is the rows the table has chosen, by mapping id: a click
+	// chooses one, ⌘-click adds or takes one out, ⇧-click a run, ⌘A all
+	// shown. A drag of a chosen row carries the whole choice, so several
+	// rules move as one block. Like the table's other row state, the
+	// choice follows its rows — the Key's ids — through filtering,
+	// reordering and reloading.
+	chosen ui.Selection[string]
 	// detailID is the mapping whose detail popover is open, "" for none.
 	// One popover at a time: opening another row's 详情 closes the first.
 	detailID string
@@ -514,16 +521,24 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			return
 		}
 
-		// The rows keep their state by ID as the list changes. No row is
-		// chosen: the table's highlight paints over the badges and status
-		// colors a row carries, and nothing here acts on a chosen row.
+		// The rows keep their state by ID as the list changes, so the
+		// choice below follows its rows as they are filtered, reordered
+		// and reloaded, and a row dragged away stays itself.
 		v.table.Key = func(i int) any { return filtered[i].ID }
 		v.table.Label = func(i int) string { return filtered[i].Name }
+		// Rows can be chosen together: a click chooses one, ⌘-click adds
+		// or takes one out, ⇧-click a run, ⌘A everything shown. The
+		// choice is what a drag of a chosen row carries, as the desktop
+		// does; nothing else here acts on it, and a right-click on a row
+		// not chosen chooses it alone before its menu opens.
+		v.table.Selection = &v.chosen
 		// A row dragged to a new place reorders through the same store
 		// call the context menu's 上移/下移 use. The toolkit carries the
-		// row at half opacity and draws the line it would land on; what
-		// the drop hands over are the dragged rows and the row they go
-		// before, in the indices of the list as it stands.
+		// dragged rows at half opacity and draws the line they would land
+		// on; what the drop hands over are the dragged rows — the whole
+		// choice when the row grabbed is one of them, else that row
+		// alone — and the row they go before, in the indices of the list
+		// as it stands.
 		v.table.Reorder = func(rows []int, to int) {
 			inDrag := make(map[int]bool, len(rows))
 			moved := make([]string, 0, len(rows))
