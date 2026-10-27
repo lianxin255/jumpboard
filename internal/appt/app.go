@@ -205,7 +205,10 @@ type App struct {
 	form     FormValues
 	// formErrs are the fields the last save found wrong, cleared when the
 	// form is saved or reopened.
-	formErrs     map[string]string
+	formErrs map[string]string
+	// formPortFix is the free port offered when ListenPort is taken, 0
+	// when no fix was found or the port is valid.
+	formPortFix  int
 	templateOpen bool
 	confirm      *Confirm
 	snapshotView *model.Snapshot
