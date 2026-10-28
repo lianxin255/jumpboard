@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 
@@ -154,4 +157,36 @@ func main() {
 	// than a shot — this is the page a first run shows.
 	shoot("terminal-dark", appt.PageTerminal, appt.ThemeDark, true, nil)
 	shoot("terminal-light", appt.PageTerminal, appt.ThemeLight, false, nil)
+
+	// The chat page needs four frames: the door a user without AI lands
+	// on, and a conversation with drafts to import — both themes. The
+	// conversation is a real round against a fake gateway (the e2e
+	// stand-in's shape, one reply carrying two drafts), run synchronously
+	// so the state lands before the frame. These come last, because a
+	// configured AI adds the panel's button to the mappings page: an
+	// earlier SetAI would repaint the shots above with an entry only some
+	// users have.
+	shoot("chat-unconfigured-dark", appt.PageAIChat, appt.ThemeDark, true, nil)
+	shoot("chat-unconfigured-light", appt.PageAIChat, appt.ThemeLight, false, nil)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reply := "两条映射如下：\n\n```json\n{\"drafts\":[" +
+			`{"name":"内网 MySQL","protocol":"tcp","listenPort":9000,"upstreamHost":"192.168.1.10","upstreamPort":3306,"explanation":"把内网 MySQL 暴露到 9000"},` +
+			`{"name":"内网 Redis","protocol":"tcp","listenPort":9001,"upstreamHost":"192.168.1.11","upstreamPort":6379,"explanation":"把内网 Redis 暴露到 9001"}]}` +
+			"\n```\n\n导入前可再调整端口。"
+		data, _ := json.Marshal(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"content": reply}}},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	}))
+	defer srv.Close()
+	if err := a.SetAI(srv.URL, "chat-model"); err != nil {
+		panic(err)
+	}
+	if err := a.RunChatSync("把内网 MySQL 和 Redis 分别暴露到 9000/9001"); err != nil {
+		panic(err)
+	}
+	shoot("chat-ready-dark", appt.PageAIChat, appt.ThemeDark, true, nil)
+	shoot("chat-ready-light", appt.PageAIChat, appt.ThemeLight, false, nil)
 }

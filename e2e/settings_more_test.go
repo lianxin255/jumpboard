@@ -33,10 +33,11 @@ func TestWhitelistEntryToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	fillField(t, tt, "白名单地址", "10.1.2.3")
-	if err := tt.Click("添加"); err != nil {
-		t.Fatal(err)
-	}
+	// The AI card now leads the settings page, so the cards these walks
+	// touch sit below the fold of the default window; they are reached
+	// the way a user reaches them, by scrolling to them.
+	fillFieldScrolled(t, tt, "白名单地址", "10.1.2.3")
+	clickScrolled(t, tt, "添加")
 	waitFor(t, tt, "the address row", func() bool { return tt.HasText("10.1.2.3") })
 
 	enabled := func() bool {
@@ -192,9 +193,7 @@ func TestExportNginxButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("导出 nginx 配置"); err != nil {
-		t.Fatal(err)
-	}
+	clickScrolled(t, tt, "导出 nginx 配置")
 	tt.Frame()
 	data, err := os.ReadFile(out)
 	if err != nil {

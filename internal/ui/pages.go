@@ -328,11 +328,16 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		ui.Column(c).Gap(3).Children(func() {
 			ui.Text(c, "设置").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "外观、访问控制与数据管理").FontSize(SubtitleSz).TextColor(t.Muted)
+			ui.Text(c, "AI 配置、外观、访问控制与数据管理").FontSize(SubtitleSz).TextColor(t.Muted)
 		})
 
 		ui.Scroll(c).Children(func() {
 			ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
+				// The AI card leads the page: the chat page's 去设置 lands
+				// here for it, and a card below the fold would need the
+				// user to scroll to the one thing they came for.
+				v.aiCard(c, t)
+
 				v.card(c, t, "外观", func() {
 					ui.Field(c, "主题", func() {
 						if ui.Segmented(c, &themeIdx, "跟随系统", "亮色", "暗色").Label("主题").Changed() {
@@ -428,8 +433,6 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							FontSize(11).TextColor(t.Warning)
 					}
 				})
-
-				v.aiCard(c, t)
 
 				v.card(c, t, "备份与快照", func() {
 					ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").

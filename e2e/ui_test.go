@@ -246,9 +246,7 @@ func TestWhitelistRefusesEmpty(t *testing.T) {
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("启用白名单"); err != nil {
-		t.Fatalf("clicking the whitelist switch: %v", err)
-	}
+	clickScrolled(t, tt, "启用白名单")
 	tt.Frame()
 	// The switch calls back into the app as it flips; the change lands
 	// before the next frame.
@@ -262,10 +260,8 @@ func TestWhitelistRefusesEmpty(t *testing.T) {
 	}
 
 	// Adding an address makes it work.
-	fillField(t, tt, "白名单地址", "192.168.1.0/24")
-	if err := tt.Click("添加"); err != nil {
-		t.Fatal(err)
-	}
+	fillFieldScrolled(t, tt, "白名单地址", "192.168.1.0/24")
+	clickScrolled(t, tt, "添加")
 	waitFor(t, tt, "the address in the list", func() bool { return tt.HasText("192.168.1.0/24") })
 }
 

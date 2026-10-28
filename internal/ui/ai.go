@@ -186,11 +186,13 @@ func (v *View) runAI() {
 }
 
 // aiEntry draws the button that opens the AI panel, when AI is configured.
+// The tooltip points on to the chat page: two doors to the same model, and
+// a user who has not met the second should hear it exists.
 func (v *View) aiEntry(c *ui.Context, t Tokens) {
 	if !v.App.AIReady() {
 		return
 	}
-	if ui.Button(c, "✨ AI 建映射").Tooltip("用一句话描述，可一次生成多条草稿").Clicked() {
+	if ui.Button(c, "✨ AI 建映射").Tooltip("用一句话描述，可一次生成多条草稿；要连续追问或聊配置，用侧栏的「AI 对话」").Clicked() {
 		v.ai.open = true
 	}
 }

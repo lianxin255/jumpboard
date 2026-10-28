@@ -63,13 +63,13 @@ func TestAIChatImportsDraftsIntoWorkspace(t *testing.T) {
 	}
 	waitFor(t, tt, "the reply and its preview", func() bool {
 		return tt.HasText("两条映射如下") && tt.HasText("配置预览（2 条）") &&
-			tt.HasText("内网 MySQL") && tt.HasText("导入到当前工作区")
+			tt.HasText("内网 MySQL") && tt.HasText("导入到当前场景")
 	})
 	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Fatalf("talking must store nothing: %+v", list)
 	}
 
-	if err := tt.Click("导入到当前工作区"); err != nil {
+	if err := tt.Click("导入到当前场景"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

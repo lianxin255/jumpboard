@@ -60,7 +60,8 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 }
 
 // chatNotReady is the page a user without AI configured lands on: what
-// is missing, and the one button that goes where it is fixed.
+// is missing, and the one button that goes where it is fixed. The card
+// the settings open on is the AI one, so the landing needs no scroll.
 func (v *View) chatNotReady(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
 		ui.Box(c).Width(460).Padding(32, 28).Radius(RadiusModal).
@@ -110,7 +111,6 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 		}
 		items = append(items, chatItem{kind: 5})
 	}
-	_ = streaming
 
 	v.chatListState.Key = func(i int) any {
 		switch items[i].kind {
@@ -133,7 +133,7 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 
 	ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
 		ui.List(c, &v.chatListState, len(items), func(i int) {
-			v.chatRow(c, t, items[i], errText, note, drafts, busy)
+			v.chatRow(c, t, items[i], errText, note, drafts, busy, streaming, partial)
 		}).Grow(1).Padding(14, 16).Gap(12).Justify(ui.End).Children(func() {
 			if len(items) == 0 {
 				ui.Text(c, "说说你想转发的服务，比如：把内网 MySQL 和 Redis 分别暴露到 9000/9001").
@@ -143,8 +143,10 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 	})
 }
 
-// chatRow draws one item of the conversation's list.
-func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note string, drafts []appt.AIDraft, busy bool) {
+// chatRow draws one item of the conversation's list. The partial reply
+// rides the list as the last assistant turn (see chatList), so streaming
+// says whether that turn is still on its way.
+func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note string, drafts []appt.AIDraft, busy, streaming bool, partial string) {
 	switch it.kind {
 	case 0:
 		if it.turn.Role == ai.RoleUser {
@@ -156,7 +158,15 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 			return
 		}
 		ui.Column(c).MaxWidth(760).Gap(6).Children(func() {
-			markdown.View(c, ai.WithoutDraftBlocks(it.turn.Content), &markdown.Options{})
+			// The mygo chat shape: the reply on its way renders with
+			// markdown.Stream, which paces what arrived and completes
+			// half-written syntax; a finished turn with markdown.View,
+			// whose parse carries on.
+			if streaming && it.turn.Content == partial {
+				markdown.Stream(c, ai.WithoutDraftBlocks(it.turn.Content), &markdown.Options{})
+			} else {
+				markdown.View(c, ai.WithoutDraftBlocks(it.turn.Content), &markdown.Options{})
+			}
 			if it.turn.Content != "" && ai.WithoutDraftBlocks(it.turn.Content) == "" {
 				ui.Text(c, "（这条回复只有配置草稿，见下方预览）").FontSize(11).TextColor(t.Muted)
 			}
@@ -227,7 +237,7 @@ func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, bus
 	a := v.App
 	ui.Row(c).Gap(8).AlignItems(ui.Center).MaxWidth(760).Children(func() {
 		ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(11).TextColor(t.Muted).Grow(1)
-		if ui.PrimaryButton(c, "导入到当前工作区").Disabled(busy).
+		if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).
 			Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
 			n := len(drafts)
 			a.Ask(&appt.Confirm{

@@ -24,9 +24,9 @@ func TestConfViewerOpens(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("查看当前配置"); err != nil {
-		t.Fatal(err)
-	}
+	// The viewer's button sits below the fold now that the AI card leads
+	// the settings page; scroll to it the way a user would.
+	clickScrolled(t, tt, "查看当前配置")
 	waitFor(t, tt, "the configuration viewer", func() bool { return tt.HasText("当前配置") })
 	for _, want := range []string{"复制全文", "只读", "关闭"} {
 		if !tt.HasText(want) {
