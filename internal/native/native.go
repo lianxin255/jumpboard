@@ -32,7 +32,11 @@ func Notify(title, body string) {
 	if !mygo.NotificationsSupported() {
 		return
 	}
-	if err := mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body}).Show(); err != nil {
+	if err := mygo.NewNotification(mygo.NotificationOptions{
+		ID:    "jumpboard.notice",
+		Title: title,
+		Body:  body,
+	}).Show(); err != nil {
 		log.Printf("通知未送达（%v）：%s - %s", err, title, body)
 	}
 }
@@ -89,6 +93,7 @@ func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
 		{Role: mygo.RoleQuit},
 	})
 	if tray, err := mygo.NewTray(mygo.TrayOptions{
+		ID:             "jumpboard.tray",
 		Icon:           icon,
 		IconIsTemplate: template,
 		ToolTip:        "JumpBoard",
@@ -116,6 +121,18 @@ func Setup(a *appt.App, win *mygo.Window, appIcon []byte) *Dock {
 			})
 		}
 	}
+
+	// Clicking a desktop notification brings the main window forward.
+	mygo.App.OnNotificationClick(func(string) {
+		d.Show()
+	})
+
+	// macOS reopen: clicking the Dock icon when the window is hidden brings it back.
+	mygo.App.OnActivate(func(hasVisibleWindows bool) {
+		if !hasVisibleWindows {
+			d.Show()
+		}
+	})
 
 	// The global show/hide shortcut is a setting the settings card can
 	// change while the app runs; appt holds the stored value and this
@@ -203,6 +220,12 @@ func (d *Dock) setHotkey(oldAcc, newAcc string) error {
 // re-tints for light and dark bars. A template icon over the full-colour
 // resources/icon.png, which was drawn for the Dock's size and would read
 // as a muddy 16-pixel blob up there.
+//
+// The glyph is drawn thick on purpose: a 6px-wide pad at @2x reads as a
+// hairline's 3px at the bar's 1x scale, and a thin icon is what the bar
+// renders as near-invisible in its overflow manager. Both pads stand
+// 15px tall and the connector is 5px thick, so the mark keeps its weight
+// wherever macOS puts it.
 func trayIcon() []byte {
 	const size = 32
 	img := image.NewNRGBA(image.Rect(0, 0, size, size))
@@ -215,14 +238,34 @@ func trayIcon() []byte {
 			}
 		}
 	}
-	// Left pad, right pad, and the hop: a shaft with a head, leaning up.
-	fill(3, 13, 8, 18)
-	fill(23, 13, 28, 18)
-	fill(10, 15, 18, 16)
-	for i := 0; i < 5; i++ {
-		fill(18+i, 13-i, 19+i, 14-i)
+	// The pads: the local port on the left, the upstream on the right,
+	// both 6 wide and 15 tall with the corners clipped to read as round.
+	pad := func(x0 int) {
+		fill(x0, 10, x0+5, 22)
+		// Clip the outer corners: the pad reads rounded without a radius.
+		img.SetNRGBA(x0, 10, color.NRGBA{})
+		img.SetNRGBA(x0, 22, color.NRGBA{})
+	}
+	pad(3)
+	pad(23)
+	// The connector: the forwarding itself, a thick shaft meeting an
+	// arrowhead that lands inside the right pad's height.
+	fill(9, 14, 15, 18)
+	// The arrowhead: a triangle whose tip is the far edge of the shaft.
+	for dy := -5; dy <= 5; dy++ {
+		for x := 15; x <= 20-(abs(dy)); x++ {
+			img.SetNRGBA(x, 16+dy, black)
+		}
 	}
 	var b bytes.Buffer
 	_ = png.Encode(&b, img)
 	return b.Bytes()
+}
+
+// abs is the integer absolute value, for the arrowhead's slope.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
