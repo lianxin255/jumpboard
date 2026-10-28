@@ -1,7 +1,10 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/lianxin255/jumpboard/internal/model"
@@ -133,5 +136,65 @@ func TestAIFilterEmptyAnswer(t *testing.T) {
 	})
 	if _, _, query, _, ids := a.AIFilterState(); query != "" || len(ids) != 0 {
 		t.Errorf("clearing should retire the filter: %q %v", query, ids)
+	}
+}
+
+// TestAIFilterServerErrorClears walks the failure path: a gateway that
+// refuses the filter leaves the error in red with the button that retires
+// it. The failure hides no rows — that is the empty answer's business, not
+// an error's — and the button puts the filter state back the page starts
+// in, the way ClearAIFilter promises for a landed error.
+func TestAIFilterServerErrorClears(t *testing.T) {
+	a := testApp(t)
+	for i, name := range []string{"报错甲", "报错乙"} {
+		if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
+			Name: name, Protocol: model.TCP, ListenPort: 19701 + i,
+			UpstreamHost: "127.0.0.1", UpstreamPort: 3306, Enabled: true,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := a.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]string{"message": "filter down"},
+		})
+	}))
+	t.Cleanup(srv.Close)
+	a.SetAI(srv.URL, "test-model")
+
+	tt := tester(t, a, 1200, 760)
+	tt.Frame()
+	fillField(t, tt, "AI 筛选", "3306")
+	if err := tt.Click("开始筛选"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the failure to land", func() bool {
+		return tt.HasText("AI 筛选失败")
+	})
+	if !tt.HasText("500") {
+		t.Errorf("the failure should name the status: %v", tt.Texts())
+	}
+
+	// A failed ask must not hide rows: the table keeps every mapping the
+	// way a landed filter never would.
+	for _, name := range []string{"报错甲", "报错乙"} {
+		if !tt.HasText(name) {
+			t.Errorf("%s should stay on screen after a failure: %v", name, tt.Texts())
+		}
+	}
+
+	// The error's clear button retires the failure and the state behind it.
+	if err := tt.Click("清除筛选"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the failure to clear", func() bool {
+		return !tt.HasText("AI 筛选失败")
+	})
+	if _, errText, query, _, ids := a.AIFilterState(); errText != "" || query != "" || len(ids) != 0 {
+		t.Errorf("clearing should retire the error: %q %q %v", errText, query, ids)
 	}
 }

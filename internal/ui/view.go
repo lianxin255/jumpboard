@@ -399,8 +399,8 @@ func (v *View) pendingBar(c *ui.Context, t Tokens, busy bool) {
 				ui.Text(c, "有未生效的改动").FontSize(13).Bold().TextColor(t.AmberText)
 				ui.Text(c, "未应用 · 重新加载后对外生效").FontSize(11).TextColor(t.AmberText)
 			})
-			if ui.PrimaryButton(c, "立即应用").Disabled(busy).
-				Tooltip("应用配置（⌘R）").Clicked() {
+			if ui.PrimaryButton(c, "应用配置").Disabled(busy).
+				Tooltip("让改动生效（⌘R）").Clicked() {
 				a.RunBackground(a.Apply)
 			}
 		})

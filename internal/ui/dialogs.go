@@ -282,7 +282,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 
 				ui.Divider(c)
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "「保存」只入库；「立即生效」保存并应用配置").FontSize(11).TextColor(t.Muted)
+					ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(11).TextColor(t.Muted)
 					ui.Spacer(c)
 					if ui.Button(c, "取消").Clicked() {
 						a.CloseForm()
@@ -292,8 +292,8 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 						a.SetForm(f)
 						a.RunBackground(a.SaveForm)
 					}
-					if ui.PrimaryButton(c, "立即生效").
-						Tooltip("保存规则并立即应用配置").Label("立即生效").Clicked() {
+					if ui.PrimaryButton(c, "应用配置").
+						Tooltip("保存规则并应用配置").Clicked() {
 						f := f
 						a.SetForm(f)
 						a.RunBackground(a.SaveFormAndApply)

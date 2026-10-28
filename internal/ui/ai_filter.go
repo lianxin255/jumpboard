@@ -36,12 +36,15 @@ func (v *View) aiFilterBar(c *ui.Context, t Tokens) {
 	}
 }
 
-// aiFilterResult draws the slim line an ask leaves under the toolbar:
-// the error in red when it failed, and — once it landed — the query, the
-// model's one-line rationale, how many rows survived and the button that
-// puts the table back. When nothing matched, the empty-state card below
-// already carries the clear button, so this line does not add a second
-// one; its rationale is the sentence that card's hint cannot know.
+// aiFilterResult draws the slim line an ask leaves under the toolbar.
+// A failed ask shows the error in red with the button that retires it —
+// ClearAIFilter clears a landed error as readily as a landed filter, and
+// this button is that promise's way in. A landed one shows the query,
+// the model's one-line rationale, how many rows survived and the button
+// that puts the table back; when nothing matched, the empty-state card
+// below already carries the clear button, so this line does not add a
+// second one, and its rationale is the sentence that card's hint cannot
+// know.
 func (v *View) aiFilterResult(c *ui.Context, t Tokens) {
 	a := v.App
 	busy, errText, query, rationale, ids := a.AIFilterState()
@@ -51,6 +54,10 @@ func (v *View) aiFilterResult(c *ui.Context, t Tokens) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if errText != "" {
 			ui.Text(c, "AI 筛选失败："+errText).FontSize(11).TextColor(t.Danger)
+			if ui.Button(c, "清除筛选").FontSize(11).
+				Tooltip("关掉这条失败提示，回到全部映射").Clicked() {
+				a.ClearAIFilter()
+			}
 			return
 		}
 		line := "AI 筛选「" + query + "」"
