@@ -27,7 +27,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
 				ui.Text(c, "日志").FontSize(TitleSize).Bold().TextColor(t.FG)
-				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(SubtitleSz).TextColor(t.Muted)
+				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(NoteSize).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
 			// No fixed width: the control sizes to its labels. Width(220)
@@ -46,7 +46,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					Tooltip("把操作日志全量导出为文本文件").Clicked() {
 					v.exportAppLogs()
 				}
-				if ui.Button(c, "清空操作日志").Disabled(busy).Clicked() {
+				if DangerQuietButton(c, t, "清空操作日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
 						Title: "清空操作日志", Body: "所有操作记录都会被删除。",
 						Label: "清空", Destructive: true,
@@ -70,7 +70,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					Tooltip("把 access.log 全量导出").Clicked() {
 					v.exportAccessLog()
 				}
-				if ui.Button(c, "清空访问日志").Disabled(busy).Clicked() {
+				if DangerQuietButton(c, t, "清空访问日志").Disabled(busy).Clicked() {
 					a.Ask(&appt.Confirm{
 						Title: "清空访问日志", Body: "引擎写的 access.log 会被清空。",
 						Label: "清空", Destructive: true,
@@ -124,7 +124,7 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 
 	if len(shown) == 0 {
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "没有日志").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "没有日志").FontSize(NoteSize).TextColor(t.Muted)
 		})
 		return
 	}
@@ -148,11 +148,11 @@ func (v *View) appLogList(c *ui.Context, t Tokens, logs []model.LogEntry) {
 		}
 		ui.Row(c).Gap(10).Padding(8, 14).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
-			ui.Text(c, formatClock(e.Timestamp)).FontSize(11).TextColor(t.Muted).Width(70)
+			ui.Text(c, formatClock(e.Timestamp)).FontSize(CaptionSize).TextColor(t.Muted).Width(70)
 			ui.Box(c).Width(52).Radius(RadiusBadge).Background(tint).Padding(2, 0).Children(func() {
-				ui.Text(c, string(e.Level)).FontSize(10).Bold().TextColor(color)
+				ui.Text(c, string(e.Level)).FontSize(CaptionSize).Bold().TextColor(color)
 			})
-			ui.Text(c, e.Message).FontSize(12).TextColor(t.FG).SingleLine().Grow(1)
+			ui.Text(c, e.Message).FontSize(NoteSize).TextColor(t.FG).SingleLine().Grow(1)
 		})
 	}).Grow(1)
 }
@@ -162,7 +162,7 @@ func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 	a := v.App
 	if !a.NginxLogRead() {
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "访问日志读取已关闭").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "访问日志读取已关闭").FontSize(NoteSize).TextColor(t.Muted)
 		})
 		return
 	}
@@ -184,19 +184,19 @@ func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 
 	ui.Column(c).Fill().Gap(0).Children(func() {
 		if len(errs) > 0 {
-			ui.Text(c, "错误").FontSize(11).Bold().TextColor(t.Danger).Padding(6, 14)
+			ui.Text(c, "错误").FontSize(CaptionSize).Bold().TextColor(t.Danger).Padding(6, 14)
 			ui.List(c, nil, len(errs), func(i int) {
-				ui.Text(c, errs[i]).Font("monospace").FontSize(11).TextColor(t.Danger).
+				ui.Text(c, errs[i]).Font("monospace").FontSize(CaptionSize).TextColor(t.Danger).
 					Padding(2, 14).SingleLine()
 			}).MaxHeight(200)
 		}
-		ui.Text(c, "访问记录").FontSize(11).Bold().TextColor(t.Muted).Padding(6, 14)
+		ui.Text(c, "访问记录").FontSize(CaptionSize).Bold().TextColor(t.Muted).Padding(6, 14)
 		if len(access) == 0 {
-			ui.Text(c, "还没有访问记录").FontSize(12).TextColor(t.Muted).Padding(8, 14)
+			ui.Text(c, "还没有访问记录").FontSize(NoteSize).TextColor(t.Muted).Padding(8, 14)
 			return
 		}
 		ui.List(c, nil, len(access), func(i int) {
-			ui.Text(c, access[i]).Font("monospace").FontSize(11).TextColor(t.FG2).
+			ui.Text(c, access[i]).Font("monospace").FontSize(CaptionSize).TextColor(t.FG2).
 				Padding(2, 14).SingleLine()
 		}).Grow(1)
 	}).Grow(1)
@@ -232,14 +232,14 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 		ui.Column(c).Gap(3).Children(func() {
 			ui.Text(c, "配置历史").FontSize(TitleSize).Bold().TextColor(t.FG)
 			ui.Text(c, "每次成功应用都会存一份快照，最多保留 50 份。回滚会把当时的规则恢复回来并立即生效。").
-				FontSize(SubtitleSz).TextColor(t.Muted).Wrap()
+				FontSize(NoteSize).TextColor(t.Muted).Wrap()
 		})
 		if dirty {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
 				Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.32)).Children(func() {
 				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
 				ui.Text(c, "有改动还没应用；映射页的状态点会显示哪些规则还没生效。").
-					FontSize(11).TextColor(t.Warning)
+					FontSize(CaptionSize).TextColor(t.Warning)
 			})
 		}
 
@@ -257,16 +257,16 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
 					ui.Column(c).Gap(2).Grow(1).Children(func() {
 						ui.Textf(c, "%s · %d 行", formatTime(sn.CreatedAt), strings.Count(sn.Content, "\n")+1).
-							FontSize(13).TextColor(t.FG)
-						ui.Text(c, sn.Reason).FontSize(11).TextColor(t.Muted)
+							FontSize(BodySize).TextColor(t.FG)
+						ui.Text(c, sn.Reason).FontSize(CaptionSize).TextColor(t.Muted)
 					})
-					if ui.Button(c, "查看").FontSize(11).Clicked() {
+					if ui.Button(c, "查看").FontSize(CaptionSize).Clicked() {
 						s := sn
 						a.SetSnapshotView(&s)
 					}
 					// The label names the row: every row says 回滚, and a
 					// test has to reach one snapshot rather than the first.
-					if ui.Button(c, "回滚").FontSize(11).Label("回滚 " + sn.ID).Disabled(busy).Clicked() {
+					if DangerQuietButton(c, t, "回滚").FontSize(CaptionSize).Label("回滚 " + sn.ID).Disabled(busy).Clicked() {
 						s := sn
 						a.Ask(&appt.Confirm{
 							Title: "回滚配置",
@@ -328,7 +328,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		ui.Column(c).Gap(3).Children(func() {
 			ui.Text(c, "设置").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "AI 配置、外观、访问控制与数据管理").FontSize(SubtitleSz).TextColor(t.Muted)
+			ui.Text(c, "AI 配置、外观、访问控制与数据管理").FontSize(NoteSize).TextColor(t.Muted)
 		})
 
 		ui.Scroll(c).Children(func() {
@@ -352,7 +352,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					ui.Text(c, "亮色与暗色各有一套配色；跟随系统时随桌面的外观自动切换。").
-						FontSize(11).TextColor(t.Muted).Wrap()
+						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					ui.Field(c, "网关名称", func() {
 						if ui.TextInput(c, &v.settingsName).Submitted() {
 							a.SetHostName(v.settingsName)
@@ -365,15 +365,15 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
-						FontSize(11).TextColor(t.Muted).Wrap()
+						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					// The traffic switch rides the same row as its words, the
 					// whitelist switch's shape: a settings page whose cards
 					// grow one line each would push the cards beside them
 					// below the fold of the window's default size.
 					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 						ui.Column(c).Gap(2).Grow(1).Children(func() {
-							ui.Text(c, "流量显示").FontSize(13).TextColor(t.FG)
-							ui.Text(c, "映射表与详情显示连接数和流量").FontSize(11).TextColor(t.Muted)
+							ui.Text(c, "流量显示").FontSize(BodySize).TextColor(t.FG)
+							ui.Text(c, "映射表与详情显示连接数和流量").FontSize(CaptionSize).TextColor(t.Muted)
 						})
 						on := a.ShowTraffic()
 						if ui.Switch(c, &on).Label("显示流量").
@@ -386,8 +386,8 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				v.card(c, t, "访问控制", func() {
 					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 						ui.Column(c).Gap(2).Grow(1).Children(func() {
-							ui.Text(c, "IP 白名单").FontSize(13).TextColor(t.FG)
-							ui.Text(c, "开启后只允许列表中的 IP 访问所有代理").FontSize(11).TextColor(t.Muted)
+							ui.Text(c, "IP 白名单").FontSize(BodySize).TextColor(t.FG)
+							ui.Text(c, "开启后只允许列表中的 IP 访问所有代理").FontSize(CaptionSize).TextColor(t.Muted)
 						})
 						// The switch's label names the action, not the heading
 						// text beside it: two elements with one name would
@@ -399,7 +399,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					})
 					ui.Divider(c)
 					if len(wl) == 0 {
-						ui.Text(c, "还没有条目").FontSize(11).TextColor(t.Muted)
+						ui.Text(c, "还没有条目").FontSize(CaptionSize).TextColor(t.Muted)
 					}
 					for _, e := range wl {
 						e := e
@@ -409,12 +409,12 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 								a.RunBackground(func() error { return a.ToggleWhitelist(e.ID, on) })
 							})
 							ui.Column(c).Gap(1).Grow(1).Children(func() {
-								ui.Text(c, e.IP).FontSize(12).TextColor(t.FG).Font("monospace")
+								ui.Text(c, e.IP).FontSize(NoteSize).TextColor(t.FG).Font("monospace")
 								if e.Note != "" {
-									ui.Text(c, e.Note).FontSize(10).TextColor(t.Muted)
+									ui.Text(c, e.Note).FontSize(CaptionSize).TextColor(t.Muted)
 								}
 							})
-							if ui.Button(c, "移除").FontSize(11).Clicked() {
+							if DangerQuietButton(c, t, "移除").FontSize(CaptionSize).Clicked() {
 								a.RunBackground(func() error { return a.DeleteWhitelist(e.ID) })
 							}
 						})
@@ -430,15 +430,15 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					})
 					if a.WhitelistOn() && len(wl) == 0 {
 						ui.Text(c, "白名单开着但没有任何 IP，应用配置会被拒绝。").
-							FontSize(11).TextColor(t.Warning)
+							FontSize(CaptionSize).TextColor(t.Warning)
 					}
 				})
 
 				v.card(c, t, "备份与快照", func() {
 					ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").
-						FontSize(11).TextColor(t.Muted).Wrap()
+						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					ui.Row(c).Gap(8).Children(func() {
-						if ui.PrimaryButton(c, "导出备份").Clicked() {
+						if ui.Button(c, "导出备份").Clicked() {
 							v.exportBackup()
 						}
 						if ui.Button(c, "导入备份").Clicked() {
@@ -453,14 +453,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					ui.Text(c, "导出不含密码；导入会全量替换现有映射与白名单。").
-						FontSize(11).TextColor(t.Muted).Wrap()
+						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					ui.Divider(c)
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						if ui.Button(c, "导出 nginx 配置").Clicked() {
 							v.exportNginx()
 						}
 						ui.Text(c, "导出成标准 nginx.conf，可在真正的 nginx 上运行。").
-							FontSize(11).TextColor(t.Muted).Wrap()
+							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					})
 					ui.Divider(c)
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -468,14 +468,14 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 							a.SetConfViewOpen(true)
 						}
 						ui.Text(c, "只读查看应用实际生成的 nginx.conf。").
-							FontSize(11).TextColor(t.Muted).Wrap()
+							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					})
 					ui.Divider(c)
-					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(10).
+					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(CaptionSize).
 						TextColor(t.Muted).Wrap().Selectable()
 					if a.Paths.Fallback {
 						ui.Text(c, "程序目录不可写，数据改存在用户目录。").
-							FontSize(10).TextColor(t.Warning)
+							FontSize(CaptionSize).TextColor(t.Warning)
 					}
 				})
 
@@ -489,9 +489,9 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 						ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
 							Border(1, t.Border).Children(func() {
-							ui.Text(c, a.Hotkey()).FontSize(11).Bold().TextColor(t.FG).Font("monospace")
+							ui.Text(c, a.Hotkey()).FontSize(CaptionSize).Bold().TextColor(t.FG).Font("monospace")
 						})
-						ui.Text(c, "全局显示/隐藏主窗口").FontSize(12).TextColor(t.FG2)
+						ui.Text(c, "全局显示/隐藏主窗口").FontSize(NoteSize).TextColor(t.FG2)
 					})
 					// A typed accelerator, not a key recorder: the string
 					// is validated by trying to register it, which is what
@@ -510,7 +510,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						}
 					})
 					if d.err != "" {
-						ui.Text(c, d.err).FontSize(11).TextColor(t.Danger).Wrap()
+						ui.Text(c, d.err).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
 					}
 					ui.Divider(c)
 					rows := [][2]string{
@@ -524,47 +524,47 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 						ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 							ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
 								Border(1, t.Border).Children(func() {
-								ui.Text(c, r[0]).FontSize(11).Bold().TextColor(t.FG).Font("monospace")
+								ui.Text(c, r[0]).FontSize(CaptionSize).Bold().TextColor(t.FG).Font("monospace")
 							})
-							ui.Text(c, r[1]).FontSize(12).TextColor(t.FG2)
+							ui.Text(c, r[1]).FontSize(NoteSize).TextColor(t.FG2)
 						})
 					}
-					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(11).TextColor(t.Muted)
+					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(CaptionSize).TextColor(t.Muted)
 				})
 
 				v.card(c, t, "更新", func() {
-					ui.Text(c, "当前版本 "+a.AppVersion).FontSize(11).TextColor(t.Muted)
+					ui.Text(c, "当前版本 "+a.AppVersion).FontSize(CaptionSize).TextColor(t.Muted)
 					if !a.UpdatesEnabled() {
 						ui.Text(c, "开发构建不支持自动更新，新版本请从 GitHub Releases 下载。").
-							FontSize(11).TextColor(t.Muted).Wrap()
+							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 						return
 					}
 					if up := a.UpdateAvail(); up != nil {
-						ui.Text(c, "发现新版本 "+up.Version).FontSize(13).Bold().TextColor(t.FG)
+						ui.Text(c, "发现新版本 "+up.Version).FontSize(BodySize).Bold().TextColor(t.FG)
 						markdown.View(c, up.Notes, &markdown.Options{})
 						if a.UpdateBusy() {
 							if p := a.UpdateProgress(); p >= 0 {
 								ui.Text(c, fmt.Sprintf("正在下载更新…%d%%", int(p*100))).
-									FontSize(11).TextColor(t.Muted)
+									FontSize(CaptionSize).TextColor(t.Muted)
 							} else {
-								ui.Text(c, "正在下载更新…").FontSize(11).TextColor(t.Muted)
+								ui.Text(c, "正在下载更新…").FontSize(CaptionSize).TextColor(t.Muted)
 							}
 						}
 						if ui.PrimaryButton(c, "安装并重启").Disabled(a.UpdateBusy()).Clicked() {
 							a.InstallFoundUpdate()
 						}
 						ui.Text(c, "下载校验通过后自动重启到新版本。").
-							FontSize(11).TextColor(t.Muted).Wrap()
+							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 						return
 					}
 					if ui.Button(c, "检查更新").Disabled(a.UpdateBusy()).Clicked() {
 						a.CheckForUpdates()
 					}
 					if a.UpdateBusy() {
-						ui.Text(c, "正在检查…").FontSize(11).TextColor(t.Muted)
+						ui.Text(c, "正在检查…").FontSize(CaptionSize).TextColor(t.Muted)
 					} else {
 						ui.Text(c, "更新包经签名校验，只有检查后才会下载。").
-							FontSize(11).TextColor(t.Muted).Wrap()
+							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					}
 				})
 			})
@@ -583,13 +583,11 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				Background(t.Danger.Alpha(0.08)).Border(1, t.Danger.Alpha(0.45)).
 				Children(func() {
 					ui.Column(c).Gap(2).Grow(1).Children(func() {
-						ui.Text(c, "危险操作").FontSize(13).Bold().TextColor(t.Danger)
+						ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)
 						ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
-							FontSize(11).TextColor(t.FG2)
+							FontSize(CaptionSize).TextColor(t.FG2)
 					})
-					btn := ui.PrimaryButton(c, "清空所有数据").Disabled(busy)
-					btn.Background(t.Danger)
-					if btn.Clicked() {
+					if DangerButton(c, t, "清空所有数据").Disabled(busy).Clicked() {
 						a.Ask(&appt.Confirm{
 							Title: "清空所有数据",
 							Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
@@ -611,7 +609,7 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 	list, active := a.WorkspacesState()
 	v.card(c, t, "场景", func() {
 		ui.Text(c, "每个场景一套独立映射：公司、家里各存各的规则，切换后立即按新场景重新应用。").
-			FontSize(11).TextColor(t.Muted).Wrap()
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		for _, w := range list {
 			w := w
 			on := w.ID == active
@@ -620,34 +618,34 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 					// The rename is the row itself turned into a field,
 					// prefilled with the name it would change.
 					ui.TextInput(c, &v.wsRenameName).Grow(1).Label("重命名 " + w.Name)
-					if ui.Button(c, "保存").FontSize(11).Disabled(busy).Clicked() {
+					if ui.Button(c, "保存").FontSize(CaptionSize).Disabled(busy).Clicked() {
 						id, name := w.ID, v.wsRenameName
 						v.wsRenameID = ""
 						a.RunBackground(func() error { return a.RenameWorkspaceAction(id, name) })
 					}
-					if ui.Button(c, "取消").FontSize(11).Clicked() {
+					if ui.Button(c, "取消").FontSize(CaptionSize).Clicked() {
 						v.wsRenameID = ""
 					}
 					return
 				}
 				ui.Column(c).Gap(1).Grow(1).Children(func() {
-					ui.Text(c, w.Name).FontSize(12).TextColor(t.FG)
+					ui.Text(c, w.Name).FontSize(NoteSize).TextColor(t.FG)
 					if on {
-						ui.Text(c, "当前场景").FontSize(10).TextColor(t.Accent)
+						ui.Text(c, "当前场景").FontSize(CaptionSize).TextColor(t.Accent)
 					}
 				})
 				if !on {
-					if ui.Button(c, "切换").FontSize(11).Label("切换 " + w.Name).
+					if ui.Button(c, "切换").FontSize(CaptionSize).Label("切换 " + w.Name).
 						Disabled(busy).Tooltip("切换到这个场景，引擎立即按它重新应用").Clicked() {
 						a.RequestSwitchWorkspace(w.ID)
 					}
 				}
-				if ui.Button(c, "重命名").FontSize(11).Label("重命名 " + w.Name).Disabled(busy).Clicked() {
+				if ui.Button(c, "重命名").FontSize(CaptionSize).Label("重命名 " + w.Name).Disabled(busy).Clicked() {
 					v.wsRenameID, v.wsRenameName = w.ID, w.Name
 				}
 				// The last scene and the active one have no delete: the
 				// buttons stay rather than flicker with the list.
-				del := ui.Button(c, "删除").FontSize(11).Label("删除场景 " + w.Name).
+				del := DangerQuietButton(c, t, "删除").FontSize(CaptionSize).Label("删除场景 " + w.Name).
 					Disabled(busy || on || len(list) <= 1).Tooltip("删除场景及其全部映射，删除前会确认")
 				if del.Clicked() {
 					name := w.Name
@@ -669,7 +667,7 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 				a.RunBackground(func() error { return a.CreateWorkspaceAction(name) })
 			}
 		})
-		ui.Text(c, "新场景从空白开始，不会影响正在转发的规则。").FontSize(11).TextColor(t.Muted).Wrap()
+		ui.Text(c, "新场景从空白开始，不会影响正在转发的规则。").FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 	})
 }
 
@@ -678,7 +676,7 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 func (v *View) card(c *ui.Context, t Tokens, title string, fn func()) {
 	ui.Column(c).Grow(1).MinWidth(320).MaxWidth(560).Gap(10).Padding(16).Radius(RadiusPanel).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
-		ui.Text(c, title).FontSize(13).Bold().TextColor(t.FG)
+		ui.Text(c, title).FontSize(BodySize).Bold().TextColor(t.FG)
 		fn()
 	})
 }

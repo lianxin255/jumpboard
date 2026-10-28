@@ -105,7 +105,7 @@ func (v *View) terminalPage(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
 		ui.Column(c).Gap(3).Children(func() {
 			ui.Text(c, "终端").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "在应用里跑本地 shell、探测转发端口或读串口，各开一个标签").FontSize(SubtitleSz).TextColor(t.Muted)
+			ui.Text(c, "在应用里跑本地 shell、探测转发端口或读串口，各开一个标签").FontSize(NoteSize).TextColor(t.Muted)
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Segmented(c, &v.termNewKind, termShell.label(), termProbe.label(), termSerial.label()).
@@ -133,14 +133,14 @@ func (v *View) terminalPage(c *ui.Context, t Tokens) {
 			for i, s := range tabs {
 				i, s := i, s
 				on := i == active
-				tab := ui.Button(c, s.name).FontSize(12)
+				tab := ui.Button(c, s.name).FontSize(NoteSize)
 				if on {
 					tab.Bold()
 				}
 				if tab.Clicked() {
 					v.activateTab(i)
 				}
-				closeBtn := ui.Button(c, "×").FontSize(12).Width(22).
+				closeBtn := ui.Button(c, "×").FontSize(NoteSize).Width(22).
 					Label("关闭-" + s.name).Tooltip("关闭这个会话")
 				if closeBtn.Clicked() {
 					v.closeTab(s.id)
@@ -283,7 +283,7 @@ func (v *View) shellPane(c *ui.Context, t Tokens, s *tabSession) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Label("终端创建中")
 			ui.Text(c, "首次运行需要下载终端模拟库（1–2 MB），之后直接启动。").
-				FontSize(11).TextColor(t.Muted)
+				FontSize(CaptionSize).TextColor(t.Muted)
 		})
 		return
 	}
@@ -292,7 +292,7 @@ func (v *View) shellPane(c *ui.Context, t Tokens, s *tabSession) {
 			Padding(8, 10).Radius(RadiusPanel).
 			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).
 			Children(func() {
-				ui.Text(c, "shell 已退出").FontSize(12).TextColor(t.FG2).Grow(1)
+				ui.Text(c, "shell 已退出").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 				if ui.Button(c, "重开终端").Clicked() {
 					v.startShell(s)
 				}
@@ -408,7 +408,7 @@ func (v *View) probePane(c *ui.Context, t Tokens, s *tabSession, mappings []mode
 						chosen.ListenPort)))
 				}
 			}
-			ui.Text(c, "已连接 "+termLn).FontSize(11).TextColor(t.Muted)
+			ui.Text(c, "已连接 "+termLn).FontSize(CaptionSize).TextColor(t.Muted)
 		} else if starting {
 			ui.Spinner(c).Label("连接中")
 		} else if ui.PrimaryButton(c, "连接").Clicked() {
@@ -418,7 +418,7 @@ func (v *View) probePane(c *ui.Context, t Tokens, s *tabSession, mappings []mode
 	if term == nil {
 		if !starting {
 			ui.Text(c, "连接后输入的内容会原样发往该端口，端口的应答显示在这里。").
-				FontSize(11).TextColor(t.Muted).Wrap()
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		return
 	}
@@ -426,7 +426,7 @@ func (v *View) probePane(c *ui.Context, t Tokens, s *tabSession, mappings []mode
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().
 			Padding(8, 10).Radius(RadiusPanel).
 			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).Children(func() {
-			ui.Text(c, "连接已断开").FontSize(12).TextColor(t.FG2).Grow(1)
+			ui.Text(c, "连接已断开").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 			if ui.PrimaryButton(c, "重新连接").Clicked() {
 				v.connectProbe(s, chosen)
 			}
@@ -544,7 +544,7 @@ func (v *View) serialPane(c *ui.Context, t Tokens, s *tabSession) {
 			if ui.Button(c, "断开").Clicked() {
 				v.hangUp(s)
 			}
-			ui.Text(c, "已连接 "+pick).FontSize(11).TextColor(t.Muted)
+			ui.Text(c, "已连接 "+pick).FontSize(CaptionSize).TextColor(t.Muted)
 		} else if starting {
 			ui.Spinner(c).Label("打开中")
 		} else if ui.PrimaryButton(c, "打开串口").Clicked() {
@@ -559,12 +559,12 @@ func (v *View) serialPane(c *ui.Context, t Tokens, s *tabSession) {
 		s.serialRatePick = ratePick
 	}
 	if err != "" && term == nil {
-		ui.Text(c, err).FontSize(11).TextColor(t.Danger).Wrap()
+		ui.Text(c, err).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
 	}
 	if term == nil {
 		if !starting {
 			ui.Text(c, "串口以原始 8-N-1 打开：设备输出显示在这里，输入原样发往设备。").
-				FontSize(11).TextColor(t.Muted).Wrap()
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		return
 	}
@@ -572,7 +572,7 @@ func (v *View) serialPane(c *ui.Context, t Tokens, s *tabSession) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().
 			Padding(8, 10).Radius(RadiusPanel).
 			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).Children(func() {
-			ui.Text(c, "串口已断开").FontSize(12).TextColor(t.FG2).Grow(1)
+			ui.Text(c, "串口已断开").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 			if ui.PrimaryButton(c, "重新打开").Clicked() {
 				v.openSerial(s, pick, rateFromPick(ratePick))
 			}
@@ -658,9 +658,9 @@ func (v *View) termMessageCard(c *ui.Context, t Tokens, title, why, hint string)
 	ui.Box(c).FillWidth().Grow(1).Padding(16).Radius(RadiusPanel).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
-			ui.Text(c, title).FontSize(13).Bold().TextColor(t.FG)
-			ui.Text(c, why).FontSize(12).TextColor(t.FG2).Wrap()
-			ui.Text(c, hint).FontSize(11).TextColor(t.Muted).Wrap()
+			ui.Text(c, title).FontSize(BodySize).Bold().TextColor(t.FG)
+			ui.Text(c, why).FontSize(NoteSize).TextColor(t.FG2).Wrap()
+			ui.Text(c, hint).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		})
 	})
 }

@@ -44,13 +44,13 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 	busy, errMsg, note, drafts := v.ai.snapshot()
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(620).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(620).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "用一句话新建映射").FontSize(16).Bold().TextColor(t.FG)
+				ui.Text(c, "用一句话新建映射").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Spacer(c)
-				ui.Text(c, "AI 只生成草稿，保存前你可以逐项修改").FontSize(11).TextColor(t.Muted)
+				ui.Text(c, "AI 只生成草稿，保存前你可以逐项修改").FontSize(CaptionSize).TextColor(t.Muted)
 			})
 
 			ui.Row(c).Gap(8).Children(func() {
@@ -78,17 +78,17 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 			if busy {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c).Label("生成中")
-					ui.Text(c, "正在生成草稿…").FontSize(12).TextColor(t.Muted)
+					ui.Text(c, "正在生成草稿…").FontSize(NoteSize).TextColor(t.Muted)
 				})
 			}
 			if errMsg != "" {
-				ui.Text(c, errMsg).FontSize(12).TextColor(t.Danger)
+				ui.Text(c, errMsg).FontSize(NoteSize).TextColor(t.Danger)
 			}
 			if note != "" {
-				ui.Text(c, note).FontSize(11).TextColor(t.Muted).Wrap()
+				ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 			}
 			if len(drafts) > 0 {
-				ui.Textf(c, "草稿（%d 条）", len(drafts)).FontSize(11).Bold().TextColor(t.Muted)
+				ui.Textf(c, "草稿（%d 条）", len(drafts)).FontSize(CaptionSize).Bold().TextColor(t.Muted)
 				for i, d := range drafts {
 					v.draftCard(c, t, i, d)
 				}
@@ -120,15 +120,15 @@ func (v *View) draftCard(c *ui.Context, t Tokens, i int, d appt.AIDraft) {
 		Background(t.Surface3).Border(1, t.Border).Children(func() {
 		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
 			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
-			FontSize(12).TextColor(t.FG)
+			FontSize(NoteSize).TextColor(t.FG)
 		if d.Explanation != "" {
-			ui.Text(c, d.Explanation).FontSize(11).TextColor(t.Muted).Wrap()
+			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		if m.ExtraDirectives != "" {
-			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(11).TextColor(t.Muted)
+			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(CaptionSize).TextColor(t.Muted)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "丢弃").Clicked() {
+			if DangerQuietButton(c, t, "丢弃").Clicked() {
 				v.dropDraft(i)
 			}
 			if ui.PrimaryButton(c, "采用").Clicked() {

@@ -33,9 +33,9 @@ func (v *View) diagSection(c *ui.Context, t Tokens, busy bool) {
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "AI 诊断").FontSize(12).Bold().TextColor(t.FG)
+				ui.Text(c, "AI 诊断").FontSize(NoteSize).Bold().TextColor(t.FG)
 				ui.Spacer(c)
-				ui.Text(c, "仅供参考，不会自动修改配置").FontSize(10).TextColor(t.Muted)
+				ui.Text(c, "仅供参考，不会自动修改配置").FontSize(CaptionSize).TextColor(t.Muted)
 				if ui.Button(c, "收起").Clicked() {
 					a.DismissDiagnosis()
 				}
@@ -47,11 +47,11 @@ func (v *View) diagSection(c *ui.Context, t Tokens, busy bool) {
 					if diagBusy {
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 							ui.Spinner(c).Label("诊断中")
-							ui.Text(c, "正在分析失败原因…").FontSize(12).TextColor(t.Muted)
+							ui.Text(c, "正在分析失败原因…").FontSize(NoteSize).TextColor(t.Muted)
 						})
 					}
 					if diagErr != "" {
-						ui.Text(c, diagErr).FontSize(11).TextColor(t.Danger).Selectable()
+						ui.Text(c, diagErr).FontSize(CaptionSize).TextColor(t.Danger).Selectable()
 					}
 					if advice != nil {
 						v.adviceBody(c, t, *advice)
@@ -67,33 +67,33 @@ func (v *View) diagSection(c *ui.Context, t Tokens, busy bool) {
 func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 	a := v.App
 	if adv.Summary != "" {
-		ui.Text(c, adv.Summary).FontSize(12).Bold().TextColor(t.FG).Wrap()
+		ui.Text(c, adv.Summary).FontSize(NoteSize).Bold().TextColor(t.FG).Wrap()
 	}
 	if len(adv.Causes) > 0 {
-		ui.Text(c, "可能原因").FontSize(11).Bold().TextColor(t.Muted)
+		ui.Text(c, "可能原因").FontSize(CaptionSize).Bold().TextColor(t.Muted)
 		for _, cause := range adv.Causes {
-			ui.Text(c, "• "+cause).FontSize(11).TextColor(t.FG2).Wrap()
+			ui.Text(c, "• "+cause).FontSize(CaptionSize).TextColor(t.FG2).Wrap()
 		}
 	}
 	if len(adv.Steps) > 0 {
-		ui.Text(c, "建议步骤").FontSize(11).Bold().TextColor(t.Muted)
+		ui.Text(c, "建议步骤").FontSize(CaptionSize).Bold().TextColor(t.Muted)
 		for _, step := range adv.Steps {
 			ui.Column(c).Gap(3).Children(func() {
 				if step.Title != "" {
-					ui.Text(c, step.Title).FontSize(11).Bold().TextColor(t.FG).Wrap()
+					ui.Text(c, step.Title).FontSize(CaptionSize).Bold().TextColor(t.FG).Wrap()
 				}
 				if step.Detail != "" {
-					ui.Text(c, step.Detail).FontSize(11).TextColor(t.FG2).Wrap()
+					ui.Text(c, step.Detail).FontSize(CaptionSize).TextColor(t.FG2).Wrap()
 				}
 				if step.Command != "" {
 					cmd := step.Command
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, cmd).Font("monospace").FontSize(11).
+						ui.Text(c, cmd).Font("monospace").FontSize(CaptionSize).
 							TextColor(t.FG2).Selectable()
 						// The label carries the step's title: several steps
 						// can offer a copy, and a control has to say which
 						// one it acts on.
-						if ui.Button(c, "复制命令").FontSize(10).
+						if ui.Button(c, "复制命令").FontSize(CaptionSize).
 							Label("复制命令-" + step.Title).
 							Tooltip("复制这条命令，自己决定要不要运行").Clicked() {
 							a.RunBackground(func() error { return a.CopyText(cmd) })
@@ -101,7 +101,7 @@ func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 					})
 				}
 				if step.Risk != "" {
-					ui.Text(c, "风险："+step.Risk).FontSize(10).TextColor(t.Warning).Wrap()
+					ui.Text(c, "风险："+step.Risk).FontSize(CaptionSize).TextColor(t.Warning).Wrap()
 				}
 			})
 		}

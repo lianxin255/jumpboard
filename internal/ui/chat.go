@@ -36,11 +36,11 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
 				ui.Text(c, "AI 对话").FontSize(TitleSize).Bold().TextColor(t.FG)
-				ui.Text(c, "聊端口映射，聊出来的配置确认后导入当前场景").FontSize(SubtitleSz).TextColor(t.Muted)
+				ui.Text(c, "聊端口映射，聊出来的配置确认后导入当前场景").FontSize(NoteSize).TextColor(t.Muted)
 			})
 			ui.Spacer(c)
 			if len(turns) > 0 {
-				if ui.Button(c, "清空对话").Disabled(busy).
+				if DangerQuietButton(c, t, "清空对话").Disabled(busy).
 					Tooltip("清掉这段对话和等待导入的草稿；已导入的映射不受影响").Clicked() {
 					a.ClearChat()
 				}
@@ -64,18 +64,18 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 // the settings open on is the AI one, so the landing needs no scroll.
 func (v *View) chatNotReady(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		ui.Box(c).Width(460).Padding(32, 28).Radius(RadiusModal).
+		ui.Box(c).Width(460).Padding(32, 24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).Children(func() {
 			ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(36, 36).Radius(10).Background(t.Accent.Alpha(0.14)).
+				ui.Box(c).Size(36, 36).Radius(RadiusButton).Background(t.Accent.Alpha(0.14)).
 					Border(1, t.Accent.Alpha(0.28)).Children(func() {
 					ui.Column(c).Fill().Center().Children(func() {
-						ui.Text(c, "✨").FontSize(16).TextColor(t.Accent)
+						ui.Text(c, "✨").FontSize(HeadSize).TextColor(t.Accent)
 					})
 				})
-				ui.Text(c, "还没有配置 AI 服务").FontSize(18).Bold().TextColor(t.FG)
+				ui.Text(c, "还没有配置 AI 服务").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Text(c, "填好接口地址和模型后，这里可以和模型对话生成映射配置。").
-					FontSize(13).TextColor(t.Muted)
+					FontSize(BodySize).TextColor(t.Muted)
 				if ui.PrimaryButton(c, "去设置").Clicked() {
 					v.App.SetPage(appt.PageSettings)
 				}
@@ -137,7 +137,7 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 		}).Grow(1).Padding(14, 16).Gap(12).Justify(ui.End).Children(func() {
 			if len(items) == 0 {
 				ui.Text(c, "说说你想转发的服务，比如：把内网 MySQL 和 Redis 分别暴露到 9000/9001").
-					FontSize(12).TextColor(t.Muted).Margin(ui.Auto)
+					FontSize(NoteSize).TextColor(t.Muted).Margin(ui.Auto)
 			}
 		})
 	})
@@ -168,23 +168,23 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 				markdown.View(c, ai.WithoutDraftBlocks(it.turn.Content), &markdown.Options{})
 			}
 			if it.turn.Content != "" && ai.WithoutDraftBlocks(it.turn.Content) == "" {
-				ui.Text(c, "（这条回复只有配置草稿，见下方预览）").FontSize(11).TextColor(t.Muted)
+				ui.Text(c, "（这条回复只有配置草稿，见下方预览）").FontSize(CaptionSize).TextColor(t.Muted)
 			}
 		})
 	case 1:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Label("回复中")
-			ui.Text(c, "正在回复…").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "正在回复…").FontSize(NoteSize).TextColor(t.Muted)
 		})
 	case 2:
-		ui.Text(c, errText).FontSize(12).TextColor(t.Danger).Selectable().Wrap()
+		ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap()
 	case 3:
 		ui.Column(c).Gap(2).Children(func() {
-			ui.Textf(c, "配置预览（%d 条）", len(drafts)).FontSize(12).Bold().TextColor(t.FG)
+			ui.Textf(c, "配置预览（%d 条）", len(drafts)).FontSize(NoteSize).Bold().TextColor(t.FG)
 			if note != "" {
-				ui.Text(c, note).FontSize(11).TextColor(t.Muted).Wrap()
+				ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 			}
-			ui.Text(c, "草稿不会自动生效；确认导入后仍需点「应用配置」").FontSize(11).TextColor(t.Muted)
+			ui.Text(c, "草稿不会自动生效；确认导入后仍需点「应用配置」").FontSize(CaptionSize).TextColor(t.Muted)
 		})
 	case 4:
 		v.chatDraftCard(c, t, it.draft, it.index, busy)
@@ -207,19 +207,19 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 		Background(t.Surface3).Border(1, t.Border).Children(func() {
 		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
 			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
-			FontSize(12).TextColor(t.FG)
+			FontSize(NoteSize).TextColor(t.FG)
 		if d.Explanation != "" {
-			ui.Text(c, d.Explanation).FontSize(11).TextColor(t.Muted).Wrap()
+			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		if m.ExtraDirectives != "" {
-			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(11).TextColor(t.Muted)
+			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(CaptionSize).TextColor(t.Muted)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "丢弃").FontSize(11).
+			if DangerQuietButton(c, t, "丢弃").FontSize(CaptionSize).
 				Label("丢弃草稿 " + m.Name).Clicked() {
 				a.DropChatDraft(i)
 			}
-			if ui.Button(c, "填入表单").FontSize(11).
+			if ui.Button(c, "填入表单").FontSize(CaptionSize).
 				Label("填入表单 " + m.Name).
 				Tooltip("把这条草稿填进新建映射表单，逐项修改后保存").Clicked() {
 				a.DropChatDraft(i)
@@ -236,7 +236,7 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, busy bool) {
 	a := v.App
 	ui.Row(c).Gap(8).AlignItems(ui.Center).MaxWidth(760).Children(func() {
-		ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(11).TextColor(t.Muted).Grow(1)
+		ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(CaptionSize).TextColor(t.Muted).Grow(1)
 		if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).
 			Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
 			n := len(drafts)

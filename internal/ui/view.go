@@ -212,15 +212,15 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 		ui.Box(c).Height(top).Shrink(0).FillWidth().DragWindow()
 
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 16, 16).DragWindow().Children(func() {
-			ui.Box(c).Size(30, 30).Radius(8).
+			ui.Box(c).Size(30, 30).Radius(RadiusChip).
 				Background(t.Accent).Children(func() {
 				ui.Column(c).Fill().Center().Children(func() {
-					ui.Text(c, "跳").FontSize(16).Bold().TextColor(t.AccentText)
+					ui.Text(c, "跳").FontSize(HeadSize).Bold().TextColor(t.AccentText)
 				})
 			})
 			ui.Column(c).Gap(0).Children(func() {
-				ui.Text(c, "JumpBoard").FontSize(14).Bold().TextColor(t.FG)
-				ui.Text(c, "内网端口转发").FontSize(10).TextColor(t.Muted)
+				ui.Text(c, "JumpBoard").FontSize(BodySize).Bold().TextColor(t.FG)
+				ui.Text(c, "内网端口转发").FontSize(CaptionSize).TextColor(t.Muted)
 			})
 		})
 
@@ -229,7 +229,7 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
 			for i, label := range labels {
 				on := i == page
-				tab := tabs.Tab(i).FillWidth().Height(34).Radius(9).Padding(0, 10).
+				tab := tabs.Tab(i).FillWidth().Height(34).Radius(RadiusButton).Padding(0, 10).
 					AlignItems(ui.Center).Gap(10)
 				if on {
 					tab.Background(t.Accent.Alpha(0.08))
@@ -239,8 +239,8 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 					if on {
 						mark = t.Accent
 					}
-					ui.Box(c).Size(3, 14).Radius(2).Background(mark)
-					text := ui.Text(c, label).FontSize(13)
+					ui.Box(c).Size(3, 14).Radius(RadiusTiny).Background(mark)
+					text := ui.Text(c, label).FontSize(BodySize)
 					if on {
 						text.Bold().TextColor(t.Accent)
 					} else {
@@ -272,13 +272,14 @@ func (v *View) engineCard(c *ui.Context, t Tokens, engine string, busy bool) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 10).Radius(RadiusChip).
 			Background(t.Chip).Border(1, t.Border).Children(func() {
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
-			ui.Text(c, label).FontSize(12).Bold().TextColor(t.FG).Grow(1)
+			ui.Text(c, label).FontSize(NoteSize).Bold().TextColor(t.FG).Grow(1)
 			if engine == "running" {
-				ui.Text(c, a.Eng.Mode()).FontSize(10).TextColor(t.Meta)
+				ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
 			}
 		})
 		if engine == "running" {
-			if ui.Button(c, "停止").FillWidth().Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
+			if DangerQuietButton(c, t, "停止").FillWidth().
+				Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
 				a.Ask(&appt.Confirm{
 					Title: "停止引擎",
 					Body:  "停止后所有转发规则立即失效，外部无法访问。",
@@ -327,7 +328,7 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		if len(rules) > 0 {
 			ui.Textf(c, "监听 %d/%d · %d 连接", listening, len(rules), conns).
-				FontSize(12).TextColor(t.Meta)
+				FontSize(NoteSize).TextColor(t.Meta)
 		}
 		ui.Spacer(c)
 		if busy {
@@ -351,14 +352,14 @@ func (v *View) actionRow(c *ui.Context, t Tokens) {
 	if msg := a.ApplyError(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
 			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
-			ui.Text(c, msg).FontSize(11).TextColor(t.Danger).Selectable()
+			ui.Text(c, msg).FontSize(CaptionSize).TextColor(t.Danger).Selectable()
 		})
 		v.diagSection(c, t, busy)
 	}
 	if msg := a.ApplyWarning(); msg != "" {
 		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
 			Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
-			ui.Text(c, msg).FontSize(11).TextColor(t.Warning).Selectable()
+			ui.Text(c, msg).FontSize(CaptionSize).TextColor(t.Warning).Selectable()
 		})
 	}
 	if a.ConfChanged() {
@@ -375,11 +376,11 @@ func (v *View) confChangedBar(c *ui.Context, t Tokens, busy bool) {
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Padding(8, 12).
 		Radius(RadiusChip).
 		Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
-		ui.Text(c, "配置文件被外部修改").FontSize(12).TextColor(t.Warning).Grow(1)
-		if ui.Button(c, "导入合并").FontSize(11).Disabled(busy).Clicked() {
+		ui.Text(c, "配置文件被外部修改").FontSize(NoteSize).TextColor(t.Warning).Grow(1)
+		if ui.Button(c, "导入合并").FontSize(CaptionSize).Disabled(busy).Clicked() {
 			a.RunBackground(a.ImportChangedConf)
 		}
-		if ui.Button(c, "忽略").FontSize(11).Clicked() {
+		if ui.Button(c, "忽略").FontSize(CaptionSize).Clicked() {
 			a.DismissConfChange()
 		}
 	})
@@ -396,8 +397,8 @@ func (v *View) pendingBar(c *ui.Context, t Tokens, busy bool) {
 			Background(t.AmberSoft).Border(1, t.AmberLine).Children(func() {
 			ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
 			ui.Column(c).Gap(1).Grow(1).Children(func() {
-				ui.Text(c, "有未生效的改动").FontSize(13).Bold().TextColor(t.AmberText)
-				ui.Text(c, "未应用 · 重新加载后对外生效").FontSize(11).TextColor(t.AmberText)
+				ui.Text(c, "有未生效的改动").FontSize(BodySize).Bold().TextColor(t.AmberText)
+				ui.Text(c, "未应用 · 重新加载后对外生效").FontSize(CaptionSize).TextColor(t.AmberText)
 			})
 			if ui.PrimaryButton(c, "应用配置").Disabled(busy).
 				Tooltip("让改动生效（⌘R）").Clicked() {
@@ -489,10 +490,10 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			ui.Column(c).Gap(2).Children(func() {
 				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)
 				if len(mappings) == 0 {
-					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(12).TextColor(t.Meta)
+					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(NoteSize).TextColor(t.Meta)
 				} else {
 					ui.Textf(c, "%d 条规则 · %d 启用 · %d 停用", len(mappings), enabled, len(mappings)-enabled).
-						FontSize(12).TextColor(t.Meta)
+						FontSize(NoteSize).TextColor(t.Meta)
 				}
 			})
 			ui.Spacer(c)
@@ -660,7 +661,7 @@ func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
 	color := protoColor(t, m.Protocol)
 	ui.Box(c).Padding(3, 8).Radius(RadiusBadge).
 		Background(color.Alpha(0.12)).Children(func() {
-		ui.Text(c, m.Protocol.Label()).FontSize(11).Bold().TextColor(color)
+		ui.Text(c, m.Protocol.Label()).FontSize(CaptionSize).Bold().TextColor(color)
 	})
 }
 
@@ -766,7 +767,7 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered
 		// itself, so the panel points at what it is about. open is
 		// recomputed from detailID every frame, which keeps the popover
 		// honest when another row's name is clicked instead.
-		name := ui.Text(c, m.Name).FontSize(13).Bold().TextColor(t.FG).SingleLine().
+		name := ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG).SingleLine().
 			Tooltip("点一下看详情，右键更多操作")
 		if name.Clicked() {
 			if v.detailID == m.ID {
@@ -796,10 +797,10 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered
 				}
 				ui.Box(c).Size(6, 6).Radius(3).Background(dot).Tooltip(hint)
 			}
-			ui.Text(c, displayHost(m)).FontSize(11).TextColor(t.Meta).SingleLine()
+			ui.Text(c, displayHost(m)).FontSize(CaptionSize).TextColor(t.Meta).SingleLine()
 			// A rule that cannot listen says why in the row itself.
 			if v.App.EngineApplied() && m.Enabled && !listening && problem != "" && problem != "未应用" {
-				ui.Text(c, problem).FontSize(10).TextColor(t.Danger).SingleLine()
+				ui.Text(c, problem).FontSize(CaptionSize).TextColor(t.Danger).SingleLine()
 			}
 		})
 	})
@@ -826,20 +827,20 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			// The address is what someone shares, so a click puts it on the
 			// clipboard rather than making them select the text by hand.
-			if ui.Text(c, localLabel).Font("monospace").FontSize(12).TextColor(t.FG2).
+			if ui.Text(c, localLabel).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
 				Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
 				Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
 				mm := m
 				a.RunBackground(func() error { return a.CopyAddress(mm) })
 			}
-			ui.Text(c, "→").FontSize(12).TextColor(t.Meta)
-			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(12).TextColor(t.FG2).
+			ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
+			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
 				Tooltip("上游目标")
 			// The group rides at the end of the row: a label, not a
 			// control — the chips above the table are where a group is
 			// picked, this only says which one the rule belongs to.
 			if m.Group != "" {
-				ui.Text(c, m.Group).FontSize(10).TextColor(t.Meta).SingleLine().
+				ui.Text(c, m.Group).FontSize(CaptionSize).TextColor(t.Meta).SingleLine().
 					Label("分组 "+m.Group).Tooltip("分组："+m.Group).
 					Padding(2, 6).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border)
 			}
@@ -854,17 +855,17 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 		if a.ShowTraffic() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				if info.Active > 0 {
-					ui.Textf(c, "· %d 活跃", info.Active).FontSize(10).TextColor(t.Success).
+					ui.Textf(c, "· %d 活跃", info.Active).FontSize(CaptionSize).TextColor(t.Success).
 						Tooltip("这条规则此刻正开着的连接数")
 				}
-				ui.Textf(c, "· %d 次", info.Connections).FontSize(10).TextColor(t.Meta).
+				ui.Textf(c, "· %d 次", info.Connections).FontSize(CaptionSize).TextColor(t.Meta).
 					Tooltip("这条规则累计转发的连接数")
 				tooltip := "这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端"
 				if !info.LastCloseAt.IsZero() {
 					tooltip += "；最近断开 " + info.LastCloseAt.Format("15:04:05")
 				}
 				ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
-					FontSize(10).TextColor(t.Meta).Tooltip(tooltip)
+					FontSize(CaptionSize).TextColor(t.Meta).Tooltip(tooltip)
 			})
 		}
 	})
@@ -900,7 +901,7 @@ func displayHost(m model.Mapping) string {
 func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if !m.HealthCheckEnabled {
 		ui.Box(c).Padding(3, 8).Radius(RadiusPill).Background(t.Chip).Children(func() {
-			ui.Text(c, "未启用").FontSize(11).TextColor(t.Meta)
+			ui.Text(c, "未启用").FontSize(CaptionSize).TextColor(t.Meta)
 		})
 		return
 	}
@@ -915,7 +916,7 @@ func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	case model.HealthUnhealthy:
 		word, color, fill, tip = "● 异常", t.Danger, t.DangerSoft, "点一下重新检查"
 	}
-	if ui.Text(c, word).FontSize(11).Bold().TextColor(color).Label(label).
+	if ui.Text(c, word).FontSize(CaptionSize).Bold().TextColor(color).Label(label).
 		Tooltip(tip).Padding(3, 10).Radius(RadiusPill).
 		Background(fill).Clicked() {
 		mm := m
@@ -927,14 +928,14 @@ func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 	a := v.App
 	id := m.ID
 	ui.Row(c).Gap(4).Children(func() {
-		if ui.Button(c, "编辑").FontSize(11).Disabled(busy).Clicked() {
+		if ui.Button(c, "编辑").FontSize(CaptionSize).Disabled(busy).Clicked() {
 			mm := m
 			a.OpenForm(&mm)
 		}
-		if ui.Button(c, "克隆").FontSize(11).Disabled(busy).Clicked() {
+		if ui.Button(c, "克隆").FontSize(CaptionSize).Disabled(busy).Clicked() {
 			a.RunBackground(func() error { return a.CloneMapping(id) })
 		}
-		if ui.Button(c, "删除").FontSize(11).Disabled(busy).Clicked() {
+		if DangerQuietButton(c, t, "删除").FontSize(CaptionSize).Disabled(busy).Clicked() {
 			name := m.Name
 			a.Ask(&appt.Confirm{
 				Title:       "删除映射",
@@ -959,20 +960,20 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			v.protoCell(c, t, m)
 			if m.Enabled {
-				ui.Text(c, "已启用").FontSize(11).TextColor(t.Meta)
+				ui.Text(c, "已启用").FontSize(CaptionSize).TextColor(t.Meta)
 			} else {
-				ui.Text(c, "已停用").FontSize(11).TextColor(t.Meta)
+				ui.Text(c, "已停用").FontSize(CaptionSize).TextColor(t.Meta)
 			}
 			ui.Spacer(c)
-			if ui.Text(c, "×").FontSize(12).TextColor(t.Meta).Label("关闭详情").Clicked() {
+			if ui.Text(c, "×").FontSize(NoteSize).TextColor(t.Meta).Label("关闭详情").Clicked() {
 				v.detailID = ""
 			}
 		})
-		ui.Text(c, m.Name).FontSize(14).Bold().TextColor(t.FG)
-		ui.Text(c, forwardLine(m)).Font("monospace").FontSize(12).TextColor(t.FG2).
+		ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG)
+		ui.Text(c, forwardLine(m)).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
 			Tooltip("本地地址 → 上游目标")
 		if m.ServerNames != "" {
-			ui.Textf(c, "域名 %s", m.ServerNames).FontSize(11).TextColor(t.Meta)
+			ui.Textf(c, "域名 %s", m.ServerNames).FontSize(CaptionSize).TextColor(t.Meta)
 		}
 		if m.HealthCheckEnabled {
 			word, color := "未检查", t.Meta
@@ -982,9 +983,9 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 			case model.HealthUnhealthy:
 				word, color = "健康检查：异常", t.Danger
 			}
-			ui.Text(c, word).FontSize(11).TextColor(color)
+			ui.Text(c, word).FontSize(CaptionSize).TextColor(color)
 		} else {
-			ui.Text(c, "健康检查未启用").FontSize(11).TextColor(t.Meta)
+			ui.Text(c, "健康检查未启用").FontSize(CaptionSize).TextColor(t.Meta)
 		}
 		// The traffic section is the same display the table carries, so the
 		// setting quiets both. What it adds over the row is the recent
@@ -995,10 +996,10 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 			info := a.RuleInfo(m.ID)
 			if !info.LastCloseAt.IsZero() {
 				ui.Textf(c, "最近断开 %s", info.LastCloseAt.Format("15:04:05")).
-					FontSize(11).TextColor(t.Meta)
+					FontSize(CaptionSize).TextColor(t.Meta)
 			}
 			if info.LastErr != "" {
-				ui.Textf(c, "最近错误 %s", info.LastErr).FontSize(11).TextColor(t.Danger).
+				ui.Textf(c, "最近错误 %s", info.LastErr).FontSize(CaptionSize).TextColor(t.Danger).
 					Tooltip(info.LastErrAt.Format("15:04:05")).Wrap()
 			}
 		}
@@ -1023,13 +1024,13 @@ func (v *View) throughputBlock(c *ui.Context, t Tokens, mappingID string) {
 	rates := v.App.Throughput(mappingID)
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "吞吐").FontSize(11).TextColor(t.Muted)
+			ui.Text(c, "吞吐").FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Spacer(c)
 			ui.Textf(c, "当前速率 %s", formatRate(v.App.CurrentRate(mappingID))).
-				FontSize(11).TextColor(t.Meta)
+				FontSize(CaptionSize).TextColor(t.Meta)
 		})
 		if len(rates) < 2 {
-			ui.Text(c, "收集中…").FontSize(11).TextColor(t.Meta)
+			ui.Text(c, "收集中…").FontSize(CaptionSize).TextColor(t.Meta)
 			return
 		}
 		v.throughputCurve(c, t, rates)
@@ -1055,7 +1056,7 @@ func (v *View) throughputCurve(c *ui.Context, t Tokens, rates []float64) {
 	}
 	axes := chart.Axes{Left: y.Ticks(2)}
 	axes.Label = func(_ chart.Side, tick chart.Tick) {
-		ui.Text(c, tick.Label).FontSize(9).TextColor(t.Meta).NoWrap()
+		ui.Text(c, tick.Label).FontSize(CaptionSize).TextColor(t.Meta).NoWrap()
 	}
 	chart.Plot(c, axes, func(area ui.Element) {
 		area.Label("近一分钟吞吐")
@@ -1094,7 +1095,7 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 	ui.Box(c).Width(240).Padding(0, 10).Radius(RadiusButton).
 		Background(t.Chip).Border(1, t.Border).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "⌕").FontSize(13).TextColor(t.Meta)
+			ui.Text(c, "⌕").FontSize(BodySize).TextColor(t.Meta)
 			// The key goes on the context before the input is built: a
 			// TextInput owns its buffer in state, so its identity has to
 			// be fixed up front, not changed afterwards.
@@ -1104,7 +1105,7 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 				Tooltip("按名称、域名、端口搜索（⌘F）").
 				AutoFocus()
 			if v.query != "" {
-				if ui.Text(c, "×").FontSize(12).TextColor(t.Meta).
+				if ui.Text(c, "×").FontSize(NoteSize).TextColor(t.Meta).
 					Label("清空搜索").Clicked() {
 					v.query = ""
 				}
@@ -1123,11 +1124,11 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	list, active := a.WorkspacesState()
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
-		ui.Text(c, "场景").FontSize(11).TextColor(t.Muted)
+		ui.Text(c, "场景").FontSize(CaptionSize).TextColor(t.Muted)
 		for _, w := range list {
 			w := w
 			on := w.ID == active
-			chip := ui.Text(c, w.Name).FontSize(11).SingleLine().
+			chip := ui.Text(c, w.Name).FontSize(CaptionSize).SingleLine().
 				Label("场景 "+w.Name).
 				Tooltip("切换到这个场景的映射；有未应用的改动会先确认").
 				Padding(3, 8).Radius(RadiusChip)
@@ -1141,7 +1142,7 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 				a.RequestSwitchWorkspace(w.ID)
 			}
 		}
-		if ui.Text(c, "管理").FontSize(11).TextColor(t.Muted).
+		if ui.Text(c, "管理").FontSize(CaptionSize).TextColor(t.Muted).
 			Label("管理场景").Tooltip("在设置里新建、改名、删除场景").
 			Padding(3, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
 			a.SetPage(appt.PageSettings)
@@ -1167,7 +1168,7 @@ func (v *View) groupChips(c *ui.Context, t Tokens, groups []string) {
 				target = ""
 			}
 			on := v.groupFilter == target
-			chip := ui.Text(c, name).FontSize(11).SingleLine().
+			chip := ui.Text(c, name).FontSize(CaptionSize).SingleLine().
 				Label("组 "+name).Tooltip("按分组筛选").
 				Padding(3, 8).Radius(RadiusChip)
 			if on {
@@ -1202,19 +1203,19 @@ func distinctGroups(mappings []model.Mapping) []string {
 func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		ui.Box(c).Width(460).Padding(32, 28).Radius(RadiusModal).
+		ui.Box(c).Width(460).Padding(32, 24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).Children(func() {
 			ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(36, 36).Radius(10).Background(t.Accent.Alpha(0.14)).
+				ui.Box(c).Size(36, 36).Radius(RadiusButton).Background(t.Accent.Alpha(0.14)).
 					Border(1, t.Accent.Alpha(0.28)).Children(func() {
 					ui.Column(c).Fill().Center().Children(func() {
-						ui.Text(c, "⇄").FontSize(16).TextColor(t.Accent)
+						ui.Text(c, "⇄").FontSize(HeadSize).TextColor(t.Accent)
 					})
 				})
-				ui.Text(c, "还没有转发规则").FontSize(18).Bold().TextColor(t.FG)
+				ui.Text(c, "还没有转发规则").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Text(c, "把内网 MySQL、SSH、Web 等服务转到这台机器的端口上。").
-					FontSize(13).TextColor(t.Muted)
-				ui.Text(c, "建好后点「应用配置」或 ⌘R，立刻对外生效。").FontSize(13).TextColor(t.Muted)
+					FontSize(BodySize).TextColor(t.Muted)
+				ui.Text(c, "建好后点「应用配置」或 ⌘R，立刻对外生效。").FontSize(BodySize).TextColor(t.Muted)
 				ui.Row(c).Gap(10).Children(func() {
 					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
 						Tooltip("新建一条映射（⌘N）").Clicked() {
@@ -1224,7 +1225,7 @@ func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 						a.SetTemplatePicker(true)
 					}
 				})
-				ui.Text(c, "常用模板：SSH · RDP · MySQL · Redis · Web").FontSize(11).TextColor(t.Muted)
+				ui.Text(c, "常用模板：SSH · RDP · MySQL · Redis · Web").FontSize(CaptionSize).TextColor(t.Muted)
 			})
 		})
 	})
@@ -1233,11 +1234,11 @@ func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 // emptyState draws the placeholder a page shows with nothing in it.
 func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	ui.Column(c).Fill().Center().Gap(10).Children(func() {
-		ui.Box(c).Width(360).Padding(24, 20).Radius(RadiusPanel).
+		ui.Box(c).Width(360).Padding(32, 24).Radius(RadiusPanel).
 			Background(t.Surface).Border(1, t.Border).Children(func() {
 			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
-				ui.Text(c, hint).FontSize(12).TextColor(t.Muted)
+				ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+				ui.Text(c, hint).FontSize(NoteSize).TextColor(t.Muted)
 			})
 		})
 	})
@@ -1262,17 +1263,17 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 		}
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Textf(c, "已选 %d 条 · 启用 %d · 停用 %d", len(chosen), len(onIDs), len(offIDs)).
-				FontSize(11).Bold().TextColor(t.FG)
+				FontSize(CaptionSize).Bold().TextColor(t.FG)
 			ui.Spacer(c)
-			if ui.Button(c, "批量启用").FontSize(11).Disabled(busy || len(offIDs) == 0).
+			if ui.Button(c, "批量启用").FontSize(CaptionSize).Disabled(busy || len(offIDs) == 0).
 				Tooltip("启用选中的停用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(offIDs, true) })
 			}
-			if ui.Button(c, "批量停用").FontSize(11).Disabled(busy || len(onIDs) == 0).
+			if ui.Button(c, "批量停用").FontSize(CaptionSize).Disabled(busy || len(onIDs) == 0).
 				Tooltip("停用选中的启用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(onIDs, false) })
 			}
-			if ui.Button(c, "批量删除").FontSize(11).Disabled(busy).
+			if DangerQuietButton(c, t, "批量删除").FontSize(CaptionSize).Disabled(busy).
 				Tooltip("删除选中的规则").Clicked() {
 				a.Ask(&appt.Confirm{
 					Title:       "批量删除",
@@ -1285,7 +1286,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 					Run: func() error { return a.DeleteMappings(ids) },
 				})
 			}
-			if ui.Button(c, "取消选择").FontSize(11).Disabled(busy).
+			if ui.Button(c, "取消选择").FontSize(CaptionSize).Disabled(busy).
 				Tooltip("清空当前选择").Clicked() {
 				v.chosen.Clear()
 			}
@@ -1308,10 +1309,10 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Textf(c, "%s %d 条 · 启用 %d · 停用 %d", scope, len(filtered), len(onIDs), len(offIDs)).
-			FontSize(11).TextColor(t.Muted)
+			FontSize(CaptionSize).TextColor(t.Muted)
 		ui.Spacer(c)
 		if len(offIDs) > 0 {
-			if ui.Button(c, "全部启用").FontSize(11).Disabled(busy).
+			if ui.Button(c, "全部启用").FontSize(CaptionSize).Disabled(busy).
 				Tooltip("启用当前列表中停用的规则，改完后需应用配置").Clicked() {
 				ids := append([]string(nil), offIDs...)
 				a.Ask(&appt.Confirm{
@@ -1323,7 +1324,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 			}
 		}
 		if len(onIDs) > 0 {
-			if ui.Button(c, "全部停用").FontSize(11).Disabled(busy).
+			if ui.Button(c, "全部停用").FontSize(CaptionSize).Disabled(busy).
 				Tooltip("停用当前列表中启用的规则，改完后需应用配置").Clicked() {
 				ids := append([]string(nil), onIDs...)
 				a.Ask(&appt.Confirm{
@@ -1353,17 +1354,17 @@ func (v *View) chosenInFiltered(filtered []model.Mapping) []model.Mapping {
 // filterEmpty is the card shown when search/filter matches nothing.
 func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Center().Gap(12).Children(func() {
-		ui.Box(c).Width(420).Padding(28, 24).Radius(RadiusPanel).
+		ui.Box(c).Width(420).Padding(32, 24).Radius(RadiusPanel).
 			Background(t.Surface).Border(1, t.Border).Children(func() {
 			ui.Column(c).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "没有匹配的规则").FontSize(16).Bold().TextColor(t.FG)
+				ui.Text(c, "没有匹配的规则").FontSize(HeadSize).Bold().TextColor(t.FG)
 				hint := "试试别的关键词，或清掉筛选条件。"
 				if v.query != "" {
 					hint = fmt.Sprintf("没有名称、域名或端口匹配「%s」的规则。", v.query)
 				}
-				ui.Text(c, hint).FontSize(13).TextColor(t.Muted)
+				ui.Text(c, hint).FontSize(BodySize).TextColor(t.Muted)
 				ui.Row(c).Gap(8).Children(func() {
-					if ui.PrimaryButton(c, "清除筛选").Clicked() {
+					if ui.Button(c, "清除筛选").Clicked() {
 						v.query = ""
 						v.filter = 0
 						v.groupFilter = ""

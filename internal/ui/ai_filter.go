@@ -32,7 +32,7 @@ func (v *View) aiFilterBar(c *ui.Context, t Tokens) {
 	}
 	if busy {
 		ui.Spinner(c).Label("筛选中")
-		ui.Text(c, "筛选中…").FontSize(11).TextColor(t.Muted)
+		ui.Text(c, "筛选中…").FontSize(CaptionSize).TextColor(t.Muted)
 	}
 }
 
@@ -53,8 +53,8 @@ func (v *View) aiFilterResult(c *ui.Context, t Tokens) {
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if errText != "" {
-			ui.Text(c, "AI 筛选失败："+errText).FontSize(11).TextColor(t.Danger)
-			if ui.Button(c, "清除筛选").FontSize(11).
+			ui.Text(c, "AI 筛选失败："+errText).FontSize(CaptionSize).TextColor(t.Danger)
+			if ui.Button(c, "清除筛选").FontSize(CaptionSize).
 				Tooltip("关掉这条失败提示，回到全部映射").Clicked() {
 				a.ClearAIFilter()
 			}
@@ -64,10 +64,10 @@ func (v *View) aiFilterResult(c *ui.Context, t Tokens) {
 		if rationale != "" {
 			line += "：" + rationale
 		}
-		ui.Text(c, line).FontSize(11).TextColor(t.Muted)
-		ui.Textf(c, "（%d 条）", len(ids)).FontSize(11).TextColor(t.Muted)
+		ui.Text(c, line).FontSize(CaptionSize).TextColor(t.Muted)
+		ui.Textf(c, "（%d 条）", len(ids)).FontSize(CaptionSize).TextColor(t.Muted)
 		if len(ids) > 0 {
-			if ui.Button(c, "清除筛选").FontSize(11).
+			if ui.Button(c, "清除筛选").FontSize(CaptionSize).
 				Tooltip("取消这句话的筛选，回到全部映射").Clicked() {
 				a.ClearAIFilter()
 			}

@@ -69,7 +69,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 	}
 	// groupHead is the small heading above a set of fields.
 	groupHead := func(label string) {
-		ui.Text(c, label).FontSize(12).Bold().TextColor(t.FG)
+		ui.Text(c, label).FontSize(NoteSize).Bold().TextColor(t.FG)
 	}
 
 	ui.Modal(c, &open, func() {
@@ -78,25 +78,25 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 			Children(func() {
 
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					ui.Text(c, title).FontSize(16).Bold().TextColor(t.FG)
+					ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
 					if isWeb(f.Protocol) {
-						ui.Text(c, "反代").FontSize(10).Bold().TextColor(t.HTTP).
+						ui.Text(c, "反代").FontSize(CaptionSize).Bold().TextColor(t.HTTP).
 							Padding(2, 8).Radius(RadiusBadge).Background(t.HTTP.Alpha(0.14))
 					}
 					ui.Spacer(c)
-					if ui.Text(c, "×").FontSize(16).TextColor(t.Muted).Label("关闭").Clicked() {
+					if ui.Text(c, "×").FontSize(HeadSize).TextColor(t.Muted).Label("关闭").Clicked() {
 						a.CloseForm()
 					}
 				})
 				// Live forward preview so the rule reads as an address path while editing.
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
 					Background(t.Surface3).Border(1, t.Border).Children(func() {
-					ui.Text(c, "转发").FontSize(10).Bold().TextColor(t.Muted)
-					ui.Text(c, formPreviewLocal(f)).FontSize(12).Bold().TextColor(t.Accent)
-					ui.Text(c, "→").FontSize(12).TextColor(t.Muted)
-					ui.Text(c, formPreviewUpstream(f)).FontSize(12).TextColor(t.FG2)
+					ui.Text(c, "转发").FontSize(CaptionSize).Bold().TextColor(t.Muted)
+					ui.Text(c, formPreviewLocal(f)).FontSize(NoteSize).Bold().TextColor(t.Accent)
+					ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Muted)
+					ui.Text(c, formPreviewUpstream(f)).FontSize(NoteSize).TextColor(t.FG2)
 					ui.Spacer(c)
-					ui.Text(c, f.Protocol).FontSize(10).TextColor(t.Muted)
+					ui.Text(c, f.Protocol).FontSize(CaptionSize).TextColor(t.Muted)
 				})
 
 				// The scroll view fills a box of a fixed height: a modal
@@ -150,8 +150,8 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 							if portFix != 0 {
 								port := strconv.Itoa(portFix)
 								ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-									ui.Textf(c, "或改用 %d：", portFix).FontSize(11).TextColor(t.Muted)
-									if ui.Button(c, "改用 "+port).FontSize(11).Clicked() {
+									ui.Textf(c, "或改用 %d：", portFix).FontSize(CaptionSize).TextColor(t.Muted)
+									if ui.Button(c, "改用 "+port).FontSize(CaptionSize).Clicked() {
 										// f is this frame's copy of the form;
 										// the app holds its own. Writing only
 										// the app's would not do: the input
@@ -165,7 +165,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 										a.UseFormPortFix()
 										a.SetForm(f)
 									}
-									if ui.Button(c, "忽略").FontSize(11).Clicked() {
+									if ui.Button(c, "忽略").FontSize(CaptionSize).Clicked() {
 										a.ClearFormPortFix()
 									}
 								})
@@ -265,7 +265,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 							// common cases need no typing.
 							ui.Row(c).Gap(8).Children(func() {
 								for _, chip := range directiveChips {
-									if ui.Button(c, chip.label).FontSize(11).
+									if ui.Button(c, chip.label).FontSize(CaptionSize).
 										Tooltip("插入 " + chip.directive).Clicked() {
 										f.ExtraDirectives = appendDirective(f.ExtraDirectives, chip.directive)
 										a.SetForm(f)
@@ -277,12 +277,12 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 				})
 
 				if n := len(errs); n > 0 {
-					ui.Textf(c, "还有 %d 处需要修正", n).FontSize(11).TextColor(t.Danger)
+					ui.Textf(c, "还有 %d 处需要修正", n).FontSize(CaptionSize).TextColor(t.Danger)
 				}
 
 				ui.Divider(c)
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(11).TextColor(t.Muted)
+					ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(CaptionSize).TextColor(t.Muted)
 					ui.Spacer(c)
 					if ui.Button(c, "取消").Clicked() {
 						a.CloseForm()
@@ -402,29 +402,29 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 	a := v.App
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(680).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(680).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
-			ui.Text(c, "从模板新建").FontSize(16).Bold().TextColor(t.FG)
-			ui.Text(c, "选一个模板，表单会预先填好常用端口和指令。").FontSize(12).TextColor(t.Muted)
+			ui.Text(c, "从模板新建").FontSize(HeadSize).Bold().TextColor(t.FG)
+			ui.Text(c, "选一个模板，表单会预先填好常用端口和指令。").FontSize(NoteSize).TextColor(t.Muted)
 			ui.Scroll(c).Children(func() {
 				ui.Column(c).Gap(6).Children(func() {
 					for _, tpl := range a.Tpl.List() {
 						tpl := tpl
 						ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(10, 12).Radius(RadiusChip).
 							Background(t.Surface2).Border(1, t.Border).Children(func() {
-							ui.Text(c, tpl.Name).FontSize(13).Bold().TextColor(t.FG).Width(160)
-							ui.Text(c, tpl.Category).FontSize(11).TextColor(t.Muted).Width(70)
-							ui.Text(c, tpl.Description).FontSize(11).TextColor(t.FG2).Grow(1).SingleLine()
+							ui.Text(c, tpl.Name).FontSize(BodySize).Bold().TextColor(t.FG).Width(160)
+							ui.Text(c, tpl.Category).FontSize(CaptionSize).TextColor(t.Muted).Width(70)
+							ui.Text(c, tpl.Description).FontSize(CaptionSize).TextColor(t.FG2).Grow(1).SingleLine()
 							// Each row's buttons name their template: a list of
 							// identical "使用" buttons is ambiguous to a
 							// screen reader, and to the tests.
-							if ui.Button(c, "使用 "+tpl.Name).FontSize(11).Label("使用 " + tpl.Name).Clicked() {
+							if ui.Button(c, "使用 "+tpl.Name).FontSize(CaptionSize).Label("使用 " + tpl.Name).Clicked() {
 								a.SetTemplatePicker(false)
 								a.OpenFormFromTemplate(tpl)
 							}
 							if !tpl.Builtin {
-								if ui.Button(c, "删除 "+tpl.Name).FontSize(11).Label("删除模板 " + tpl.Name).Clicked() {
+								if DangerQuietButton(c, t, "删除 "+tpl.Name).FontSize(CaptionSize).Label("删除模板 " + tpl.Name).Clicked() {
 									if err := a.Tpl.Delete(tpl.ID); err != nil {
 										a.Fail("%v", err)
 									} else {
@@ -452,11 +452,11 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(420).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(420).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
-			ui.Text(c, q.Title).FontSize(15).Bold().TextColor(t.FG)
-			ui.Text(c, q.Body).FontSize(12).TextColor(t.FG2)
+			ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG)
+			ui.Text(c, q.Body).FontSize(NoteSize).TextColor(t.FG2)
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if ui.Button(c, "取消").Clicked() {
 					v.App.ResolveConfirm(false)
@@ -464,9 +464,14 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 				// The label names the confirmation apart from the button
 				// that opened it: both say 清空 or 回滚, and a test
 				// clicking the first match would hit the opener.
-				btn := ui.PrimaryButton(c, q.Label).Label("确认" + q.Label)
+				// Destructive confirms answer in the danger color, the
+				// same step every destructive page button takes — and only
+				// the one button is built, so the click finds it.
+				var btn ui.Element
 				if q.Destructive {
-					btn.Background(t.Danger)
+					btn = DangerButton(c, t, q.Label).Label("确认" + q.Label)
+				} else {
+					btn = ui.PrimaryButton(c, q.Label).Label("确认" + q.Label)
 				}
 				if btn.Clicked() {
 					v.App.ResolveConfirm(true)
@@ -501,14 +506,14 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(760).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(760).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "配置快照").FontSize(15).Bold().TextColor(t.FG)
-				ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(11).TextColor(t.Meta)
+				ui.Text(c, "配置快照").FontSize(HeadSize).Bold().TextColor(t.FG)
+				ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(CaptionSize).TextColor(t.Meta)
 				ui.Spacer(c)
-				ui.Text(c, formatTime(sn.CreatedAt)).FontSize(11).TextColor(t.Muted)
+				ui.Text(c, formatTime(sn.CreatedAt)).FontSize(CaptionSize).TextColor(t.Muted)
 			})
 			ui.Scroll(c).Height(460).Children(func() {
 				editor.DiffView(c, diff)
@@ -519,8 +524,10 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 				}
 				// The button used to roll back the moment it was clicked, with
 				// nothing to confirm against. The diff above is what the
-				// question refers to.
-				if ui.PrimaryButton(c, "回滚到此配置").Clicked() {
+				// question refers to. Rolling back replaces the running
+				// configuration: a destructive main action, so the danger
+				// face; the confirm it opens still asks before it acts.
+				if DangerButton(c, t, "回滚到此配置").Clicked() {
 					snap := *sn
 					a.SetSnapshotView(nil)
 					a.Ask(&appt.Confirm{
@@ -656,15 +663,15 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(860).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(860).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "当前配置").FontSize(15).Bold().TextColor(t.FG)
-				ui.Textf(c, "%d 条规则", n).FontSize(11).TextColor(t.Meta)
+				ui.Text(c, "当前配置").FontSize(HeadSize).Bold().TextColor(t.FG)
+				ui.Textf(c, "%d 条规则", n).FontSize(CaptionSize).TextColor(t.Meta)
 				ui.Spacer(c)
-				ui.Text(c, "只读").FontSize(10).TextColor(t.Muted)
-				if ui.Button(c, "复制全文").FontSize(11).
+				ui.Text(c, "只读").FontSize(CaptionSize).TextColor(t.Muted)
+				if ui.Button(c, "复制全文").FontSize(CaptionSize).
 					Tooltip("把这份配置复制到剪贴板").Clicked() {
 					a.RunBackground(func() error { return a.CopyText(conf) })
 				}
@@ -694,33 +701,38 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 	open := true
 	title := "粘贴导入"
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(520).Gap(12).Padding(20).Radius(RadiusModal).
+		ui.Column(c).Width(520).Gap(12).Padding(24).Radius(RadiusModal).
 			Background(t.Surface).Border(1, t.Border).
 			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
-			ui.Text(c, title).FontSize(15).Bold().TextColor(t.FG)
+			ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
 			kind := "nginx 配置"
 			if pv.Replace {
 				kind = "JumpBoard 备份"
 			}
-			ui.Text(c, "剪贴板内容是 "+kind).FontSize(12).TextColor(t.FG2)
+			ui.Text(c, "剪贴板内容是 "+kind).FontSize(NoteSize).TextColor(t.FG2)
 			ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
 				Background(t.Surface2).Border(1, t.Border).Children(func() {
-				ui.Text(c, pv.Detail).FontSize(12).TextColor(t.FG).Wrap()
+				ui.Text(c, pv.Detail).FontSize(NoteSize).TextColor(t.FG).Wrap()
 			})
 			if pv.Replace {
 				ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
-					FontSize(11).TextColor(t.Warning).Wrap()
+					FontSize(CaptionSize).TextColor(t.Warning).Wrap()
 			} else {
 				ui.Text(c, "与现有规则合并，只新增，不改动已有的映射。").
-					FontSize(11).TextColor(t.Muted).Wrap()
+					FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if ui.Button(c, "取消").Clicked() {
 					a.CancelPasteImport()
 				}
-				btn := ui.PrimaryButton(c, "导入").Label("导入粘贴内容")
+				// Replacing everything is the destructive path, so its
+				// button answers in the danger color; either way one
+				// button is built, so the click finds it.
+				var btn ui.Element
 				if pv.Replace {
-					btn.Background(t.Warning)
+					btn = DangerButton(c, t, "导入").Label("导入粘贴内容")
+				} else {
+					btn = ui.PrimaryButton(c, "导入").Label("导入粘贴内容")
 				}
 				if btn.Clicked() {
 					a.RunBackground(a.ConfirmPasteImport)

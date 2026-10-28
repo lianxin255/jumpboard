@@ -20,7 +20,7 @@ func (v *View) confImportBar(c *ui.Context, t Tokens, busy bool) {
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
 		Background(t.Success.Alpha(0.10)).Border(1, t.Success.Alpha(0.30)).Children(func() {
 		ui.Textf(c, "已导入 %s（合并 %d 条映射）", imp.Name, imp.Count).
-			FontSize(11).TextColor(t.FG)
+			FontSize(CaptionSize).TextColor(t.FG)
 		ui.Spacer(c)
 		if a.AIReady() {
 			if ui.Button(c, "AI 解读").Disabled(busy).
@@ -28,7 +28,7 @@ func (v *View) confImportBar(c *ui.Context, t Tokens, busy bool) {
 				a.RunBackground(a.InterpretDroppedConf)
 			}
 		}
-		if ui.Button(c, "×").FontSize(11).Label("关闭导入提示").
+		if ui.Button(c, "×").FontSize(CaptionSize).Label("关闭导入提示").
 			Tooltip("关掉这条导入提示，已导入的映射不受影响").Clicked() {
 			a.DismissConfImport()
 		}
@@ -50,12 +50,12 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "AI 解读").FontSize(12).Bold().TextColor(t.FG)
+				ui.Text(c, "AI 解读").FontSize(NoteSize).Bold().TextColor(t.FG)
 				if target != "" {
-					ui.Text(c, target).FontSize(12).TextColor(t.Muted)
+					ui.Text(c, target).FontSize(NoteSize).TextColor(t.Muted)
 				}
 				ui.Spacer(c)
-				ui.Text(c, "仅供参考，只读展示").FontSize(10).TextColor(t.Muted)
+				ui.Text(c, "仅供参考，只读展示").FontSize(CaptionSize).TextColor(t.Muted)
 				if ui.Button(c, "收起").Clicked() {
 					a.DismissInterpretation()
 				}
@@ -67,11 +67,11 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 					if busy {
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 							ui.Spinner(c).Label("解读中")
-							ui.Text(c, "正在分析文件…").FontSize(12).TextColor(t.Muted)
+							ui.Text(c, "正在分析文件…").FontSize(NoteSize).TextColor(t.Muted)
 						})
 					}
 					if errText != "" {
-						ui.Text(c, errText).FontSize(11).TextColor(t.Danger).Selectable()
+						ui.Text(c, errText).FontSize(CaptionSize).TextColor(t.Danger).Selectable()
 					}
 					if interp != nil {
 						v.interpretBody(c, t, *interp)

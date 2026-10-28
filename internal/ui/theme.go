@@ -12,6 +12,8 @@ import (
 // The toolkit theme uses Radius/Spacing 10/6; these are for hand-drawn boxes.
 // Sizes follow the glass desktop: window 16, floating bars 14, cards 12,
 // buttons and inputs 9–10, chips 8, pills 12.
+// SidebarW is the frosted rail's width. Page pads and gaps sit on the
+// 4/8 grid: 20 and 32 vertically and horizontally, 14 between blocks.
 const (
 	RadiusWindow = float32(16)
 	RadiusModal  = float32(16)
@@ -23,12 +25,24 @@ const (
 	RadiusTiny   = float32(2)
 	RadiusPill   = float32(12)
 
-	SidebarW   = float32(232)
-	PagePadY   = float32(22)
-	PagePadX   = float32(32)
-	PageGap    = float32(14)
-	TitleSize  = float32(24)
-	SubtitleSz = float32(12)
+	SidebarW = float32(232)
+	PagePadY = float32(20)
+	PagePadX = float32(32)
+	PageGap  = float32(14)
+)
+
+// Type tokens: five sizes every text falls into, so a page cannot grow a
+// ninth orphan size. Title heads a page, Head a dialog or a section,
+// Body is the toolkit's own default for controls and prose, Note is the
+// secondary line beside Body (page subtitles, dialog bodies), and
+// Caption is metadata and the small controls of a row — timestamps,
+// chips, and the 11 DIP buttons lists carry.
+const (
+	TitleSize   = float32(24)
+	HeadSize    = float32(16)
+	BodySize    = float32(13)
+	NoteSize    = float32(12)
+	CaptionSize = float32(11)
 )
 
 // Tokens are the colors of one appearance. The light and dark sets share
@@ -172,7 +186,7 @@ func theme(t Tokens) *ui.Theme {
 	th.Scrollbar = t.Muted
 	// Buttons, inputs and chips share the glass radius.
 	th.Radius, th.Spacing = 10, 6
-	th.FontSize = 13
+	th.FontSize = BodySize
 	if !t.Dark {
 		th.Inverse, th.InverseText = ui.Hex("#1C2434"), ui.Hex("#FBFCFE")
 	}
