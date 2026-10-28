@@ -39,6 +39,7 @@ const (
 	PageLogs
 	PageHistory
 	PageTerminal
+	PageAIChat
 	PageSettings
 )
 
@@ -208,6 +209,22 @@ type App struct {
 	filterQuery     string
 	filterRationale string
 	filterIDs       map[string]bool
+
+	// The AI conversation the chat page holds: the turns so far, the
+	// reply on its way (chatPartial while chatStreaming delivers
+	// fragments), and the drafts the last reply proposed, waiting for
+	// the user's import decision. Behind the mutex because the request
+	// goroutine writes them and every frame reads them, like the
+	// interpretation's state.
+	chatTurns     []ai.ChatTurn
+	chatPartial   string
+	chatStreaming bool
+	chatBusy      bool
+	chatErr       string
+	// chatNote says what a reply's drafts had dropped or capped.
+	chatNote string
+	// chatDrafts are sanitized AIDrafts, never raw model output.
+	chatDrafts []AIDraft
 
 	// The update the last check found, if any, and how far its download
 	// got: negative means unknown or not downloading. updateBusy covers a
