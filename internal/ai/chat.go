@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+
+	openai "github.com/sashabaranov/go-openai"
 )
 
 // The roles a conversation turn carries. The system role is not one of
@@ -83,9 +85,9 @@ running.`
 // to chatTurnsCut runes, and re-cut to start on a user turn, since a
 // conversation that opens on the assistant's half of a pair reads as a
 // broken transcript to gateways that check.
-func wireTurns(turns []ChatTurn) []chatMessage {
-	out := make([]chatMessage, 0, len(turns)+1)
-	out = append(out, chatMessage{Role: "system", Content: chatSystemPrompt})
+func wireTurns(turns []ChatTurn) []openai.ChatCompletionMessage {
+	out := make([]openai.ChatCompletionMessage, 0, len(turns)+1)
+	out = append(out, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: chatSystemPrompt})
 	for _, t := range turns {
 		if t.Role != RoleUser && t.Role != RoleAssistant {
 			continue
@@ -94,7 +96,7 @@ func wireTurns(turns []ChatTurn) []chatMessage {
 		if content == "" {
 			continue
 		}
-		out = append(out, chatMessage{Role: t.Role, Content: Truncate(content, chatTurnCut)})
+		out = append(out, openai.ChatCompletionMessage{Role: t.Role, Content: Truncate(content, chatTurnCut)})
 	}
 	if len(out) > chatTurnsMax+1 {
 		// The system prompt sits outside the window: the cap is on
@@ -104,7 +106,7 @@ func wireTurns(turns []ChatTurn) []chatMessage {
 		for len(window) > 0 && window[0].Role != RoleUser {
 			window = window[1:]
 		}
-		out = append([]chatMessage{out[0]}, window...)
+		out = append([]openai.ChatCompletionMessage{out[0]}, window...)
 	}
 	return out
 }

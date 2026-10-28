@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	openai "github.com/sashabaranov/go-openai"
 )
 
 // chatGateway stands in for the model the way the other tests' fakes do,
@@ -58,7 +60,7 @@ func serveChat(t *testing.T, g *chatGateway) *Client {
 }
 
 // request reads the message list the gateway saw.
-func (g *chatGateway) request(t *testing.T) []chatMessage {
+func (g *chatGateway) request(t *testing.T) []openai.ChatCompletionMessage {
 	t.Helper()
 	g.mu.Lock()
 	body := g.body
@@ -67,7 +69,7 @@ func (g *chatGateway) request(t *testing.T) []chatMessage {
 		t.Fatal("the gateway saw no request")
 	}
 	var req struct {
-		Messages []chatMessage `json:"messages"`
+		Messages []openai.ChatCompletionMessage `json:"messages"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		t.Fatal(err)

@@ -8,18 +8,19 @@
 package ai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	openai "github.com/sashabaranov/go-openai"
 
 	"github.com/lianxin255/jumpboard/internal/model"
 )
@@ -327,21 +328,41 @@ func joinNotes(explanation string, notes ...string) string {
 }
 
 // Client calls an OpenAI compatible endpoint.
+//
+// The wire — requests, server-sent events, error bodies — is the
+// go-openai library's, not this package's. What stays here is the part
+// that is JumpBoard's: the base-URL normalisation, the redirect guard
+// that keeps the key on the endpoint the user configured, the Chinese
+// error surfaces, and the lenient decoding of what a model writes.
 type Client struct {
 	settings Settings
 	http     *http.Client
+	oa       *openai.Client
 }
 
 // New returns a client.
+//
+// The library wants the base URL to end in /v1, while Settings takes an
+// address typed with or without it; normalizeBase makes the two meet. The
+// library's own HTTP client is replaced with ours so the timeout and the
+// redirect guard apply to every request, streaming ones included.
 func New(s Settings) *Client {
 	timeout := s.Timeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	return &Client{settings: s, http: &http.Client{
+	httpClient := &http.Client{
 		Timeout:       timeout,
 		CheckRedirect: sameOriginOnly,
-	}}
+	}
+	c := &Client{settings: s, http: httpClient}
+	if strings.TrimSpace(s.BaseURL) != "" {
+		cfg := openai.DefaultConfig(s.APIKey)
+		cfg.BaseURL = normalizeBase(s.BaseURL) + "/v1"
+		cfg.HTTPClient = httpClient
+		c.oa = openai.NewClientWithConfig(cfg)
+	}
+	return c
 }
 
 // sameOriginOnly keeps the API key from following a redirect off the
@@ -365,44 +386,62 @@ func sameOriginOnly(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// request and response shapes, narrowed to what the client reads.
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// mapOpenAIError turns the library's errors into the sentences the app
+// shows: the gateway's own message when it sent one, the status alone
+// when it did not, and the connection's error when no response arrived.
+// Every caller surfaces the result unchanged, so one wording serves the
+// settings probe, the one-shot features and the conversation alike.
+func mapOpenAIError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.Message != "" {
+			return fmt.Errorf("AI 服务返回 %d：%s", apiErr.HTTPStatusCode, apiErr.Message)
+		}
+		return fmt.Errorf("AI 服务返回 %d", apiErr.HTTPStatusCode)
+	}
+	var reqErr *openai.RequestError
+	if errors.As(err, &reqErr) {
+		return fmt.Errorf("AI 服务返回 %d", reqErr.HTTPStatusCode)
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return fmt.Errorf("连接 AI 服务失败：%w", err)
+	}
+	return fmt.Errorf("无法解析 AI 服务的响应：%w", err)
 }
 
-type chatRequest struct {
-	Model          string          `json:"model"`
-	Messages       []chatMessage   `json:"messages"`
-	Temperature    float64         `json:"temperature"`
-	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
+// chatTemperature is the low temperature every AI request asks for, save
+// on the model families the library refuses one for before any request
+// travels: the o1/o3/o4 and gpt-5/gpt-6 names, which fix their sampling.
+// Omitting beats failing — a gateway that ignores the field answers the
+// same either way, and a name that only looks like one of these is still
+// served.
+func chatTemperature(model string) float32 {
+	for _, prefix := range []string{"o1", "o3", "o4", "gpt-5", "gpt-6"} {
+		if strings.HasPrefix(model, prefix) {
+			return 0 // omitted on the wire
+		}
+	}
+	return 0.2
 }
 
 // postChat sends one chat completion and returns the model's content,
 // with the JSON object already extracted.
 //
 // Every AI feature shares this one request path — the redirect guard,
-// the low temperature, the JSON response format, the 1MiB read limit
-// and the non-200 error surface — so a hardening of one reaches them
-// all. Draft and Diagnose differ only in their prompts and in how the
-// reply is decoded. The conversation in chat.go sends its whole message
-// list through postChatMsgs instead, without the JSON format; this pair
-// stays the two-message shape every one-shot feature uses.
+// the low temperature, the JSON response format and the error surface —
+// so a hardening of one reaches them all. Draft and Diagnose differ only
+// in their prompts and in how the reply is decoded. The conversation in
+// chat.go sends its whole message list through postChatMsgs instead,
+// without the JSON format; this pair stays the two-message shape every
+// one-shot feature uses.
 func (c *Client) postChat(ctx context.Context, system, user string) (string, error) {
-	return c.postChatMsgs(ctx, []chatMessage{
-		{Role: "system", Content: system},
-		{Role: "user", Content: user},
+	return c.postChatMsgs(ctx, []openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: system},
+		{Role: openai.ChatMessageRoleUser, Content: user},
 	}, true)
 }
 
@@ -411,58 +450,28 @@ func (c *Client) postChat(ctx context.Context, system, user string) (string, err
 // object and reads one back out of whatever wrapper the model used,
 // which every one-shot feature wants; a conversation wants prose with a
 // JSON block inside it, so it asks without and gets the raw text.
-func (c *Client) postChatMsgs(ctx context.Context, msgs []chatMessage, jsonFormat bool) (string, error) {
+func (c *Client) postChatMsgs(ctx context.Context, msgs []openai.ChatCompletionMessage, jsonFormat bool) (string, error) {
 	if !c.settings.Ready() {
 		return "", errors.New("还没有配置 AI 服务")
 	}
-	reqBody := chatRequest{
+	req := openai.ChatCompletionRequest{
 		Model:       c.settings.Model,
-		Temperature: 0.2,
 		Messages:    msgs,
+		Temperature: chatTemperature(c.settings.Model),
 	}
 	if jsonFormat {
-		reqBody.ResponseFormat = json.RawMessage(`{"type":"json_object"}`)
-	}
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	url := normalizeBase(c.settings.BaseURL) + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.settings.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.settings.APIKey)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("连接 AI 服务失败：%w", err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
-		var r chatResponse
-		if json.Unmarshal(data, &r) == nil && r.Error != nil && r.Error.Message != "" {
-			return "", fmt.Errorf("AI 服务返回 %d：%s", resp.StatusCode, r.Error.Message)
+		req.ResponseFormat = &openai.ChatCompletionResponseFormat{
+			Type: openai.ChatCompletionResponseFormatTypeJSONObject,
 		}
-		return "", fmt.Errorf("AI 服务返回 %d", resp.StatusCode)
 	}
-
-	var r chatResponse
-	if err := json.Unmarshal(data, &r); err != nil {
-		return "", fmt.Errorf("无法解析 AI 服务的响应：%w", err)
+	resp, err := c.oa.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", mapOpenAIError(err)
 	}
-	if len(r.Choices) == 0 {
+	if len(resp.Choices) == 0 {
 		return "", errors.New("AI 服务没有返回内容")
 	}
-	content := r.Choices[0].Message.Content
+	content := resp.Choices[0].Message.Content
 	if jsonFormat {
 		content = extractJSON(content)
 	}
@@ -893,17 +902,6 @@ func (c *Client) Probe(ctx context.Context) error {
 	return err
 }
 
-// modelsResponse is the OpenAI shape of GET /v1/models, narrowed to the
-// one field worth reading: each entry's id, which is what a request names.
-type modelsResponse struct {
-	Data []struct {
-		ID string `json:"id"`
-	} `json:"data"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
 // Models lists what the endpoint offers, for the settings page's picker.
 //
 // The list comes from GET /v1/models, which every OpenAI compatible
@@ -912,41 +910,16 @@ type modelsResponse struct {
 // The ids are sorted and de-duplicated: gateways repeat them, and a
 // dropdown of "gpt-4o, gpt-4o, gpt-4o" reads as a bug.
 func (c *Client) Models(ctx context.Context) ([]string, error) {
-	base := normalizeBase(c.settings.BaseURL)
-	if base == "" {
+	if normalizeBase(c.settings.BaseURL) == "" {
 		return nil, errors.New("请先填写接口地址")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)
+	list, err := c.oa.ListModels(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if c.settings.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.settings.APIKey)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("连接 AI 服务失败：%w", err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		var mr modelsResponse
-		msg := ""
-		if json.Unmarshal(data, &mr) == nil && mr.Error != nil {
-			msg = "：" + mr.Error.Message
-		}
-		return nil, fmt.Errorf("AI 服务返回 %d%s", resp.StatusCode, msg)
-	}
-	var mr modelsResponse
-	if err := json.Unmarshal(data, &mr); err != nil {
-		return nil, fmt.Errorf("无法解析模型列表：%w", err)
+		return nil, mapOpenAIError(err)
 	}
 	seen := map[string]bool{}
-	out := make([]string, 0, len(mr.Data))
-	for _, m := range mr.Data {
+	out := make([]string, 0, len(list.Models))
+	for _, m := range list.Models {
 		if m.ID != "" && !seen[m.ID] {
 			seen[m.ID] = true
 			out = append(out, m.ID)

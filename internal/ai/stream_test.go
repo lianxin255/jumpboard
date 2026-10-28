@@ -65,8 +65,9 @@ func TestPostChatStreamDeliversDeltas(t *testing.T) {
 
 // TestPostChatAutoFallsBackToOneShot checks the gateway that ignores
 // stream:true and answers a normal JSON completion: the streaming attempt
-// refuses the body, postChatAuto retries once through postChat, and the
-// caller sees the one-shot result without a single delta on the way.
+// reads it as an empty stream — no error, and no text either — so
+// postChatAuto retries once through postChat, and the caller sees the
+// one-shot result without a single delta on the way.
 func TestPostChatAutoFallsBackToOneShot(t *testing.T) {
 	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -74,8 +75,11 @@ func TestPostChatAutoFallsBackToOneShot(t *testing.T) {
 	})
 	c := New(Settings{BaseURL: srv.URL, Model: "test"})
 
-	if _, err := c.postChatStream(context.Background(), "s", "u", nil); err == nil {
-		t.Fatal("a JSON body is not a stream and should be refused")
+	if text, err := c.postChatStream(context.Background(), "s", "u", nil); err != nil || text != "" {
+		// A JSON body is not an event stream; the library's reader ends it
+		// at once, which is what makes the caller fall back rather than
+		// show an error of its own.
+		t.Fatalf("the stream attempt should end empty without an error: text=%q err=%v", text, err)
 	}
 
 	deltas := 0
@@ -153,20 +157,24 @@ func TestPostChatAutoKeepsPartialWhenStreamDrops(t *testing.T) {
 }
 
 // TestPostChatStreamToleratesChunkShapes checks the shapes a gateway may
-// send inside an otherwise correct stream: message.content in place of
-// delta.content, data: without the space, empty deltas, events without
-// choices, usage-only trailers, and foreign lines — none of them text, or
-// text in the wrong slot, and none of them fatal.
+// send inside an otherwise correct stream: comments, foreign fields, data:
+// without the space, empty deltas, events without choices, usage-only
+// trailers, and events after [DONE] — none of them text, and none of them
+// fatal. (A gateway that puts message.content where delta.content belongs
+// is tolerated the same way, but its text is lost: the library's reader
+// knows the one slot, and widening it would mean hand-rolling the wire
+// this package no longer owns.)
 func TestPostChatStreamToleratesChunkShapes(t *testing.T) {
 	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		w.Write([]byte("data: {\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"}}]}\n\n" +
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n" +
 			": keep-alive\n\n" +
 			"event: rename\n" +
-			"data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n" +
 			"data:{\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n" +
 			"data: {\"choices\":[{\"delta\":{\"content\":\"\"}}]}\n\n" +
 			"data: {\"choices\":[],\"usage\":{\"total_tokens\":9}}\n\n" +
+			"data: {\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\" ignored\"}}]}\n\n" +
 			"data: [DONE]\n\n" +
 			"data: {\"choices\":[{\"delta\":{\"content\":\"after done\"}}]}\n\n"))
 	})
