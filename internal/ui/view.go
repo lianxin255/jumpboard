@@ -59,6 +59,13 @@ type View struct {
 	wsNewName    string
 	wsRenameID   string
 	wsRenameName string
+	// The AI chat page's own state: the composer's buffer and the
+	// conversation list's scroll place, which follows the newest message
+	// until the user scrolls up. The conversation itself lives in the
+	// app, like every other AI feature's state; these are only the
+	// field and the list, with the whitelist fields' main-thread home.
+	chatInput     string
+	chatListState ui.ListState
 	// The log and history lists keep their scroll position in the view:
 	// a ListState built inside a frame forgets it every frame, so the
 	// list could never be scrolled past its first page.
@@ -217,7 +224,7 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 			})
 		})
 
-		labels := []string{"映射", "日志", "历史", "终端", "设置"}
+		labels := []string{"映射", "日志", "历史", "终端", "AI 对话", "设置"}
 		tabs := ui.TabsBase(c, &page, len(labels))
 		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
 			for i, label := range labels {
@@ -294,6 +301,8 @@ func (v *View) body(c *ui.Context, t Tokens) {
 		v.historyPage(c, t)
 	case appt.PageTerminal:
 		v.terminalPage(c, t)
+	case appt.PageAIChat:
+		v.aiChatPage(c, t)
 	case appt.PageSettings:
 		v.settingsPage(c, t)
 	default:
