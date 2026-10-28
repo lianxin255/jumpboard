@@ -48,16 +48,23 @@ type streamChunk struct {
 // event yields "", and a stream that breaks mid-way yields the partial
 // text. Which of the two happened is what postChatAuto's fallback turns on.
 func (c *Client) postChatStream(ctx context.Context, system, user string, onDelta func(string)) (string, error) {
+	return c.postChatStreamMsgs(ctx, []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	}, onDelta)
+}
+
+// postChatStreamMsgs is postChatStream over a whole message list, the way
+// postChatMsgs is postChat's: the conversation in chat.go streams its
+// history through this one.
+func (c *Client) postChatStreamMsgs(ctx context.Context, msgs []chatMessage, onDelta func(string)) (string, error) {
 	if !c.settings.Ready() {
 		return "", errors.New("还没有配置 AI 服务")
 	}
 	body, err := json.Marshal(streamRequest{
-		Model:  c.settings.Model,
-		Stream: true,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
+		Model:       c.settings.Model,
+		Stream:      true,
+		Messages:    msgs,
 		Temperature: 0.2,
 	})
 	if err != nil {
@@ -160,8 +167,22 @@ func (c *Client) postChatStream(ctx context.Context, system, user string, onDelt
 // rather than restarting, so the caller can show what arrived instead of
 // waiting twice. Check err before using the text in that case.
 func (c *Client) postChatAuto(ctx context.Context, system, user string, onDelta func(string)) (string, error) {
+	return c.postChatAutoMsgs(ctx, []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	}, true, onDelta)
+}
+
+// postChatAutoMsgs is postChatAuto over a whole message list, with the
+// same fallback rule: a streaming attempt that fails before the first
+// fragment is retried once through the one-shot path; after the first
+// fragment the partial text travels with the error. jsonFormat says what
+// the one-shot fallback wants, the same thing postChatMsgs' flag says —
+// true for the one-shot features' JSON object, false for the
+// conversation's prose. The conversation in chat.go is the false caller.
+func (c *Client) postChatAutoMsgs(ctx context.Context, msgs []chatMessage, jsonFormat bool, onDelta func(string)) (string, error) {
 	var started bool
-	text, err := c.postChatStream(ctx, system, user, func(frag string) {
+	text, err := c.postChatStreamMsgs(ctx, msgs, func(frag string) {
 		started = true
 		if onDelta != nil {
 			onDelta(frag)
@@ -171,7 +192,7 @@ func (c *Client) postChatAuto(ctx context.Context, system, user string, onDelta 
 		return text, nil
 	}
 	if !started {
-		return c.postChat(ctx, system, user)
+		return c.postChatMsgs(ctx, msgs, jsonFormat)
 	}
 	return text, err
 }

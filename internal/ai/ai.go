@@ -396,20 +396,34 @@ type chatResponse struct {
 // the low temperature, the JSON response format, the 1MiB read limit
 // and the non-200 error surface — so a hardening of one reaches them
 // all. Draft and Diagnose differ only in their prompts and in how the
-// reply is decoded.
+// reply is decoded. The conversation in chat.go sends its whole message
+// list through postChatMsgs instead, without the JSON format; this pair
+// stays the two-message shape every one-shot feature uses.
 func (c *Client) postChat(ctx context.Context, system, user string) (string, error) {
+	return c.postChatMsgs(ctx, []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	}, true)
+}
+
+// postChatMsgs sends one chat completion over a whole message list and
+// returns the model's content. jsonFormat asks the gateway for a JSON
+// object and reads one back out of whatever wrapper the model used,
+// which every one-shot feature wants; a conversation wants prose with a
+// JSON block inside it, so it asks without and gets the raw text.
+func (c *Client) postChatMsgs(ctx context.Context, msgs []chatMessage, jsonFormat bool) (string, error) {
 	if !c.settings.Ready() {
 		return "", errors.New("还没有配置 AI 服务")
 	}
-	body, err := json.Marshal(chatRequest{
+	reqBody := chatRequest{
 		Model:       c.settings.Model,
 		Temperature: 0.2,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
-		ResponseFormat: json.RawMessage(`{"type":"json_object"}`),
-	})
+		Messages:    msgs,
+	}
+	if jsonFormat {
+		reqBody.ResponseFormat = json.RawMessage(`{"type":"json_object"}`)
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -448,7 +462,11 @@ func (c *Client) postChat(ctx context.Context, system, user string) (string, err
 	if len(r.Choices) == 0 {
 		return "", errors.New("AI 服务没有返回内容")
 	}
-	return extractJSON(r.Choices[0].Message.Content), nil
+	content := r.Choices[0].Message.Content
+	if jsonFormat {
+		content = extractJSON(content)
+	}
+	return content, nil
 }
 
 // ForModel returns a client that names another model: a shallow copy
