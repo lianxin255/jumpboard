@@ -283,8 +283,8 @@ type hotkeyDraft struct {
 // thread, so the map needs no lock.
 var hotkeyCards = map[*appt.App]*hotkeyDraft{}
 
-// hotkeyCard returns the shortcut card's draft for the app.
-func hotkeyCard(a *appt.App) *hotkeyDraft {
+// hotkeyDraftFor returns the shortcut card's draft for the app.
+func hotkeyDraftFor(a *appt.App) *hotkeyDraft {
 	d, ok := hotkeyCards[a]
 	if !ok {
 		d = &hotkeyDraft{}
@@ -293,22 +293,33 @@ func hotkeyCard(a *appt.App) *hotkeyDraft {
 	return d
 }
 
+// settingsCardMin is the least width one of the settings page's cards
+// takes. Two cards and the gap between them need 736 DIPs, which the
+// window's content has from 1280 wide (999 DIPs once the rail and the
+// page's padding are taken out) but not at 960 (680): the pairs sit side
+// by side on a wide window and stack, each card full width, on a narrow
+// one — with nothing between the two sizes to tune.
+const settingsCardMin = float32(360)
+
 // settingsPage holds the appearance, the access control and the data tools.
+//
+// The page is rows, not one wrap flow: the AI card owns the first row
+// whole, the cards after it pair by affinity, and each row's two cards
+// sit top aligned and equal in width. A wrap flow of cards with
+// different heights is a waterfall — cards beside cards they have
+// nothing to do with, ragged where the pair beside them is shorter.
 func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, _, wl, _, _, busy, _ := a.Snapshot()
 
-	if !v.nameLoaded {
-		v.settingsName = a.HostName()
-		v.nameLoaded = true
-	}
-
-	themeIdx := 0
-	switch a.Theme() {
-	case appt.ThemeLight:
-		themeIdx = 1
-	case appt.ThemeDark:
-		themeIdx = 2
+	// pair is one row of the settings page: two cards that share the row
+	// while both fit beside each other and stack, each on its own
+	// full-width line, once the window is too narrow for the pair.
+	pair := func(left, right func()) {
+		ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
+			left()
+			right()
+		})
 	}
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
@@ -318,280 +329,326 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 			// The cards read in the order a user needs them: the AI card
 			// leads — the chat page's 去设置 lands on it, and a card below
 			// the fold would need the user to scroll to the one thing they
-			// came for — then the desktop's looks, who may connect, the
-			// data tools, the scenes those tools feed, and the least-visited
-			// cards (快捷键, 更新) last. The danger band stays a band across
-			// the page below them all, apart from the cards it outclasses
-			// in consequence.
-			ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
+			// came for — then the desktop's looks beside who may connect,
+			// the data tools beside the scenes they feed, and the
+			// least-visited pair (快捷键, 更新) last. The danger band stays a
+			// band across the page below them all, apart from the cards it
+			// outclasses in consequence.
+			ui.Column(c).Gap(16).Children(func() {
 				v.aiCard(c, t)
 
-				v.card(c, t, "外观", func() {
-					ui.Field(c, "主题", func() {
-						if ui.Segmented(c, &themeIdx, "跟随系统", "亮色", "暗色").Label("主题").Changed() {
-							switch themeIdx {
-							case 1:
-								a.SetTheme(appt.ThemeLight)
-							case 2:
-								a.SetTheme(appt.ThemeDark)
-							default:
-								a.SetTheme(appt.ThemeSystem)
-							}
-						}
-					})
-					ui.Text(c, "亮色与暗色各有一套配色；跟随系统时随桌面的外观自动切换。").
-						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					ui.Field(c, "网关名称", func() {
-						if ui.TextInput(c, &v.settingsName).Submitted() {
-							a.SetHostName(v.settingsName)
-						}
-					})
-					ui.Field(c, "开机自启", func() {
-						on := a.OpenAtLogin()
-						if ui.Switch(c, &on).Label("开机自启动").Changed() {
-							_ = a.SetOpenAtLogin(on)
-						}
-					})
-					ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
-						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					// The traffic switch rides the same row as its words, the
-					// whitelist switch's shape: a settings page whose cards
-					// grow one line each would push the cards beside them
-					// below the fold of the window's default size.
-					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				pair(
+					func() { v.appearanceCard(c, t) },
+					func() { v.accessCard(c, t, wl, busy) },
+				)
+
+				pair(
+					func() { v.backupCard(c, t) },
+					func() { v.workspaceCard(c, t, busy) },
+				)
+
+				pair(
+					func() { v.hotkeyCard(c, t) },
+					func() { v.updateCard(c, t) },
+				)
+
+				// The danger zone is a band across the page, not a button
+				// among the tools: wiping everything deserves to look
+				// different from exporting a backup.
+				zoneFill, zoneLine := statusOutline(t.Danger)
+				ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
+					Padding(14, 16).Radius(RadiusPanel).
+					Background(zoneFill).Border(1, zoneLine).
+					Children(func() {
 						ui.Column(c).Gap(2).Grow(1).Children(func() {
-							ui.Text(c, "流量显示").FontSize(BodySize).TextColor(t.FG)
-							ui.Text(c, "映射表与详情显示连接数和流量").FontSize(CaptionSize).TextColor(t.Muted)
+							ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)
+							ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
+								FontSize(CaptionSize).TextColor(t.FG2)
 						})
-						on := a.ShowTraffic()
-						if ui.Switch(c, &on).Label("显示流量").
-							Tooltip("关闭后映射表和详情不再显示连接数与流量，转发本身不受影响").Changed() {
-							a.SetShowTraffic(on)
-						}
-					})
-				})
-
-				v.card(c, t, "访问控制", func() {
-					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-						ui.Column(c).Gap(2).Grow(1).Children(func() {
-							ui.Text(c, "IP 白名单").FontSize(BodySize).TextColor(t.FG)
-							ui.Text(c, "开启后只允许列表中的 IP 访问所有代理").FontSize(CaptionSize).TextColor(t.Muted)
-						})
-						// The switch's label names the action, not the heading
-						// text beside it: two elements with one name would
-						// make the click ambiguous.
-						on := a.WhitelistOn()
-						if ui.Switch(c, &on).Label("启用白名单").Changed() {
-							a.SetWhitelistOn(on)
-						}
-					})
-					ui.Divider(c)
-					if len(wl) == 0 {
-						ui.Text(c, "还没有条目").FontSize(CaptionSize).TextColor(t.Muted)
-					}
-					for _, e := range wl {
-						e := e
-						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-							on := e.Enabled
-							ui.Switch(c, &on).Label("启用-" + e.IP).OnChange(func() {
-								a.RunBackground(func() error { return a.ToggleWhitelist(e.ID, on) })
+						if DangerButton(c, t, "清空所有数据").Disabled(busy).Clicked() {
+							a.Ask(&appt.Confirm{
+								Title: "清空所有数据",
+								Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
+								Label: "全部删除", Destructive: true,
+								Run: a.Wipe,
 							})
-							ui.Column(c).Gap(1).Grow(1).Children(func() {
-								ui.Text(c, e.IP).FontSize(NoteSize).TextColor(t.FG).Font(FontMono)
-								if e.Note != "" {
-									ui.Text(c, e.Note).FontSize(CaptionSize).TextColor(t.Muted)
-								}
-							})
-							if DangerQuietButton(c, t, "移除").FontSize(CaptionSize).Clicked() {
-								a.RunBackground(func() error { return a.DeleteWhitelist(e.ID) })
-							}
-						})
-					}
-					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &v.whitelistIP).Placeholder("192.168.1.0/24").Grow(1).Label("白名单地址")
-						ui.TextInput(c, &v.whitelistNote).Placeholder("备注").Width(90)
-						if ui.Button(c, "添加").Disabled(busy).Clicked() {
-							ip, note := v.whitelistIP, v.whitelistNote
-							v.whitelistIP, v.whitelistNote = "", ""
-							a.RunBackground(func() error { return a.AddWhitelist(ip, note) })
 						}
 					})
-					if a.WhitelistOn() && len(wl) == 0 {
-						ui.Text(c, "白名单开着但没有任何 IP，应用配置会被拒绝。").
-							FontSize(CaptionSize).TextColor(t.Warning)
-					}
-				})
-
-				v.card(c, t, "备份与快照", func() {
-					ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").
-						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					ui.Row(c).Gap(8).Children(func() {
-						if ui.Button(c, "导出备份").Clicked() {
-							v.exportBackup()
-						}
-						if ui.Button(c, "导入备份").Clicked() {
-							v.importBackup()
-						}
-						if ui.Button(c, "导入为新场景").
-							Tooltip("把备份里的映射放进一个新建的场景，不动当前场景").Clicked() {
-							v.importBackupAsWorkspace()
-						}
-						if ui.Button(c, "配置历史").Clicked() {
-							a.SetPage(appt.PageHistory)
-						}
-					})
-					ui.Text(c, "导出不含密码；导入会全量替换现有映射与白名单。").
-						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					ui.Divider(c)
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						if ui.Button(c, "导出 nginx 配置").Clicked() {
-							v.exportNginx()
-						}
-						ui.Text(c, "导出成标准 nginx.conf，可在真正的 nginx 上运行。").
-							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					})
-					ui.Divider(c)
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						if ui.Button(c, "查看当前配置").Clicked() {
-							a.SetConfViewOpen(true)
-						}
-						ui.Text(c, "只读查看应用实际生成的 nginx.conf。").
-							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					})
-					ui.Divider(c)
-					ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(CaptionSize).
-						TextColor(t.Muted).Wrap().Selectable()
-					if a.Paths.Fallback {
-						ui.Text(c, "程序目录不可写，数据改存在用户目录。").
-							FontSize(CaptionSize).TextColor(t.Warning)
-					}
-				})
-
-				// The scene card rides the same flow, after the data tools
-				// it sits beside in spirit: a scene is renamed and retired
-				// rarely enough that the tools around it keep the first
-				// rows, and the page scrolls. The one-click switch is on
-				// the mappings page, where it belongs.
-				v.workspaceCard(c, t, busy)
-
-				v.card(c, t, "快捷键", func() {
-					// The global binding is a setting; the in-app
-					// shortcuts below it are not — they are wired in the
-					// view and stay as they are. The current accelerator
-					// is read from the store each frame: frames are drawn
-					// on demand, and the card must say what is stored, not
-					// what it remembers.
-					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-						kbdKey(c, t, a.Hotkey())
-						ui.Text(c, "全局显示/隐藏主窗口").FontSize(NoteSize).TextColor(t.FG2)
-					})
-					// A typed accelerator, not a key recorder: the string
-					// is validated by trying to register it, which is what
-					// the save reports.
-					d := hotkeyCard(a)
-					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &d.text).Placeholder("CmdOrCtrl+Shift+Alt+K").Grow(1).
-							Label("新快捷键").
-							Tooltip("输入组合键文本（本版不录制按键）：修饰键写 CmdOrCtrl、Ctrl、Alt 或 Shift，用 + 连接，末尾是主键（字母、数字或 F1-F24 等功能键），例如 CmdOrCtrl+Shift+Alt+K。保存时尝试注册，组合被占用或格式不对会提示。")
-						if ui.Button(c, "保存快捷键").Clicked() {
-							if err := a.SetHotkey(d.text); err != nil {
-								d.err = err.Error()
-							} else {
-								d.text, d.err = "", ""
-							}
-						}
-					})
-					if d.err != "" {
-						ui.Text(c, d.err).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
-					}
-					ui.Divider(c)
-					rows := [][2]string{
-						{"⌘N", "新建映射"},
-						{"⌘F", "聚焦搜索"},
-						{"⌘R", "应用配置"},
-						{"Esc", "关闭当前对话框"},
-					}
-					for _, r := range rows {
-						r := r
-						ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-							kbdKey(c, t, r[0])
-							ui.Text(c, r[1]).FontSize(NoteSize).TextColor(t.FG2)
-						})
-					}
-					ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(CaptionSize).TextColor(t.Muted)
-				})
-
-				v.card(c, t, "更新", func() {
-					ui.Text(c, "当前版本 "+a.AppVersion).FontSize(CaptionSize).TextColor(t.Muted)
-					if !a.UpdatesEnabled() {
-						ui.Text(c, "开发构建不支持自动更新，新版本请从 GitHub Releases 下载。").
-							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-						return
-					}
-					if up := a.UpdateAvail(); up != nil {
-						ui.Text(c, "发现新版本 "+up.Version).FontSize(BodySize).Bold().TextColor(t.FG)
-						markdown.View(c, up.Notes, &markdown.Options{})
-						if a.UpdateBusy() {
-							if p := a.UpdateProgress(); p >= 0 {
-								ui.Text(c, fmt.Sprintf("正在下载更新…%d%%", int(p*100))).
-									FontSize(CaptionSize).TextColor(t.Muted)
-							} else {
-								ui.Text(c, "正在下载更新…").FontSize(CaptionSize).TextColor(t.Muted)
-							}
-						}
-						if ui.PrimaryButton(c, "安装并重启").Disabled(a.UpdateBusy()).Clicked() {
-							a.InstallFoundUpdate()
-						}
-						ui.Text(c, "下载校验通过后自动重启到新版本。").
-							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-						return
-					}
-					if ui.Button(c, "检查更新").Disabled(a.UpdateBusy()).Clicked() {
-						a.CheckForUpdates()
-					}
-					if a.UpdateBusy() {
-						ui.Text(c, "正在检查…").FontSize(CaptionSize).TextColor(t.Muted)
-					} else {
-						ui.Text(c, "更新包经签名校验，只有检查后才会下载。").
-							FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					}
-				})
 			})
+		}).Grow(1)
+	})
+}
 
-			// The danger zone is a band across the page, not a button
-			// among the tools: wiping everything deserves to look
-			// different from exporting a backup.
-			zoneFill, zoneLine := statusOutline(t.Danger)
-			ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
-				Padding(14, 16).Radius(RadiusPanel).
-				Background(zoneFill).Border(1, zoneLine).
-				Children(func() {
-					ui.Column(c).Gap(2).Grow(1).Children(func() {
-						ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)
-						ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
-							FontSize(CaptionSize).TextColor(t.FG2)
-					})
-					if DangerButton(c, t, "清空所有数据").Disabled(busy).Clicked() {
-						a.Ask(&appt.Confirm{
-							Title: "清空所有数据",
-							Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
-							Label: "全部删除", Destructive: true,
-							Run: a.Wipe,
-						})
+// appearanceCard is the settings page's 外观 card: the theme, the
+// gateway's name, the login item and the traffic display.
+func (v *View) appearanceCard(c *ui.Context, t Tokens) {
+	a := v.App
+	if !v.nameLoaded {
+		v.settingsName = a.HostName()
+		v.nameLoaded = true
+	}
+	themeIdx := 0
+	switch a.Theme() {
+	case appt.ThemeLight:
+		themeIdx = 1
+	case appt.ThemeDark:
+		themeIdx = 2
+	}
+
+	card(c, t, "外观", func() {
+		ui.Field(c, "主题", func() {
+			if ui.Segmented(c, &themeIdx, "跟随系统", "亮色", "暗色").Label("主题").Changed() {
+				switch themeIdx {
+				case 1:
+					a.SetTheme(appt.ThemeLight)
+				case 2:
+					a.SetTheme(appt.ThemeDark)
+				default:
+					a.SetTheme(appt.ThemeSystem)
+				}
+			}
+		})
+		ui.Text(c, "亮色与暗色各有一套配色；跟随系统时随桌面的外观自动切换。").
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		ui.Field(c, "网关名称", func() {
+			if ui.TextInput(c, &v.settingsName).Submitted() {
+				a.SetHostName(v.settingsName)
+			}
+		})
+		ui.Field(c, "开机自启", func() {
+			on := a.OpenAtLogin()
+			if ui.Switch(c, &on).Label("开机自启动").Changed() {
+				_ = a.SetOpenAtLogin(on)
+			}
+		})
+		ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		// The traffic switch rides the same row as its words, the
+		// whitelist switch's shape: a settings page whose cards
+		// grow one line each would push the cards beside them
+		// below the fold of the window's default size.
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Gap(2).Grow(1).Children(func() {
+				ui.Text(c, "流量显示").FontSize(BodySize).TextColor(t.FG)
+				ui.Text(c, "映射表与详情显示连接数和流量").FontSize(CaptionSize).TextColor(t.Muted)
+			})
+			on := a.ShowTraffic()
+			if ui.Switch(c, &on).Label("显示流量").
+				Tooltip("关闭后映射表和详情不再显示连接数与流量，转发本身不受影响").Changed() {
+				a.SetShowTraffic(on)
+			}
+		})
+	})
+}
+
+// accessCard is the settings page's 访问控制 card: the whitelist's
+// master switch, its rows, and the field that adds to it.
+func (v *View) accessCard(c *ui.Context, t Tokens, wl []model.WhitelistEntry, busy bool) {
+	a := v.App
+	card(c, t, "访问控制", func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Gap(2).Grow(1).Children(func() {
+				ui.Text(c, "IP 白名单").FontSize(BodySize).TextColor(t.FG)
+				ui.Text(c, "开启后只允许列表中的 IP 访问所有代理").FontSize(CaptionSize).TextColor(t.Muted)
+			})
+			// The switch's label names the action, not the heading
+			// text beside it: two elements with one name would
+			// make the click ambiguous.
+			on := a.WhitelistOn()
+			if ui.Switch(c, &on).Label("启用白名单").Changed() {
+				a.SetWhitelistOn(on)
+			}
+		})
+		ui.Divider(c)
+		if len(wl) == 0 {
+			ui.Text(c, "还没有条目").FontSize(CaptionSize).TextColor(t.Muted)
+		}
+		for _, e := range wl {
+			e := e
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				on := e.Enabled
+				ui.Switch(c, &on).Label("启用-" + e.IP).OnChange(func() {
+					a.RunBackground(func() error { return a.ToggleWhitelist(e.ID, on) })
+				})
+				ui.Column(c).Gap(1).Grow(1).Children(func() {
+					ui.Text(c, e.IP).FontSize(NoteSize).TextColor(t.FG).Font(FontMono)
+					if e.Note != "" {
+						ui.Text(c, e.Note).FontSize(CaptionSize).TextColor(t.Muted)
 					}
 				})
-		}).Grow(1)
+				if DangerQuietButton(c, t, "移除").FontSize(CaptionSize).Clicked() {
+					a.RunBackground(func() error { return a.DeleteWhitelist(e.ID) })
+				}
+			})
+		}
+		ui.Row(c).Gap(6).Children(func() {
+			ui.TextInput(c, &v.whitelistIP).Placeholder("192.168.1.0/24").Grow(1).Label("白名单地址")
+			ui.TextInput(c, &v.whitelistNote).Placeholder("备注").Width(90)
+			if ui.Button(c, "添加").Disabled(busy).Clicked() {
+				ip, note := v.whitelistIP, v.whitelistNote
+				v.whitelistIP, v.whitelistNote = "", ""
+				a.RunBackground(func() error { return a.AddWhitelist(ip, note) })
+			}
+		})
+		if a.WhitelistOn() && len(wl) == 0 {
+			ui.Text(c, "白名单开着但没有任何 IP，应用配置会被拒绝。").
+				FontSize(CaptionSize).TextColor(t.Warning)
+		}
+	})
+}
+
+// backupCard is the settings page's 备份与快照 card: the backup and
+// export tools over the data directory they act on.
+func (v *View) backupCard(c *ui.Context, t Tokens) {
+	a := v.App
+	card(c, t, "备份与快照", func() {
+		ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		ui.Row(c).Gap(8).Wrap().Children(func() {
+			if ui.Button(c, "导出备份").Clicked() {
+				v.exportBackup()
+			}
+			if ui.Button(c, "导入备份").Clicked() {
+				v.importBackup()
+			}
+			if ui.Button(c, "导入为新场景").
+				Tooltip("把备份里的映射放进一个新建的场景，不动当前场景").Clicked() {
+				v.importBackupAsWorkspace()
+			}
+			if ui.Button(c, "配置历史").Clicked() {
+				a.SetPage(appt.PageHistory)
+			}
+		})
+		ui.Text(c, "导出不含密码；导入会全量替换现有映射与白名单。").
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		ui.Divider(c)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if ui.Button(c, "导出 nginx 配置").Clicked() {
+				v.exportNginx()
+			}
+			ui.Text(c, "导出成标准 nginx.conf，可在真正的 nginx 上运行。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		})
+		ui.Divider(c)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if ui.Button(c, "查看当前配置").Clicked() {
+				a.SetConfViewOpen(true)
+			}
+			ui.Text(c, "只读查看应用实际生成的 nginx.conf。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		})
+		ui.Divider(c)
+		ui.Text(c, "数据目录："+a.Paths.DataDir).FontSize(CaptionSize).
+			TextColor(t.Muted).Wrap().Selectable()
+		if a.Paths.Fallback {
+			ui.Text(c, "程序目录不可写，数据改存在用户目录。").
+				FontSize(CaptionSize).TextColor(t.Warning)
+		}
+	})
+}
+
+// hotkeyCard is the settings page's 快捷键 card: the global binding, the
+// field that changes it, and the in-app shortcuts that never change.
+func (v *View) hotkeyCard(c *ui.Context, t Tokens) {
+	a := v.App
+	card(c, t, "快捷键", func() {
+		// The global binding is a setting; the in-app
+		// shortcuts below it are not — they are wired in the
+		// view and stay as they are. The current accelerator
+		// is read from the store each frame: frames are drawn
+		// on demand, and the card must say what is stored, not
+		// what it remembers.
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			kbdKey(c, t, a.Hotkey())
+			ui.Text(c, "全局显示/隐藏主窗口").FontSize(NoteSize).TextColor(t.FG2)
+		})
+		// A typed accelerator, not a key recorder: the string
+		// is validated by trying to register it, which is what
+		// the save reports.
+		d := hotkeyDraftFor(a)
+		ui.Row(c).Gap(6).Children(func() {
+			ui.TextInput(c, &d.text).Placeholder("CmdOrCtrl+Shift+Alt+K").Grow(1).
+				Label("新快捷键").
+				Tooltip("输入组合键文本（本版不录制按键）：修饰键写 CmdOrCtrl、Ctrl、Alt 或 Shift，用 + 连接，末尾是主键（字母、数字或 F1-F24 等功能键），例如 CmdOrCtrl+Shift+Alt+K。保存时尝试注册，组合被占用或格式不对会提示。")
+			if ui.Button(c, "保存快捷键").Clicked() {
+				if err := a.SetHotkey(d.text); err != nil {
+					d.err = err.Error()
+				} else {
+					d.text, d.err = "", ""
+				}
+			}
+		})
+		if d.err != "" {
+			ui.Text(c, d.err).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
+		}
+		ui.Divider(c)
+		rows := [][2]string{
+			{"⌘N", "新建映射"},
+			{"⌘F", "聚焦搜索"},
+			{"⌘R", "应用配置"},
+			{"Esc", "关闭当前对话框"},
+		}
+		for _, r := range rows {
+			r := r
+			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				kbdKey(c, t, r[0])
+				ui.Text(c, r[1]).FontSize(NoteSize).TextColor(t.FG2)
+			})
+		}
+		ui.Text(c, "Windows 上 ⌘ 对应 Ctrl。").FontSize(CaptionSize).TextColor(t.Muted)
+	})
+}
+
+// updateCard is the settings page's 更新 card: the version, the check,
+// and what a found version offers.
+func (v *View) updateCard(c *ui.Context, t Tokens) {
+	a := v.App
+	card(c, t, "更新", func() {
+		ui.Text(c, "当前版本 "+a.AppVersion).FontSize(CaptionSize).TextColor(t.Muted)
+		if !a.UpdatesEnabled() {
+			ui.Text(c, "开发构建不支持自动更新，新版本请从 GitHub Releases 下载。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+			return
+		}
+		if up := a.UpdateAvail(); up != nil {
+			ui.Text(c, "发现新版本 "+up.Version).FontSize(BodySize).Bold().TextColor(t.FG)
+			markdown.View(c, up.Notes, &markdown.Options{})
+			if a.UpdateBusy() {
+				if p := a.UpdateProgress(); p >= 0 {
+					ui.Text(c, fmt.Sprintf("正在下载更新…%d%%", int(p*100))).
+						FontSize(CaptionSize).TextColor(t.Muted)
+				} else {
+					ui.Text(c, "正在下载更新…").FontSize(CaptionSize).TextColor(t.Muted)
+				}
+			}
+			if ui.PrimaryButton(c, "安装并重启").Disabled(a.UpdateBusy()).Clicked() {
+				a.InstallFoundUpdate()
+			}
+			ui.Text(c, "下载校验通过后自动重启到新版本。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+			return
+		}
+		if ui.Button(c, "检查更新").Disabled(a.UpdateBusy()).Clicked() {
+			a.CheckForUpdates()
+		}
+		if a.UpdateBusy() {
+			ui.Text(c, "正在检查…").FontSize(CaptionSize).TextColor(t.Muted)
+		} else {
+			ui.Text(c, "更新包经签名校验，只有检查后才会下载。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		}
 	})
 }
 
 // workspaceCard is the settings page's scene manager: the list with
 // switch, rename and delete, and the field that adds a scene. The
 // one-click switch itself lives on the mappings page; this is where a
-// scene is born, renamed and retired.
+// scene is born, renamed and retired. It pairs with the data tools,
+// which feed it.
 func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	list, active := a.WorkspacesState()
-	v.card(c, t, "场景", func() {
+	card(c, t, "场景", func() {
 		ui.Text(c, "每个场景一套独立映射：公司、家里各存各的规则，切换后立即按新场景重新应用。").
 			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		for _, w := range list {
@@ -655,10 +712,23 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 	})
 }
 
-// card draws a titled panel of settings. The width lets two fit a row in
-// the window's default size, the way the design lays them out.
-func (v *View) card(c *ui.Context, t Tokens, title string, fn func()) {
-	ui.Column(c).Grow(1).MinWidth(320).MaxWidth(560).Gap(10).Padding(16).Radius(RadiusPanel).
+// card draws one of the settings page's paired cards: a titled panel
+// whose Grow and MinWidth let a pair share a line while the page has room
+// for the two of them, and take a full-width line of their own — the pair
+// stacked — when it does not. Grow then splits the line with the partner,
+// so the two are always equal in width.
+func card(c *ui.Context, t Tokens, title string, fn func()) {
+	ui.Column(c).Grow(1).MinWidth(settingsCardMin).Gap(10).Padding(16).Radius(RadiusPanel).
+		Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Text(c, title).FontSize(BodySize).Bold().TextColor(t.FG)
+		fn()
+	})
+}
+
+// wideCard is the settings page's full-width card: the AI configuration,
+// which owns a row of its own and does not pair.
+func wideCard(c *ui.Context, t Tokens, title string, fn func()) {
+	ui.Column(c).FillWidth().MinWidth(settingsCardMin).Gap(10).Padding(16).Radius(RadiusPanel).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Text(c, title).FontSize(BodySize).Bold().TextColor(t.FG)
 		fn()
