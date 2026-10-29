@@ -103,10 +103,8 @@ func (v *View) terminalPage(c *ui.Context, t Tokens) {
 	v.termMu.Unlock()
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		ui.Column(c).Gap(3).Children(func() {
-			ui.Text(c, "终端").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "在应用里跑本地 shell、探测转发端口或读串口，各开一个标签").FontSize(NoteSize).TextColor(t.Muted)
-		})
+		// The window bar says the page's name and what it is for; the
+		// page starts with its own toolbar.
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Segmented(c, &v.termNewKind, termShell.label(), termProbe.label(), termSerial.label()).
 				Label("新会话类型")
@@ -288,9 +286,10 @@ func (v *View) shellPane(c *ui.Context, t Tokens, s *tabSession) {
 		return
 	}
 	if done {
+		fill, line := statusOutline(t.Warning)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().
 			Padding(8, 10).Radius(RadiusPanel).
-			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).
+			Background(fill).Border(1, line).
 			Children(func() {
 				ui.Text(c, "shell 已退出").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 				if ui.Button(c, "重开终端").Clicked() {
@@ -423,9 +422,9 @@ func (v *View) probePane(c *ui.Context, t Tokens, s *tabSession, mappings []mode
 		return
 	}
 	if done {
+		fill, line := statusOutline(t.Warning)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().
-			Padding(8, 10).Radius(RadiusPanel).
-			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).Children(func() {
+			Padding(8, 10).Radius(RadiusPanel).Background(fill).Border(1, line).Children(func() {
 			ui.Text(c, "连接已断开").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 			if ui.PrimaryButton(c, "重新连接").Clicked() {
 				v.connectProbe(s, chosen)
@@ -569,9 +568,9 @@ func (v *View) serialPane(c *ui.Context, t Tokens, s *tabSession) {
 		return
 	}
 	if done {
+		fill, line := statusOutline(t.Warning)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).FillWidth().
-			Padding(8, 10).Radius(RadiusPanel).
-			Background(t.Warning.Alpha(0.08)).Border(1, t.Warning.Alpha(0.45)).Children(func() {
+			Padding(8, 10).Radius(RadiusPanel).Background(fill).Border(1, line).Children(func() {
 			ui.Text(c, "串口已断开").FontSize(NoteSize).TextColor(t.FG2).Grow(1)
 			if ui.PrimaryButton(c, "重新打开").Clicked() {
 				v.openSerial(s, pick, rateFromPick(ratePick))

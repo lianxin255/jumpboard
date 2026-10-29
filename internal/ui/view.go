@@ -13,6 +13,7 @@ import (
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/ui/icons"
 )
 
 // View is the window's content: it draws the app from its state.
@@ -158,12 +159,35 @@ func (v *View) draw(c *ui.Context) {
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		v.sidebar(c, t)
 		ui.Column(c).Grow(1).MinWidth(0).Background(t.Canvas).Children(func() {
+			// The window bar first, then the page: the bar carries the
+			// page's mark and name, so the page itself starts with its
+			// tools instead of a title of its own.
+			v.windowHeader(c, t, v.headerTrailing())
 			v.body(c, t)
 		})
 	})
 	v.dialogs(c, t)
 	v.toast(c, t)
 	v.shortcuts(c)
+}
+
+// headerTrailing is the page's own action in the window bar's trailing
+// slot, nil when the page has none. The chat page's 清空对话 is the one
+// today: a page action, but not a reason for a second title row.
+func (v *View) headerTrailing() func(c *ui.Context, t Tokens) {
+	if v.App.Page() != appt.PageAIChat {
+		return nil
+	}
+	turns, _, _, busy, _, _, _ := v.App.AIChatState()
+	if len(turns) == 0 {
+		return nil
+	}
+	return func(c *ui.Context, t Tokens) {
+		if DangerQuietButton(c, t, "清空对话").Disabled(busy).
+			Tooltip("清掉这段对话和等待导入的草稿；已导入的映射不受影响").Clicked() {
+			v.App.ClearChat()
+		}
+	}
 }
 
 // shortcuts wires the keys a desktop app is expected to answer.
@@ -186,13 +210,14 @@ func (v *View) shortcuts(c *ui.Context) {
 	})
 }
 
-// sidebar is the frosted rail: brand, pages, and the engine. It draws no
+// sidebar is the rail: the Relay brand, the pages in their two groups —
+// 工作区 and 工具 — and, at the foot, 设置 above the engine. It draws no
 // background when the window has a material, so the frost shows through;
 // otherwise it paints the sidebar color. The pages keep the names the
-// tests click: 映射, 日志, 历史, 设置.
+// tests click: 映射, 日志, 历史, 终端, AI 对话, 设置.
 func (v *View) sidebar(c *ui.Context, t Tokens) {
 	a := v.App
-	_, _, _, _, engine, _, busy, _ := a.Snapshot()
+	mappings, _, _, _, engine, _, busy, _ := a.Snapshot()
 	page := int(a.Page())
 	bar := c.TitleBar()
 
@@ -211,11 +236,14 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 		}
 		ui.Box(c).Height(top).Shrink(0).FillWidth().DragWindow()
 
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 16, 16).DragWindow().Children(func() {
-			ui.Box(c).Size(30, 30).Radius(RadiusChip).
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 14, 16).DragWindow().Children(func() {
+			// The brand mark is the Relay itself — the two endpoints and
+			// the arrow between them — in the accent, on the accent's own
+			// tint: the product's one symbol, in the one place it lives.
+			ui.Box(c).Size(28, 28).Radius(RadiusChip).
 				Background(t.Accent).Children(func() {
 				ui.Column(c).Fill().Center().Children(func() {
-					ui.Text(c, "跳").FontSize(HeadSize).Bold().TextColor(t.AccentText)
+					ui.Icon(c, icons.Relay).Size(16, 16).TextColor(t.AccentText)
 				})
 			})
 			ui.Column(c).Gap(0).Children(func() {
@@ -224,72 +252,130 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 			})
 		})
 
+		// The nav is two groups of the same row: the pages the rules live
+		// by, then the tools beside them. The current page is the one
+		// state the rail names, so it carries the accent itself — solid,
+		// with the accent's ink — while the rest stay transparent and let
+		// the material through.
+		type navItem struct {
+			label string
+			icon  *ui.SVG
+			count string
+		}
+		groups := []struct {
+			name  string
+			items []navItem
+		}{
+			{"工作区", []navItem{
+				{"映射", icons.Relay, strconv.Itoa(len(mappings))},
+				{"日志", icons.Logs, ""},
+				{"历史", icons.History, ""},
+			}},
+			{"工具", []navItem{
+				{"终端", icons.Terminal, ""},
+				{"AI 对话", icons.Chat, ""},
+			}},
+		}
 		labels := []string{"映射", "日志", "历史", "终端", "AI 对话", "设置"}
 		tabs := ui.TabsBase(c, &page, len(labels))
-		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
-			for i, label := range labels {
-				on := i == page
-				tab := tabs.Tab(i).FillWidth().Height(34).Radius(RadiusButton).Padding(0, 10).
-					AlignItems(ui.Center).Gap(10)
-				if on {
-					tab.Background(t.Accent.Alpha(0.08))
-				}
-				tab.Children(func() {
-					mark := ui.Color{}
-					if on {
-						mark = t.Accent
-					}
-					ui.Box(c).Size(3, 14).Radius(RadiusTiny).Background(mark)
-					text := ui.Text(c, label).FontSize(BodySize)
-					if on {
-						text.Bold().TextColor(t.Accent)
-					} else {
-						text.TextColor(t.FG2)
-					}
-				})
+		idx := 0
+		navRow := func(item navItem) {
+			on := idx == page
+			tab := tabs.Tab(idx).FillWidth().Height(32).Radius(RadiusButton).
+				Padding(0, 9).AlignItems(ui.Center).Gap(9)
+			if on {
+				tab.Background(t.Accent)
 			}
+			tab.Children(func() {
+				// The icon inherits the row's ink: the accent's own on the
+				// current page, the secondary text elsewhere.
+				ic := ui.Icon(c, item.icon).Size(15, 15)
+				if on {
+					ic.TextColor(t.AccentText)
+				}
+				text := ui.Text(c, item.label).FontSize(BodySize)
+				if on {
+					text.Bold().TextColor(t.AccentText)
+				} else {
+					text.TextColor(t.FG2)
+				}
+				if item.count != "" {
+					ui.Spacer(c)
+					cnt := ui.Text(c, item.count).FontSize(CaptionSize).FontFeatures("tnum")
+					if on {
+						cnt.TextColor(t.AccentText)
+					} else {
+						cnt.TextColor(t.Meta)
+					}
+				}
+			})
+			idx++
+		}
+		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
+			for _, g := range groups {
+				ui.Text(c, g.name).FontSize(CaptionSize).TextColor(t.Meta).
+					Padding(6, 10, 2, 10)
+				for _, item := range g.items {
+					navRow(item)
+				}
+			}
+		})
+
+		ui.Spacer(c)
+
+		// 设置 and the engine sit at the rail's foot: the least-visited
+		// page and the always-present state, below the work.
+		ui.Column(c).Gap(2).Padding(0, 12).Children(func() {
+			navRow(navItem{"设置", icons.Settings, ""})
 		})
 		if tabs.List.Changed() {
 			a.SetPage(appt.Page(page))
 		}
 
-		ui.Spacer(c)
-
-		v.engineCard(c, t, engine, busy)
+		v.engineFooter(c, t, engine, busy)
 	})
 }
 
-// engineCard sits at the foot of the rail: a dot, the engine word, and
-// start or stop. The words stay the ones the tests click.
-func (v *View) engineCard(c *ui.Context, t Tokens, engine string, busy bool) {
+// engineFooter is the rail's foot: the engine's state as one compact row —
+// the dot, the word, and the mode while it runs — with the start or stop
+// control as an icon button beside it. The words stay the ones the tests
+// click; the stop keeps its confirmation.
+func (v *View) engineFooter(c *ui.Context, t Tokens, engine string, busy bool) {
 	a := v.App
-	dot := t.Success
-	label := "运行中"
-	if engine != "running" {
-		dot, label = t.Muted, "已停止"
-	}
-	ui.Column(c).Gap(8).Padding(12, 14, 16, 14).Children(func() {
+	running := engine == "running"
+	ui.Column(c).Gap(8).Padding(10, 14, 14, 14).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 10).Radius(RadiusChip).
 			Background(t.Chip).Border(1, t.Border).Children(func() {
+			dot := t.Muted
+			if running {
+				dot = t.Success
+			}
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
-			ui.Text(c, label).FontSize(NoteSize).Bold().TextColor(t.FG).Grow(1)
-			if engine == "running" {
-				ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
+			ui.Column(c).Gap(0).Grow(1).Children(func() {
+				ui.Text(c, engineLabel(engine)).FontSize(NoteSize).Bold().TextColor(t.FG)
+				if running {
+					ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
+				}
+			})
+			if running {
+				stop := IconButton(c, t, icons.Stop, t.Danger, busy).
+					Label("停止").Tooltip("停止引擎，所有转发立即失效").Disabled(busy)
+				if stop.Clicked() {
+					a.Ask(&appt.Confirm{
+						Title: "停止引擎",
+						Body:  "停止后所有转发规则立即失效，外部无法访问。",
+						Label: "停止", Destructive: true,
+						Run: a.StopEngine,
+					})
+				}
+			} else {
+				start := IconButton(c, t, icons.Start, t.Accent, busy).
+					Label("启动").Tooltip("启动内置引擎，按当前配置开始转发").Disabled(busy)
+				if start.Clicked() {
+					a.RunBackground(a.StartEngine)
+				}
 			}
 		})
-		if engine == "running" {
-			if DangerQuietButton(c, t, "停止").FillWidth().
-				Tooltip("停止引擎，所有转发立即失效").Disabled(busy).Clicked() {
-				a.Ask(&appt.Confirm{
-					Title: "停止引擎",
-					Body:  "停止后所有转发规则立即失效，外部无法访问。",
-					Label: "停止", Destructive: true,
-					Run: a.StopEngine,
-				})
-			}
-		} else if ui.PrimaryButton(c, "启动").FillWidth().Disabled(busy).Clicked() {
-			a.RunBackground(a.StartEngine)
-		}
 	})
 }
 
@@ -309,110 +395,6 @@ func (v *View) body(c *ui.Context, t Tokens) {
 	default:
 		v.mappingsPage(c, t)
 	}
-}
-
-// actionRow draws the engine state line and the buttons that change the
-// configuration.
-func (v *View) actionRow(c *ui.Context, t Tokens) {
-	a := v.App
-	_, _, _, _, _, dirty, busy, _ := a.Snapshot()
-	rules := a.RuleStatus()
-	listening, conns := 0, int64(0)
-	for _, r := range rules {
-		if r.Listening {
-			listening++
-			conns += r.Connections
-		}
-	}
-
-	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		if len(rules) > 0 {
-			ui.Textf(c, "监听 %d/%d · %d 连接", listening, len(rules), conns).
-				FontSize(NoteSize).TextColor(t.Meta)
-		}
-		ui.Spacer(c)
-		if busy {
-			ui.Spinner(c).Label("正在处理")
-		}
-		// The check binds each port for a moment and resolves the
-		// upstreams: it answers "would applying work", without touching
-		// what is running.
-		if ui.Button(c, "预检").Disabled(busy).
-			Tooltip("检查端口是否被占用、上游地址能否解析，不会改动正在跑的规则").Clicked() {
-			a.RunBackground(a.TestConfig)
-		}
-		if ui.PrimaryButton(c, "应用配置").Disabled(busy).
-			Tooltip("让改动生效（⌘R）").Clicked() {
-			a.RunBackground(a.Apply)
-		}
-	})
-	if dirty {
-		v.pendingBar(c, t, busy)
-	}
-	if msg := a.ApplyError(); msg != "" {
-		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
-			Background(t.Danger.Alpha(0.12)).Border(1, t.Danger.Alpha(0.28)).Children(func() {
-			ui.Text(c, msg).FontSize(CaptionSize).TextColor(t.Danger).Selectable()
-		})
-		v.diagSection(c, t, busy)
-	}
-	if msg := a.ApplyWarning(); msg != "" {
-		ui.Box(c).FillWidth().Padding(8, 12).Radius(RadiusChip).
-			Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
-			ui.Text(c, msg).FontSize(CaptionSize).TextColor(t.Warning).Selectable()
-		})
-	}
-	if a.ConfChanged() {
-		v.confChangedBar(c, t, busy)
-	}
-}
-
-// confChangedBar reports that the exported configuration was edited outside
-// the app. It offers to merge the file in — the same path a dropped .conf
-// takes — or to leave it alone. It never reloads on its own: the file and
-// the rules disagree, and the person decides which one is right.
-func (v *View) confChangedBar(c *ui.Context, t Tokens, busy bool) {
-	a := v.App
-	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Padding(8, 12).
-		Radius(RadiusChip).
-		Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.28)).Children(func() {
-		ui.Text(c, "配置文件被外部修改").FontSize(NoteSize).TextColor(t.Warning).Grow(1)
-		if ui.Button(c, "导入合并").FontSize(CaptionSize).Disabled(busy).Clicked() {
-			a.RunBackground(a.ImportChangedConf)
-		}
-		if ui.Button(c, "忽略").FontSize(CaptionSize).Clicked() {
-			a.DismissConfChange()
-		}
-	})
-}
-
-// pendingBar is the amber strip for a configuration that has not been
-// applied yet. It stays in the page flow so a short window does not cover
-// the rows, and it says 未应用 because that is the word the tests look for.
-func (v *View) pendingBar(c *ui.Context, t Tokens, busy bool) {
-	a := v.App
-	ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
-		ui.Row(c).Grow(1).MaxWidth(840).Height(52).Gap(12).AlignItems(ui.Center).
-			Padding(0, 10, 0, 16).Radius(RadiusFloat).
-			Background(t.AmberSoft).Border(1, t.AmberLine).Children(func() {
-			ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
-			ui.Column(c).Gap(1).Grow(1).Children(func() {
-				ui.Text(c, "有未生效的改动").FontSize(BodySize).Bold().TextColor(t.AmberText)
-				ui.Text(c, "未应用 · 重新加载后对外生效").FontSize(CaptionSize).TextColor(t.AmberText)
-			})
-			if ui.PrimaryButton(c, "应用配置").Disabled(busy).
-				Tooltip("让改动生效（⌘R）").Clicked() {
-				a.RunBackground(a.Apply)
-			}
-		})
-	})
-}
-
-func engineLabel(s string) string {
-	if s == "running" {
-		return "运行中"
-	}
-	return "已停止"
 }
 
 // mappingsPage draws the forwarding rules.
@@ -466,12 +448,6 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			}
 		}
 	}
-	enabled := 0
-	for _, m := range mappings {
-		if m.Enabled {
-			enabled++
-		}
-	}
 
 	// The whole page is a drop target: a backup or an nginx.conf dragged
 	// anywhere on the rules imports, with the border lighting up while a
@@ -486,44 +462,30 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	}
 	page.Children(func() {
 
-		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Gap(2).Children(func() {
-				ui.Text(c, "转发规则").FontSize(TitleSize).Bold().TextColor(t.FG)
-				if len(mappings) == 0 {
-					ui.Text(c, "把内网服务端口从这台机器转出去").FontSize(NoteSize).TextColor(t.Meta)
-				} else {
-					ui.Textf(c, "%d 条规则 · %d 启用 · %d 停用", len(mappings), enabled, len(mappings)-enabled).
-						FontSize(NoteSize).TextColor(t.Meta)
-				}
-			})
-			ui.Spacer(c)
-			// Search and the primary action sit on the title row. Filter,
-			// templates and AI stay one row down so the title is not a toolbar.
+		// The page's two tool groups. The first is the page's identity:
+		// which scene's rules, and the way to a new one. The scene chips
+		// grow and wrap on the left; the search and 新建映射 hold the
+		// right, the primary action the page has.
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			v.workspaceChips(c, t, busy)
 			if len(mappings) > 0 {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					v.searchBox(c, t)
-					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
-						Tooltip("新建一条映射（⌘N）").Clicked() {
-						a.OpenForm(nil)
-					}
-				})
+				v.searchBox(c, t)
+				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+					Tooltip("新建一条映射（⌘N）").Clicked() {
+					a.OpenForm(nil)
+				}
 			}
 		})
-		// The scene switcher sits between the title and the group chips:
-		// switching is the one-click answer to 公司 / 家里, so it belongs
-		// on the page the rules live on, above everything that narrows
-		// them.
-		v.workspaceChips(c, t, busy)
-		// The group filter sits under the search box's row: the same row of
-		// the page that narrows the table, one chip per group in use. It is
-		// absent while no rule carries a group, so an ungrouped rule book
-		// stays as plain as it was.
-		v.groupChips(c, t, groups)
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		// The second is everything that narrows the table or builds a row
+		// another way: the status and group filters, then the template,
+		// paste and AI doors. The row wraps on a narrow window, so the
+		// tools give way before the table's addresses do.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
 			if len(mappings) > 0 {
 				// No fixed width: the control sizes to its labels. A width
 				// narrower than the CJK labels overlapped the button beside it.
 				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
+				v.groupChips(c, t, groups)
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
@@ -534,12 +496,14 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			}
 			v.aiEntry(c, t)
 			v.aiFilterBar(c, t)
-			ui.Spacer(c)
 		})
 		// The line a filter ask leaves behind: its error, or its rationale
 		// and the button that puts the table back.
 		v.aiFilterResult(c, t)
-		v.actionRow(c, t)
+		// The window bar's actions and what they leave behind: the pending
+		// strip, an apply failure, a warning, an outside edit. Each row is
+		// drawn only while it is true.
+		v.pageNotices(c, t, busy)
 		// A dropped conf leaves a bar offering the interpretation, and its
 		// card lands right below: the answer sits where the drop did.
 		v.confImportBar(c, t, busy)
@@ -550,10 +514,14 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			return
 		}
 
-		v.batchBar(c, t, filtered, busy)
-
 		if len(filtered) == 0 {
-			v.filterEmpty(c, t)
+			panelShell(c, t).Grow(1).Children(func() {
+				v.filterEmpty(c, t)
+				ui.Box(c).FillWidth().Shrink(0).Padding(8, 14).
+					BorderWidth(0, 1, 0, 0).BorderColor(t.Hair).Children(func() {
+					v.batchBar(c, t, filtered, busy)
+				})
+			})
 			return
 		}
 
@@ -608,14 +576,28 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			a.RunBackground(func() error { return a.ReorderFilteredMappings(shown) })
 		}
 
-		ui.Column(c).Fill().Children(func() {
+		// The workbench itself: one surface panel holding the table, with
+		// the batch bar as the panel's own footer — the counts and the
+		// batch actions are the table's, stated where the table ends
+		// rather than in a row above it.
+		panelShell(c, t).Grow(1).Children(func() {
+			// Under the narrow threshold the fixed columns rebalance — a
+			// shorter name column, a tighter actions column — so the
+			// forwarding relation keeps room at the window's floor; the
+			// relation answers by stacking (forwardCell).
+			w, _ := c.Size()
+			narrow := w < forwardNarrowW
+			nameCol, actionsCol := float32(200), float32(84)
+			if narrow {
+				nameCol, actionsCol = 132, 76
+			}
 			cols := []ui.TableColumn{
-				{Title: "规则", Width: 200},
+				{Title: "规则", Width: nameCol},
 				{Title: "协议", Width: 72},
 				{Title: "转发关系"},
-				{Title: "健康", Width: 100},
+				{Title: "健康", Width: 116},
 				{Title: "启用", Width: 64},
-				{Title: "修改", Width: 200},
+				{Title: "操作", Width: actionsCol},
 			}
 			ui.Table(c, &v.table, cols, len(filtered), func(row, col int) {
 				m := filtered[row]
@@ -625,7 +607,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				case 1:
 					v.protoCell(c, t, m)
 				case 2:
-					v.forwardCell(c, t, m)
+					v.forwardCell(c, t, m, narrow)
 				case 3:
 					v.healthCell(c, t, m)
 				case 4:
@@ -638,6 +620,10 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					v.rowActions(c, t, m, busy)
 				}
 			}).Grow(1)
+			ui.Box(c).FillWidth().Shrink(0).Padding(8, 14).
+				BorderWidth(0, 1, 0, 0).BorderColor(t.Hair).Children(func() {
+				v.batchBar(c, t, filtered, busy)
+			})
 		})
 	})
 }
@@ -656,19 +642,25 @@ func protoColor(t Tokens, p model.Protocol) ui.Color {
 	}
 }
 
-// protoCell is the protocol chip: a pale fill and ink of the same hue.
+// protoCell is the protocol's mark: a small classification patch — the
+// protocol's hue in a tight badge with its own ink. The fill is the
+// opaque surface the rows share so the badge reads the same on the
+// canvas, on hover and on selection, and the area stays small: the
+// protocol is a class, not the row's news. The cell itself is a neutral
+// click band — a click or a drag start here chooses and drags the row,
+// it does not edit the protocol.
 func (v *View) protoCell(c *ui.Context, t Tokens, m model.Mapping) {
 	color := protoColor(t, m.Protocol)
-	ui.Box(c).Padding(3, 8).Radius(RadiusBadge).
-		Background(color.Alpha(0.12)).Children(func() {
+	ui.Box(c).Padding(1, 6).Radius(RadiusBadge).
+		Background(t.Surface).Border(1, color).Children(func() {
 		ui.Text(c, m.Protocol.Label()).FontSize(CaptionSize).Bold().TextColor(color)
 	})
 }
 
 // nameCell shows the mapping's name and the host under it. The protocol
 // has its own column, so it is not repeated here. The cell carries the
-// row's context menu: everything the 修改 column does as buttons, plus
-// copy, one right-click away. When the row is one of several chosen, the
+// row's context menu: what the 操作 column's buttons do, plus 克隆, copy,
+// one right-click away. When the row is one of several chosen, the
 // menu speaks for the whole choice instead, with the batch actions the
 // bar offers.
 func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered []model.Mapping) {
@@ -806,10 +798,23 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered
 	})
 }
 
-// forwardCell shows what the mapping listens on and where it goes, with
-// the traffic it moved on a muted line below.
-func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
+// forwardNarrowW is the window width under which the workbench stacks the
+// forwarding relation: below it there is no room for local and upstream
+// beside each other, so each takes its own always-drawn line and the
+// columns rebalance to give the relation what remains.
+const forwardNarrowW = float32(1150)
+
+// forwardCell shows what the mapping listens on and where it goes: the
+// forwarding relation is the row's hero — the mono pair the row is for,
+// at the row title's size on a window that has room, stacked one per
+// line on one that does not. The group rides the secondary line beside
+// the traffic counters, never the address line: the relation stays whole
+// first, its metadata second. Both lines are geometry — drawn whenever
+// the row has a group or the traffic display is on — so a row's height
+// never changes as traffic arrives.
+func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping, narrow bool) {
 	port := m.ListenPort
+	blankPort := port == 0 && m.IsHTTP()
 	if port == 0 {
 		if m.Protocol == model.HTTPS {
 			port = 443
@@ -823,49 +828,88 @@ func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if m.ServerNames != "" {
 		localLabel = fmt.Sprintf("%s:%d", m.ServerNames, port)
 	}
+	// The address is what someone shares, so a click puts it on the
+	// clipboard rather than making them select the text by hand. A local
+	// longer than the column keeps its whole self in the tooltip and the
+	// clipboard; the line shows what fits, ended cleanly.
+	local := func(size float32) {
+		if ui.Text(c, localLabel).Font(FontMono).FontSize(size).TextColor(t.FG).SingleLine().
+			Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
+			Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
+			mm := m
+			a.RunBackground(func() error { return a.CopyAddress(mm) })
+		}
+	}
+	// A web rule whose listen port was left blank shows the default it
+	// will take; the marker is a label, the copied address stays what the
+	// rule itself says.
+	marker := func() {
+		if blankPort {
+			ui.Text(c, "（默认）").FontSize(CaptionSize).TextColor(t.Meta).NoWrap().
+				Tooltip("监听端口留空时，Web 规则用默认端口：HTTP 80，HTTPS 443")
+		}
+	}
+	upstream := func(size float32) {
+		ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font(FontMono).
+			FontSize(size).TextColor(t.FG2).SingleLine().Tooltip("上游目标")
+	}
+	// relayConnector is the row's own mark: two endpoint blocks joined by
+	// one line — the Relay motif without a second arrow, drawn small and
+	// quiet between the addresses. It is a label, not a control — the
+	// arrow text beside it and the local address carry everything
+	// clickable the relation has.
+	relayConnector := func(name string) {
+		ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Meta).
+			Label("转发-" + name).Tooltip("本地端口转发到上游")
+	}
+
 	ui.Column(c).Gap(2).Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			// The address is what someone shares, so a click puts it on the
-			// clipboard rather than making them select the text by hand.
-			if ui.Text(c, localLabel).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
-				Label("复制地址-"+m.Name).Tooltip("点一下复制本地地址").
-				Padding(4, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
-				mm := m
-				a.RunBackground(func() error { return a.CopyAddress(mm) })
-			}
-			ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
-			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
-				Tooltip("上游目标")
-			// The group rides at the end of the row: a label, not a
-			// control — the chips above the table are where a group is
-			// picked, this only says which one the rule belongs to.
-			if m.Group != "" {
-				ui.Text(c, m.Group).FontSize(CaptionSize).TextColor(t.Meta).SingleLine().
-					Label("分组 "+m.Group).Tooltip("分组："+m.Group).
-					Padding(2, 6).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border)
-			}
-		})
-		// All the counters share the cell's second line, and the line is
-		// drawn whenever the traffic display is on — at zero counts too.
-		// Both are geometry, not style: the address line above fills the
-		// cell's width as it is, so a counter appearing there would wrap it
-		// and grow the row, and a second line appearing on the first packet
-		// would grow it too — either way every button below the row moves
-		// under a pointer that is already down, and the click dies.
-		if a.ShowTraffic() {
+		if narrow {
+			// The floor: one part per line, the pair read top to bottom.
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				if info.Active > 0 {
-					ui.Textf(c, "· %d 活跃", info.Active).FontSize(CaptionSize).TextColor(t.Success).
-						Tooltip("这条规则此刻正开着的连接数")
+				local(NoteSize)
+				marker()
+			})
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				relayConnector(m.Name)
+				ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
+				upstream(NoteSize)
+			})
+		} else {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				local(RowTitleSize)
+				marker()
+				relayConnector(m.Name)
+				ui.Text(c, "→").FontSize(RowTitleSize).TextColor(t.Meta)
+				upstream(RowTitleSize)
+			})
+		}
+		if m.Group != "" || a.ShowTraffic() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				// The group is a label, not a control — the chips above the
+				// table are where a group is picked, this only says which
+				// one the rule belongs to.
+				if m.Group != "" {
+					ui.Text(c, m.Group).FontSize(CaptionSize).TextColor(t.Meta).SingleLine().
+						Label("分组 "+m.Group).Tooltip("分组："+m.Group).
+						Padding(2, 6).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border)
 				}
-				ui.Textf(c, "· %d 次", info.Connections).FontSize(CaptionSize).TextColor(t.Meta).
-					Tooltip("这条规则累计转发的连接数")
-				tooltip := "这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端"
-				if !info.LastCloseAt.IsZero() {
-					tooltip += "；最近断开 " + info.LastCloseAt.Format("15:04:05")
+				if a.ShowTraffic() {
+					if info.Active > 0 {
+						ui.Textf(c, "· %d 活跃", info.Active).FontSize(CaptionSize).FontFeatures("tnum").
+							TextColor(t.Success).
+							Tooltip("这条规则此刻正开着的连接数")
+					}
+					ui.Textf(c, "· %d 次", info.Connections).FontSize(CaptionSize).FontFeatures("tnum").
+						TextColor(t.Meta).
+						Tooltip("这条规则累计转发的连接数")
+					tooltip := "这条规则累计转发的流量：↓ 从客户端收到，↑ 发回客户端"
+					if !info.LastCloseAt.IsZero() {
+						tooltip += "；最近断开 " + info.LastCloseAt.Format("15:04:05")
+					}
+					ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
+						FontSize(CaptionSize).FontFeatures("tnum").TextColor(t.Meta).Tooltip(tooltip)
 				}
-				ui.Textf(c, "流量 ↓%s ↑%s", formatBytes(info.BytesIn), formatBytes(info.BytesOut)).
-					FontSize(CaptionSize).TextColor(t.Meta).Tooltip(tooltip)
 			})
 		}
 	})
@@ -897,11 +941,18 @@ func displayHost(m model.Mapping) string {
 	return m.UpstreamHost
 }
 
-// healthCell shows the last check's outcome as a pill.
+// healthCell shows the last check's outcome: the status as a glyph and a
+// word in one quiet pill that never wraps and never grows past a single
+// line's height — a wrapped 未检查 would shove the buttons under a
+// pointer that is already down. The fill is opaque Surface and the status
+// rides on the border, the word and the glyph: a translucent fill washes
+// out over a hovered or selected row, and the pill has to read the same
+// on the canvas, on hover and on selection.
 func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	if !m.HealthCheckEnabled {
-		ui.Box(c).Padding(3, 8).Radius(RadiusPill).Background(t.Chip).Children(func() {
-			ui.Text(c, "未启用").FontSize(CaptionSize).TextColor(t.Meta)
+		ui.Box(c).Padding(2, 8).Radius(RadiusPill).Background(t.Surface).
+			Border(1, t.Border).Children(func() {
+			ui.Text(c, "未启用").FontSize(CaptionSize).TextColor(t.Meta).NoWrap()
 		})
 		return
 	}
@@ -909,33 +960,56 @@ func (v *View) healthCell(c *ui.Context, t Tokens, m model.Mapping) {
 	// status, and a control has to say which one it acts on. The pill is
 	// one text — the dot is a glyph — so the whole thing is clickable.
 	label := "检查-" + m.Name
-	word, color, fill, tip := "○ 未检查", t.Meta, t.Chip, "点一下检查"
+	word, color, tip := "未检查", t.Meta, "点一下检查"
+	glyph := icons.Unchecked
 	switch m.HealthStatus {
 	case model.HealthHealthy:
-		word, color, fill, tip = "● 健康", t.Success, t.SuccessSoft, "点一下重新检查"
+		word, color, tip, glyph = "健康", t.Success, "点一下重新检查", icons.Check
 	case model.HealthUnhealthy:
-		word, color, fill, tip = "● 异常", t.Danger, t.DangerSoft, "点一下重新检查"
+		word, color, tip, glyph = "异常", t.Danger, "点一下重新检查", icons.Alert
 	}
-	if ui.Text(c, word).FontSize(CaptionSize).Bold().TextColor(color).Label(label).
-		Tooltip(tip).Padding(3, 10).Radius(RadiusPill).
-		Background(fill).Clicked() {
+	// A pill with a border keeps the height it had without one: the border
+	// takes the place of a padding pixel, so the column and the row that
+	// hold the pill do not move. The row inside never wraps, so the pill
+	// stays one line tall.
+	pill := ui.Box(c).Padding(2, 8).Radius(RadiusPill).Background(t.Surface).
+		Border(1, color).Label(label).Tooltip(tip)
+	pill.Children(func() {
+		v.healthWord(c, t, glyph, word, color)
+	})
+	if pill.Clicked() {
 		mm := m
 		v.App.RunBackground(func() error { return v.App.CheckNow(mm) })
 	}
 }
 
+// healthWord is the pill's own glyph-and-word pair, drawn inside the
+// clickable pill's children — one line, the glyph before the word.
+func (v *View) healthWord(c *ui.Context, t Tokens, glyph *ui.SVG, word string, color ui.Color) {
+	ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, glyph).Size(11, 11).TextColor(color)
+		ui.Text(c, word).FontSize(CaptionSize).Bold().TextColor(color)
+	})
+}
+
+// rowActions is the row's own pair: 编辑 and 删除, the two things a row
+// is edited by, as icon buttons that keep their words as labels and
+// tooltips — the column narrows to the pair and gives the room back to
+// the forwarding relation. 克隆 lives one right-click away, in the row's
+// context menu.
 func (v *View) rowActions(c *ui.Context, t Tokens, m model.Mapping, busy bool) {
 	a := v.App
 	id := m.ID
 	ui.Row(c).Gap(4).Children(func() {
-		if ui.Button(c, "编辑").FontSize(CaptionSize).Disabled(busy).Clicked() {
+		edit := IconButton(c, t, icons.Edit, t.FG2, busy).
+			Label("编辑").Tooltip("编辑这条映射").Disabled(busy)
+		if edit.Clicked() {
 			mm := m
 			a.OpenForm(&mm)
 		}
-		if ui.Button(c, "克隆").FontSize(CaptionSize).Disabled(busy).Clicked() {
-			a.RunBackground(func() error { return a.CloneMapping(id) })
-		}
-		if DangerQuietButton(c, t, "删除").FontSize(CaptionSize).Disabled(busy).Clicked() {
+		del := IconButton(c, t, icons.Delete, t.Danger, busy).
+			Label("删除").Tooltip("删除这条映射，删除前会确认").Disabled(busy)
+		if del.Clicked() {
 			name := m.Name
 			a.Ask(&appt.Confirm{
 				Title:       "删除映射",
@@ -970,7 +1044,7 @@ func (v *View) detailPopover(c *ui.Context, t Tokens, m model.Mapping) {
 			}
 		})
 		ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG)
-		ui.Text(c, forwardLine(m)).Font("monospace").FontSize(NoteSize).TextColor(t.FG2).
+		ui.Text(c, forwardLine(m)).Font(FontMono).FontSize(NoteSize).TextColor(t.FG2).
 			Tooltip("本地地址 → 上游目标")
 		if m.ServerNames != "" {
 			ui.Textf(c, "域名 %s", m.ServerNames).FontSize(CaptionSize).TextColor(t.Meta)
@@ -1073,7 +1147,8 @@ func formatRate(bps float64) string {
 }
 
 // forwardLine is the mapping's forwarding relation as one line, for the
-// detail popover.
+// detail popover. A web rule with a blank listen port says the default it
+// takes, the same marker the table's forward cell carries.
 func forwardLine(m model.Mapping) string {
 	port := m.ListenPort
 	if port == 0 {
@@ -1081,6 +1156,9 @@ func forwardLine(m model.Mapping) string {
 			port = 443
 		} else {
 			port = 80
+		}
+		if m.IsHTTP() {
+			return fmt.Sprintf("127.0.0.1:%d（默认） → %s:%d", port, m.UpstreamHost, m.UpstreamPort)
 		}
 	}
 	return fmt.Sprintf("127.0.0.1:%d → %s:%d", port, m.UpstreamHost, m.UpstreamPort)
@@ -1095,7 +1173,7 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 	ui.Box(c).Width(240).Padding(0, 10).Radius(RadiusButton).
 		Background(t.Chip).Border(1, t.Border).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "⌕").FontSize(BodySize).TextColor(t.Meta)
+			ui.Icon(c, icons.Search).Size(13, 13).TextColor(t.Meta)
 			// The key goes on the context before the input is built: a
 			// TextInput owns its buffer in state, so its identity has to
 			// be fixed up front, not changed afterwards.
@@ -1115,15 +1193,18 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 }
 
 // workspaceChips is the scene switcher: one chip per workspace, the
-// active one accented the way the group chips accent a choice. A click
-// switches — through the confirmation a dirty scene asks for — and the
-// trailing 管理 chip opens the settings page, where a scene is created,
-// renamed and deleted. The row shows with a single scene too: a switcher
-// nobody can see is a feature nobody finds.
+// active one carrying the accent itself, solid, against the quiet glass
+// of the rest. A click switches — through the confirmation a dirty scene
+// asks for — and the trailing 管理 chip opens the settings page, where a
+// scene is created, renamed and deleted. The row shows with a single
+// scene too: a switcher nobody can see is a feature nobody finds.
 func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	list, active := a.WorkspacesState()
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+	// The row grows into the space the search and 新建映射 leave and wraps
+	// inside it, so a long scene list gives way before the page's primary
+	// action does.
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Grow(1).MinWidth(0).Children(func() {
 		ui.Text(c, "场景").FontSize(CaptionSize).TextColor(t.Muted)
 		for _, w := range list {
 			w := w
@@ -1132,22 +1213,31 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 				Label("场景 "+w.Name).
 				Tooltip("切换到这个场景的映射；有未应用的改动会先确认").
 				Padding(3, 8).Radius(RadiusChip)
-			if on {
-				chip.Bold().TextColor(t.Accent).
-					Background(t.Accent.Alpha(0.12)).Border(1, t.Accent.Alpha(0.45))
-			} else {
-				chip.TextColor(t.FG2).Background(t.Chip).Border(1, t.Border)
-			}
+			sceneChipStyle(chip, t, on)
 			if chip.Clicked() && !on && !busy {
 				a.RequestSwitchWorkspace(w.ID)
 			}
 		}
-		if ui.Text(c, "管理").FontSize(CaptionSize).TextColor(t.Muted).
+		manage := ui.Text(c, "管理").FontSize(CaptionSize).TextColor(t.Muted).
 			Label("管理场景").Tooltip("在设置里新建、改名、删除场景").
-			Padding(3, 8).Radius(RadiusChip).Background(t.Chip).Border(1, t.Border).Clicked() {
+			Padding(3, 8).Radius(RadiusChip)
+		chipQuiet(manage, t)
+		if manage.Clicked() {
 			a.SetPage(appt.PageSettings)
 		}
 	})
+}
+
+// sceneChipStyle is the scene switcher's pair. The active scene is the
+// one state the row names, so it carries the accent itself — a solid
+// chip with the accent's ink — while the scenes not in use and 管理 stay
+// glass. The group chips below keep their own quieter accent tint: two
+// rows of chips, two weights of choice.
+func sceneChipStyle(e ui.Element, t Tokens, on bool) ui.Element {
+	if on {
+		return e.Bold().TextColor(t.AccentText).Background(t.Accent)
+	}
+	return chipQuiet(e.TextColor(t.FG2), t)
 }
 
 // groupChips is the group filter under the search box: 全部, then one chip
@@ -1160,7 +1250,10 @@ func (v *View) groupChips(c *ui.Context, t Tokens, groups []string) {
 		return
 	}
 	names := append([]string{"全部"}, groups...)
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+	// The chips take their natural width beside the row's other tools and
+	// wrap past a bound, so a rule book with many groups cannot push the
+	// template, paste and AI doors off the page.
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().MaxWidth(360).Children(func() {
 		for _, name := range names {
 			// 全部 selects the empty filter, the state with no group chosen.
 			target := name
@@ -1171,12 +1264,7 @@ func (v *View) groupChips(c *ui.Context, t Tokens, groups []string) {
 			chip := ui.Text(c, name).FontSize(CaptionSize).SingleLine().
 				Label("组 "+name).Tooltip("按分组筛选").
 				Padding(3, 8).Radius(RadiusChip)
-			if on {
-				chip.Bold().TextColor(t.Accent).
-					Background(t.Accent.Alpha(0.12)).Border(1, t.Accent.Alpha(0.45))
-			} else {
-				chip.TextColor(t.FG2).Background(t.Chip).Border(1, t.Border)
-			}
+			chipStyle(chip, t, on)
 			if chip.Clicked() {
 				v.groupFilter = target
 			}
@@ -1199,19 +1287,14 @@ func distinctGroups(mappings []model.Mapping) []string {
 	return out
 }
 
-// mappingsEmpty is the first-run card: one clear path to add a rule.
+// mappingsEmpty is the first-run card: the Relay mark — the relation the
+// page is for — over one clear path to add a rule.
 func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		ui.Box(c).Width(460).Padding(32, 24).Radius(RadiusModal).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		emptyCard(c, t, 460).Children(func() {
 			ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(36, 36).Radius(RadiusButton).Background(t.Accent.Alpha(0.14)).
-					Border(1, t.Accent.Alpha(0.28)).Children(func() {
-					ui.Column(c).Fill().Center().Children(func() {
-						ui.Text(c, "⇄").FontSize(HeadSize).TextColor(t.Accent)
-					})
-				})
+				emptyGlyphIcon(c, t, icons.Relay)
 				ui.Text(c, "还没有转发规则").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Text(c, "把内网 MySQL、SSH、Web 等服务转到这台机器的端口上。").
 					FontSize(BodySize).TextColor(t.Muted)
@@ -1234,8 +1317,7 @@ func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 // emptyState draws the placeholder a page shows with nothing in it.
 func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	ui.Column(c).Fill().Center().Gap(10).Children(func() {
-		ui.Box(c).Width(360).Padding(32, 24).Radius(RadiusPanel).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		emptyCard(c, t, 360).Children(func() {
 			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Text(c, hint).FontSize(NoteSize).TextColor(t.Muted)
@@ -1354,8 +1436,7 @@ func (v *View) chosenInFiltered(filtered []model.Mapping) []model.Mapping {
 // filterEmpty is the card shown when search/filter matches nothing.
 func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 	ui.Column(c).Fill().Center().Gap(12).Children(func() {
-		ui.Box(c).Width(420).Padding(32, 24).Radius(RadiusPanel).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+		emptyCard(c, t, 420).Children(func() {
 			ui.Column(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "没有匹配的规则").FontSize(HeadSize).Bold().TextColor(t.FG)
 				hint := "试试别的关键词，或清掉筛选条件。"

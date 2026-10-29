@@ -107,6 +107,14 @@ func Import(s *store.Store, ws string, data []byte) (ImportResult, error) {
 		}
 		clean = append(clean, m)
 	}
+	// A backup that carries mappings but none the sanitizer will take
+	// promises a replacement and would deliver an empty rule set: the
+	// replace is refused whole, before anything is deleted, and the rules
+	// it would have destroyed keep standing. A backup with no mappings at
+	// all is a deliberate wipe and stays one.
+	if len(p.Mappings) > 0 && len(clean) == 0 {
+		return ImportResult{}, fmt.Errorf("%w：%d 条映射都缺少可用的转发信息，现有规则已保留", ErrEmptyBackup, len(p.Mappings))
+	}
 	if err := s.ReplaceAllMappings(ws, clean); err != nil {
 		return ImportResult{}, err
 	}
@@ -251,5 +259,6 @@ func firstNonEmpty(values ...string) string {
 // nowMillis is the timestamp the app stores.
 func nowMillis() int64 { return timeNowMillis() }
 
-// ErrEmptyBackup is returned for a backup with no mappings at all.
+// ErrEmptyBackup is returned for a backup from which nothing can be
+// imported: it carries mappings, but none survives the sanitizer.
 var ErrEmptyBackup = errors.New("备份文件里没有可导入的映射")

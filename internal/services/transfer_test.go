@@ -118,6 +118,61 @@ func TestImportRejectsWrongVersion(t *testing.T) {
 	}
 }
 
+// TestImportAllInvalidKeepsRules is the safety pin on the replace: a
+// nonempty backup whose every mapping fails validation promises a
+// replacement and would deliver an empty rule set. The import is
+// refused whole and the rules it would have destroyed keep standing.
+func TestImportAllInvalidKeepsRules(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
+		Name: "旧规则", Protocol: model.TCP, Enabled: true, ListenPort: 15004,
+		UpstreamHost: "10.0.0.4", UpstreamPort: 80,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte(`{"version":2,"mappings":[
+		{"name":"无上游","protocol":"tcp","enabled":true,"listenPort":15005},
+		{"name":"坏端口","protocol":"tcp","enabled":true,"listenPort":15006,"upstreamHost":"10.0.0.6","upstreamPort":99999}
+	]}`)
+	res, err := Import(s, store.DefaultWorkspaceID, payload)
+	if err == nil {
+		t.Fatal("a backup with no importable mapping should be refused")
+	}
+	if res.MappingsImported != 0 {
+		t.Errorf("nothing should be imported: %+v", res)
+	}
+	if !contains(err.Error(), "现有规则") {
+		t.Errorf("the refusal should say the rules stand: %v", err)
+	}
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
+	if len(list) != 1 || list[0].Name != "旧规则" {
+		t.Fatalf("existing rules must survive the refusal: %+v", list)
+	}
+}
+
+// TestImportEmptyBackupClears pins the intentional empty backup: no
+// mappings at all is a deliberate wipe, not a refusal.
+func TestImportEmptyBackupClears(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.CreateMapping(store.DefaultWorkspaceID, model.Mapping{
+		Name: "旧规则", Protocol: model.TCP, Enabled: true, ListenPort: 15007,
+		UpstreamHost: "10.0.0.7", UpstreamPort: 80,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Import(s, store.DefaultWorkspaceID, []byte(`{"version":2,"mappings":[]}`))
+	if err != nil {
+		t.Fatalf("an empty backup is a deliberate wipe, not an error: %v", err)
+	}
+	if res.MappingsImported != 0 || res.Skipped != 0 {
+		t.Fatalf("empty backup result: %+v", res)
+	}
+	list, _ := s.ListMappings(store.DefaultWorkspaceID)
+	if len(list) != 0 {
+		t.Fatalf("an empty backup should clear the scene, have %+v", list)
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

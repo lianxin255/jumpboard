@@ -965,16 +965,33 @@ func importKind(ext string) string {
 	}
 }
 
-// ImportDroppedFiles takes the files dropped on the window and imports
-// each one by what it is: a .json goes through the backup import, which
-// replaces the rules with the backup's; a .conf's server blocks merge in
-// as new mappings. Anything else is named and skipped — a drop is a
-// gesture, not a dialog, so refusals are a status line, never a crash,
-// and one bad file does not stop the ones behind it.
+// ImportDroppedFiles takes the files dropped on the window and handles
+// each one by what it is. A .conf's server blocks merge in as new
+// mappings right away — additions are safe to do to a gesture. A .json
+// backup replaces the whole rule set, which is too destructive to do
+// unconfirmed, so it only raises the same preview a paste does and
+// waits for the confirmation. Anything else is named and skipped — a
+// drop is a gesture, not a dialog, so refusals are a status line, never
+// a crash, and one bad file does not stop the ones behind it.
+//
+// A backup also stands alone: two .json files, or a .json beside
+// anything else, would leave the user guessing which of the files won,
+// so the whole drop is refused and nothing in it is imported — a
+// preview that was already pending keeps its place.
 //
 // It runs on the caller's background goroutine; the summary it leaves in
 // the status line covers the whole drop at once.
 func (a *App) ImportDroppedFiles(paths []string) error {
+	jsons := 0
+	for _, p := range paths {
+		if importKind(filepath.Ext(p)) == "json" {
+			jsons++
+		}
+	}
+	if jsons > 1 || (jsons == 1 && len(paths) > 1) {
+		a.Fail("已忽略本次拖入的 %d 个文件：备份（.json）请单独拖入一个，不要与其它文件一起", len(paths))
+		return nil
+	}
 	var imported, skippedFiles []string
 	for _, p := range paths {
 		base := filepath.Base(p)
@@ -985,11 +1002,19 @@ func (a *App) ImportDroppedFiles(paths []string) error {
 		}
 		switch importKind(filepath.Ext(p)) {
 		case "json":
-			if err := a.Import(data); err != nil {
-				a.Fail("导入 %s 失败：%v", base, err)
+			pv, ok := sniffBackup(data)
+			if !ok {
+				a.Fail("导入 %s 失败：不是 JumpBoard 备份（JSON 中没有可识别的备份版本）", base)
 				continue
 			}
-			imported = append(imported, base+"（备份替换）")
+			// The preview is the whole import until the user confirms it:
+			// nothing is written, so the rules the backup would replace
+			// are still the ones standing if the preview is cancelled.
+			a.mu.Lock()
+			a.pastePending = pv
+			a.mu.Unlock()
+			a.notify()
+			a.Info("已读取备份 %s，确认后才会替换现有规则", base)
 		case "conf":
 			n, err := a.ImportNginxConf(data)
 			if err != nil {

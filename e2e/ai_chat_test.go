@@ -105,3 +105,61 @@ func TestAIChatImportsDraftsIntoWorkspace(t *testing.T) {
 		t.Errorf("the conversation should keep its turns: %v", tt.Texts())
 	}
 }
+
+// TestAIChatComposerStaysOnScreen holds the composer where it belongs:
+// the conversation scrolls inside its own bounded panel and the field with
+// the send button ride one reserved row under it, so nothing the
+// conversation grows can push them off the bottom of the window — not even
+// at the app's minimum size. The regression this pins: the composer's row
+// was once unwrapped, so the field stretched full width and the send
+// button stacked under it, flush against the window's bottom edge.
+func TestAIChatComposerStaysOnScreen(t *testing.T) {
+	for _, sz := range [][2]int{{1280, 800}, {960, 640}} {
+		w, h := sz[0], sz[1]
+		a := testApp(t)
+		srv := fakeOpenAI(t, chatReply())
+		a.SetAI(srv.URL, "chat-model")
+		tt := tester(t, a, w, h)
+
+		if err := tt.Click("AI 对话"); err != nil {
+			t.Fatal(err)
+		}
+		fillField(t, tt, "消息", "把内网 MySQL 和 Redis 分别暴露到 "+itoa(chatPorts[0])+"/"+itoa(chatPorts[1]))
+		if err := tt.Click("发送"); err != nil {
+			t.Fatal(err)
+		}
+		// The longest page: a reply that carries drafts, so the list has
+		// everything a conversation can pile onto it.
+		waitFor(t, tt, "the reply and its preview", func() bool {
+			return tt.HasText("配置预览（2 条）") && tt.HasText("导入到当前场景")
+		})
+		tt.Frame()
+
+		in, ok := tt.Find("消息")
+		if !ok {
+			t.Fatalf("%dx%d: the composer's field is missing", w, h)
+		}
+		send, ok := tt.Find("发送")
+		if !ok {
+			t.Fatalf("%dx%d: the send button is missing", w, h)
+		}
+		pad := float32(20) // the page's own bottom padding
+		if bottom := in.Y + in.H; bottom > float32(h)-pad+0.5 {
+			t.Errorf("%dx%d: the field is pushed off screen: bottom %.1f > %.1f", w, h, bottom, float32(h)-pad)
+		}
+		if bottom := send.Y + send.H + 8; bottom > float32(h)-pad+0.5 {
+			// The label Find returns is the button's text; the chrome
+			// carries about 8 DIPs of padding under it.
+			t.Errorf("%dx%d: the send button is pushed off screen: bottom %.1f > %.1f", w, h, bottom, float32(h)-pad)
+		}
+		// Side by side: the button starts after the field ends and rides
+		// its band, rather than stretching below it.
+		if send.X < in.X+in.W {
+			t.Errorf("%dx%d: the send button should sit beside the field, not under it: field=%+v send=%+v", w, h, in, send)
+		}
+		if send.Y >= in.Y+in.H || send.Y+send.H <= in.Y {
+			t.Errorf("%dx%d: the send button should share the field's band: field=%+v send=%+v", w, h, in, send)
+		}
+		a.Close()
+	}
+}

@@ -40,9 +40,5 @@ func DangerQuietButton(c *ui.Context, t Tokens, label string) ui.Element {
 
 // dangerSteps is the danger color with its hover and pressed neighbors.
 func dangerSteps(t Tokens) (base, hover, pressed ui.Color) {
-	step := ui.Hex("#000000")
-	if t.Dark {
-		step = ui.Hex("#ffffff")
-	}
-	return t.Danger, t.Danger.Mix(step, 0.12), t.Danger.Mix(step, 0.24)
+	return t.Danger, t.Danger.Mix(t.Step, 0.12), t.Danger.Mix(t.Step, 0.24)
 }

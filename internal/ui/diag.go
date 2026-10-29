@@ -29,8 +29,7 @@ func (v *View) diagSection(c *ui.Context, t Tokens, busy bool) {
 
 	// The card stays until it is dismissed, unlike the toast: an advice
 	// is read more than once while fixing the failure it is about.
-	ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
-		Background(t.Surface).Border(1, t.Border).Children(func() {
+	resultCard(c, t).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "AI 诊断").FontSize(NoteSize).Bold().TextColor(t.FG)
@@ -88,7 +87,7 @@ func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 				if step.Command != "" {
 					cmd := step.Command
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, cmd).Font("monospace").FontSize(CaptionSize).
+						ui.Text(c, cmd).Font(FontMono).FontSize(CaptionSize).
 							TextColor(t.FG2).Selectable()
 						// The label carries the step's title: several steps
 						// can offer a copy, and a control has to say which

@@ -322,10 +322,25 @@ func TestWhitelistBlocksTraffic(t *testing.T) {
 	}
 
 	fillField(t, tt, "白名单地址", "10.0.0.0/24")
+	// The format error's toast holds the bottom of the window, over the
+	// add button, and its countdown runs on the tester's clock and only
+	// while the pointer is off it — the malformed add's click left the
+	// pointer resting on the card, so the toast never left on its own.
+	// Filling the field moves the pointer away; the advance waits the
+	// toast out, as a user would, before the add's click crosses the band
+	// the card held.
+	tt.Advance(5 * time.Second)
+	tt.Frame()
 	if err := tt.Click("添加"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, tt, "the address listed", func() bool { return tt.HasText("10.0.0.0/24") })
+	// The store, not the screen, says the address listed: the field alone
+	// shows the text either way, and a click the toast ate would pass a
+	// text check while adding nothing.
+	waitFor(t, tt, "the address listed", func() bool {
+		list, _ := a.Store.ListWhitelist()
+		return len(list) == 1 && list[0].IP == "10.0.0.0/24"
+	})
 
 	if err := tt.Click("启用白名单"); err != nil {
 		t.Fatal(err)
@@ -348,6 +363,12 @@ func TestWhitelistBlocksTraffic(t *testing.T) {
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Frame()
+	// The failed add left an error toast, and a toast holds the bottom of
+	// the window until its time is up. The caption size the redesign
+	// raised slid the row's 移除 into that band, so the test waits the
+	// toast out first, as a user would.
+	tt.Advance(5 * time.Second)
 	tt.Frame()
 	reveal(t, tt, "移除")
 	if err := tt.Click("移除"); err != nil {

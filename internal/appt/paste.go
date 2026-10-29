@@ -26,7 +26,7 @@ type PastePreview struct {
 	Kind    pasteKind
 	Detail  string
 	Replace bool // a backup replaces the whole rule set
-	Count   int  // mappings a backup would restore, or a conf would add
+	Count   int  // mappings a backup holds, or a conf would add
 	Data    []byte
 }
 
@@ -90,13 +90,16 @@ func (a *App) CancelPasteImport() {
 }
 
 // ConfirmPasteImport does what the preview described. A backup replaces
-// the rule set; a conf's server blocks merge in as additions.
+// the rule set; a conf's server blocks merge in as additions. The
+// content reached the preview by a paste, a link, or a dropped file —
+// the preview is the same one either way — so the record names what was
+// imported, not a source the confirmation can no longer know.
 func (a *App) ConfirmPasteImport() error {
 	a.mu.Lock()
 	pv := a.pastePending
 	a.mu.Unlock()
 	if pv == nil {
-		return fmt.Errorf("没有待导入的剪贴板内容")
+		return fmt.Errorf("没有待导入的内容")
 	}
 	defer a.CancelPasteImport()
 
@@ -106,16 +109,16 @@ func (a *App) ConfirmPasteImport() error {
 		if err != nil {
 			return err
 		}
-		a.Log.Info("从剪贴板导入备份：%d 条映射，%d 个快照，跳过 %d 条",
+		a.Log.Info("导入备份：%d 条映射，%d 个快照，跳过 %d 条",
 			res.MappingsImported, res.SnapshotsImported, res.Skipped)
 	case pasteConf:
 		added, skipped, err := services.ImportNginxConf(a.Store, a.ActiveWorkspace(), pv.Data)
 		if err != nil {
 			return err
 		}
-		a.Log.Info("从剪贴板导入 nginx 配置：新增 %d 条映射，跳过 %d 块", added, skipped)
+		a.Log.Info("导入 nginx 配置：新增 %d 条映射，跳过 %d 块", added, skipped)
 	default:
-		return fmt.Errorf("剪贴板内容无法识别")
+		return fmt.Errorf("导入内容无法识别")
 	}
 	a.markDirty()
 	// The paste lands in the table the user is looking at, so the frame
@@ -159,7 +162,10 @@ func sniffBackup(data []byte) (*PastePreview, bool) {
 		Replace: true,
 		Count:   len(p.Mappings),
 		Data:    data,
-		Detail:  fmt.Sprintf("将用备份中的 %d 条映射替换现有全部规则", len(p.Mappings)),
+		// The count is what the backup holds, not a promise: entries the
+		// importer cannot use are skipped at confirm time, so the preview
+		// says so instead of promising all of them back.
+		Detail: fmt.Sprintf("备份包含 %d 条映射；无效条目导入时将跳过，其余将替换现有全部规则", len(p.Mappings)),
 	}, true
 }
 

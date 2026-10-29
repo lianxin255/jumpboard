@@ -10,47 +10,57 @@ import (
 
 // Shape tokens keep panels, modals and chips consistent across pages.
 // The toolkit theme uses Radius/Spacing 10/6; these are for hand-drawn boxes.
-// Sizes follow the glass desktop: window 16, floating bars 14, cards 12,
-// buttons and inputs 9–10, chips 8, pills 12.
+// The vocabulary is deliberately small: 14 for the window, floating bars,
+// panels, modals and the big empty-state cards; 10 for controls; 6 for
+// chips and badges. Pill (a capsule taller than its radius) and tiny
+// functional marks (the nav rail, status dots) keep their own values.
 // SidebarW is the frosted rail's width. Page pads and gaps sit on the
 // 4/8 grid: 20 and 32 vertically and horizontally, 14 between blocks.
 const (
-	RadiusWindow = float32(16)
-	RadiusModal  = float32(16)
+	RadiusWindow = float32(14)
+	RadiusModal  = float32(14)
 	RadiusFloat  = float32(14)
-	RadiusPanel  = float32(12)
+	RadiusPanel  = float32(14)
 	RadiusButton = float32(10)
-	RadiusChip   = float32(8)
+	RadiusChip   = float32(6)
 	RadiusBadge  = float32(6)
 	RadiusTiny   = float32(2)
 	RadiusPill   = float32(12)
 
-	SidebarW = float32(232)
+	SidebarW = float32(216)
 	PagePadY = float32(20)
 	PagePadX = float32(32)
 	PageGap  = float32(14)
 )
 
-// Type tokens: five sizes every text falls into, so a page cannot grow a
-// ninth orphan size. Title heads a page, Head a dialog or a section,
-// Body is the toolkit's own default for controls and prose, Note is the
-// secondary line beside Body (page subtitles, dialog bodies), and
+// Type tokens: the sizes text falls into, so a page cannot grow a ninth
+// orphan size. Title heads the window bar — 20, the plan's page title,
+// not the 24 a dialog never had room for — Head a dialog or a section,
+// RowTitle is the row's own title size, Body is the toolkit's own default
+// for controls and prose, Note is the secondary line beside Body, and
 // Caption is metadata and the small controls of a row — timestamps,
-// chips, and the 11 DIP buttons lists carry.
+// chips, and the small buttons lists carry.
 const (
-	TitleSize   = float32(24)
-	HeadSize    = float32(16)
-	BodySize    = float32(13)
-	NoteSize    = float32(12)
-	CaptionSize = float32(11)
+	TitleSize    = float32(20)
+	HeadSize     = float32(16)
+	RowTitleSize = float32(14)
+	BodySize     = float32(13)
+	NoteSize     = float32(12)
+	CaptionSize  = float32(12)
 )
+
+// FontMono is the family addresses, commands, logs and keys draw in: a
+// name rather than a string at every call site, so the family can change
+// in one place.
+const FontMono = "monospace"
 
 // Tokens are the colors of one appearance. The light and dark sets share
 // the same roles, so a widget asks for a role and both themes answer.
 //
-// The palette is mygo's own: the zinc neutrals and the blue accent of
-// ui.LightTheme and ui.DarkTheme, so the app looks like the toolkit's
-// examples rather than a theme of its own.
+// The palette is JumpBoard's own: a slate-blue neutral ramp with one blue
+// accent — strong on the light desktop, lifted to a periwinkle on the dark
+// one so it holds its contrast against the night surfaces — and the
+// protocol and status hues the app has always carried.
 type Tokens struct {
 	Dark bool
 
@@ -77,7 +87,7 @@ type Tokens struct {
 
 	// Sidebar is the frosted rail. Canvas is the content wash behind the
 	// page. Chip is the glass chip and search field. Meta is timestamps and
-	// placeholders, quieter than Muted.
+	// placeholders; it stays at small-text contrast in both appearances.
 	Sidebar ui.Color
 	Canvas  ui.Color
 	Chip    ui.Color
@@ -90,6 +100,12 @@ type Tokens struct {
 	AmberSoft   ui.Color
 	AmberLine   ui.Color
 
+	// Shadow is the drop under a modal or a floating bar. Step is the
+	// neutral a face's hover and pressed neighbors mix toward — black on a
+	// light desktop, white on a dark one.
+	Shadow ui.Color
+	Step   ui.Color
+
 	// Protocol badges.
 	TCP   ui.Color
 	UDP   ui.Color
@@ -97,43 +113,47 @@ type Tokens struct {
 	HTTPS ui.Color
 }
 
-// Dark keeps the same roles as the light glass desktop, on a zinc night
-// surface, so a widget that asks for a role still gets an answer.
+// Dark keeps the same roles as the light desktop, on a slate night
+// surface, so a widget that asks for a role still gets an answer. The
+// accent is lifted light so its ink can be the night surface itself.
 func Dark() Tokens {
 	return Tokens{
 		Dark: true,
-		Base: ui.Hex("#14161c"), Topbar: ui.Hex("#1a1e27"),
-		Surface: ui.Hex("#1e232d"), Surface2: ui.Hex("#282e3a"), Surface3: ui.Hex("#181c24"),
-		Sidebar: ui.Hex("#1a1e27"), Canvas: ui.Hex("#14161c"), Chip: ui.Hex("#242a36"),
-		FG: ui.Hex("#f4f6fa"), FG2: ui.Hex("#c5ccd8"), Muted: ui.Hex("#9aa3b5"), Meta: ui.Hex("#7d8799"),
-		Border: ui.Hex("#343b4a"), Hair: ui.RGBA(244, 246, 250, 0.08),
-		Accent: ui.Hex("#3b82f6"), AccentText: ui.Hex("#ffffff"),
-		Success: ui.Hex("#22c55e"), SuccessSoft: ui.RGBA(34, 197, 94, 0.16),
-		Warning: ui.Hex("#f59e0b"), WarningSoft: ui.RGBA(245, 158, 11, 0.16),
-		Danger: ui.Hex("#ef6460"), DangerSoft: ui.RGBA(239, 100, 96, 0.16),
-		AmberText: ui.Hex("#f3d7a6"), AmberSoft: ui.RGBA(243, 215, 166, 0.12), AmberLine: ui.RGBA(243, 215, 166, 0.35),
-		TCP: ui.Hex("#60a5fa"), UDP: ui.Hex("#a78bfa"),
-		HTTP: ui.Hex("#2dd4bf"), HTTPS: ui.Hex("#fbbf24"),
+		Base: ui.Hex("#10141B"), Topbar: ui.Hex("#151B24"),
+		Surface: ui.Hex("#171D26"), Surface2: ui.Hex("#222B38"), Surface3: ui.Hex("#131923"),
+		Sidebar: ui.Hex("#151B24"), Canvas: ui.Hex("#10141B"), Chip: ui.Hex("#1F2632"),
+		FG: ui.Hex("#EDF2F7"), FG2: ui.Hex("#C2CCDB"), Muted: ui.Hex("#9AA7B8"), Meta: ui.Hex("#8B98AC"),
+		Border: ui.Hex("#2A3442"), Hair: ui.RGBA(237, 242, 247, 0.08),
+		Accent: ui.Hex("#8FB0FF"), AccentText: ui.Hex("#10141B"),
+		Success: ui.Hex("#22C55E"), SuccessSoft: ui.RGBA(34, 197, 94, 0.16),
+		Warning: ui.Hex("#F59E0B"), WarningSoft: ui.RGBA(245, 158, 11, 0.16),
+		Danger: ui.Hex("#F77C79"), DangerSoft: ui.RGBA(247, 124, 121, 0.16),
+		AmberText: ui.Hex("#F3D7A6"), AmberSoft: ui.RGBA(243, 215, 166, 0.12), AmberLine: ui.RGBA(243, 215, 166, 0.35),
+		Shadow: ui.RGBA(0, 0, 0, 0.45), Step: ui.Hex("#FFFFFF"),
+		TCP: ui.Hex("#60A5FA"), UDP: ui.Hex("#A78BFA"),
+		HTTP: ui.Hex("#2DD4BF"), HTTPS: ui.Hex("#FBBF24"),
 	}
 }
 
-// Light is the glass desktop: a frosted blue-grey rail, a near-white
-// content wash, and one blue used for the primary action, the selected
-// nav, and an open switch.
+// Light is the day desktop: the plan's cool near-white wash (#F5F6F8)
+// behind pure white surfaces, one strong blue for the primary action, the
+// selected nav, and an open switch — dark ink on the accent where the
+// dark theme inverts it.
 func Light() Tokens {
 	return Tokens{
-		Base: ui.Hex("#FBFCFE"), Topbar: ui.Hex("#E7EDF6"),
-		Surface: ui.Hex("#FFFFFF"), Surface2: ui.Hex("#F4F7FB"), Surface3: ui.Hex("#F4F7FB"),
-		Sidebar: ui.Hex("#E7EDF6"), Canvas: ui.Hex("#FBFCFE"), Chip: ui.Hex("#F4F7FB"),
-		FG: ui.Hex("#1C2434"), FG2: ui.Hex("#3A4458"), Muted: ui.Hex("#5C677C"), Meta: ui.Hex("#8A93A6"),
-		Border: ui.Hex("#E1E7F0"), Hair: ui.Hex("#EEF1F6"),
-		Accent: ui.Hex("#3B82F6"), AccentText: ui.Hex("#ffffff"),
-		Success: ui.Hex("#16A34A"), SuccessSoft: ui.Hex("#E9F8EE"),
-		Warning: ui.Hex("#D97706"), WarningSoft: ui.Hex("#FDF3E6"),
-		Danger: ui.Hex("#DC5B54"), DangerSoft: ui.Hex("#FDECEC"),
+		Base: ui.Hex("#F5F6F8"), Topbar: ui.Hex("#EFF1F4"),
+		Surface: ui.Hex("#FFFFFF"), Surface2: ui.Hex("#F1F4F9"), Surface3: ui.Hex("#F1F4F9"),
+		Sidebar: ui.Hex("#EFF1F4"), Canvas: ui.Hex("#F5F6F8"), Chip: ui.Hex("#F1F4F9"),
+		FG: ui.Hex("#172033"), FG2: ui.Hex("#3E4B61"), Muted: ui.Hex("#667085"), Meta: ui.Hex("#667085"),
+		Border: ui.Hex("#DDE4EC"), Hair: ui.Hex("#E9EEF4"),
+		Accent: ui.Hex("#315FD5"), AccentText: ui.Hex("#FFFFFF"),
+		Success: ui.Hex("#147D3F"), SuccessSoft: ui.Hex("#E9F8EE"),
+		Warning: ui.Hex("#925505"), WarningSoft: ui.Hex("#FDF3E6"),
+		Danger: ui.Hex("#B23633"), DangerSoft: ui.Hex("#FDECEC"),
 		AmberText: ui.Hex("#8A5416"), AmberSoft: ui.Hex("#FFF8EE"), AmberLine: ui.Hex("#F3D7A6"),
-		TCP: ui.Hex("#3B82F6"), UDP: ui.Hex("#7C6BF2"),
-		HTTP: ui.Hex("#0E9F8E"), HTTPS: ui.Hex("#D97706"),
+		Shadow: ui.RGBA(0, 0, 0, 0.45), Step: ui.Hex("#000000"),
+		TCP: ui.Hex("#315FD5"), UDP: ui.Hex("#6A4FD8"),
+		HTTP: ui.Hex("#08786D"), HTTPS: ui.Hex("#9A5B06"),
 	}
 }
 
@@ -184,11 +204,13 @@ func theme(t Tokens) *ui.Theme {
 	th.Accent, th.AccentText = t.Accent, t.AccentText
 	th.Danger, th.Warning, th.Success = t.Danger, t.Warning, t.Success
 	th.Scrollbar = t.Muted
-	// Buttons, inputs and chips share the glass radius.
+	// Buttons, inputs and chips share the control radius.
 	th.Radius, th.Spacing = 10, 6
 	th.FontSize = BodySize
 	if !t.Dark {
-		th.Inverse, th.InverseText = ui.Hex("#1C2434"), ui.Hex("#FBFCFE")
+		// Tooltips and toasts are the theme turned over: the day ink on the
+		// day wash.
+		th.Inverse, th.InverseText = t.FG, t.Canvas
 	}
 	return th
 }

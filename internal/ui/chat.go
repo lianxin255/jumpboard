@@ -28,24 +28,20 @@ type chatItem struct {
 }
 
 // aiChatPage draws the conversation page.
+//
+// The page is three bands: the header, the conversation's scroll, and the
+// composer. The scroll grows into whatever room is left and the composer
+// keeps its natural height — the conversation can never push the field or
+// the send button off the bottom of the window, not even at the app's
+// minimum size, because it scrolls inside its own bounded panel instead of
+// making the page taller.
 func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 	a := v.App
 	turns, partial, streaming, busy, errText, note, drafts := a.AIChatState()
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Gap(3).Children(func() {
-				ui.Text(c, "AI 对话").FontSize(TitleSize).Bold().TextColor(t.FG)
-				ui.Text(c, "聊端口映射，聊出来的配置确认后导入当前场景").FontSize(NoteSize).TextColor(t.Muted)
-			})
-			ui.Spacer(c)
-			if len(turns) > 0 {
-				if DangerQuietButton(c, t, "清空对话").Disabled(busy).
-					Tooltip("清掉这段对话和等待导入的草稿；已导入的映射不受影响").Clicked() {
-					a.ClearChat()
-				}
-			}
-		})
+		// The window bar carries the page's name and its 清空对话 action,
+		// so the conversation starts with itself.
 
 		// Without an endpoint and a model the page is a door that leads
 		// to the settings, not a chat that would fail on every send.
@@ -55,7 +51,7 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 		}
 
 		v.chatList(c, t, turns, partial, streaming, busy, errText, note, drafts)
-		v.chatInputRow(c, t, busy)
+		v.chatComposer(c, t, busy)
 	})
 }
 
@@ -63,16 +59,10 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 // is missing, and the one button that goes where it is fixed. The card
 // the settings open on is the AI one, so the landing needs no scroll.
 func (v *View) chatNotReady(c *ui.Context, t Tokens) {
-	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		ui.Box(c).Width(460).Padding(32, 24).Radius(RadiusModal).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
+	ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
+		emptyCard(c, t, 460).Children(func() {
 			ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(36, 36).Radius(RadiusButton).Background(t.Accent.Alpha(0.14)).
-					Border(1, t.Accent.Alpha(0.28)).Children(func() {
-					ui.Column(c).Fill().Center().Children(func() {
-						ui.Text(c, "✨").FontSize(HeadSize).TextColor(t.Accent)
-					})
-				})
+				emptyGlyph(c, t, "✨")
 				ui.Text(c, "还没有配置 AI 服务").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Text(c, "填好接口地址和模型后，这里可以和模型对话生成映射配置。").
 					FontSize(BodySize).TextColor(t.Muted)
@@ -131,7 +121,12 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 	v.chatListState.FollowEnd = true
 	v.chatListState.FollowAnimation = &ui.Smooth
 
-	ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+	// The panel grows into the room the header and the composer leave —
+	// Grow, not Fill: a Fill panel claims the page's whole height and then
+	// bargains it back from its siblings, which is how a long conversation
+	// once pushed the composer flush against the window's edge. The floor
+	// keeps the scroll itself usable in a window at its shortest.
+	panelShell(c, t).Grow(1).MinHeight(160).Children(func() {
 		ui.List(c, &v.chatListState, len(items), func(i int) {
 			v.chatRow(c, t, items[i], errText, note, drafts, busy, streaming, partial)
 		}).Grow(1).Padding(14, 16).Gap(12).Justify(ui.End).Children(func() {
@@ -203,8 +198,7 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 	if m.ListenPort != 0 {
 		listen = strconv.Itoa(m.ListenPort)
 	}
-	ui.Column(c).MaxWidth(760).Gap(6).Padding(10).Radius(RadiusChip).
-		Background(t.Surface3).Border(1, t.Border).Children(func() {
+	draftCardShell(c, t).MaxWidth(760).Children(func() {
 		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
 			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
 			FontSize(NoteSize).TextColor(t.FG)
@@ -212,7 +206,7 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		if m.ExtraDirectives != "" {
-			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(CaptionSize).TextColor(t.Muted)
+			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if DangerQuietButton(c, t, "丢弃").FontSize(CaptionSize).
@@ -262,14 +256,24 @@ func (v *View) sendChat() {
 	v.App.SendChatMessage(text)
 }
 
-// chatInputRow is the composer: the field and the send button, Enter and
-// click both sending, an empty field or a reply on its way refusing.
-func (v *View) chatInputRow(c *ui.Context, t Tokens, busy bool) {
-	in := ui.TextInput(c, &v.chatInput).
-		Placeholder("描述要转发的服务，或接着上一条继续聊").
-		Grow(1).Label("消息")
-	send := ui.PrimaryButton(c, "发送").Disabled(busy || v.chatInput == "")
-	if (in.Submitted() || send.Clicked()) && v.chatInput != "" && !busy {
-		v.sendChat()
-	}
+// chatComposer is the composer: the field and the send button on one row,
+// Enter and click both sending, an empty field or a reply on its way
+// refusing.
+//
+// The row is reserved, never shared: it keeps its natural height
+// (Shrink(0)), so the conversation above scrolls inside its own panel
+// rather than stacking the composer under a taller page — which is what
+// happened when the field and the button sat in the page's column
+// directly, the field stretched full width and the button full width
+// beneath it, flush with the window's bottom edge.
+func (v *View) chatComposer(c *ui.Context, t Tokens, busy bool) {
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+		in := ui.TextInput(c, &v.chatInput).
+			Placeholder("描述要转发的服务，或接着上一条继续聊").
+			Grow(1).Label("消息")
+		send := ui.PrimaryButton(c, "发送").Disabled(busy || v.chatInput == "")
+		if (in.Submitted() || send.Clicked()) && v.chatInput != "" && !busy {
+			v.sendChat()
+		}
+	})
 }

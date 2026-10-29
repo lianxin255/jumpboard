@@ -79,3 +79,51 @@ func TestDropRejectsUnknownExtension(t *testing.T) {
 		t.Errorf("nothing should have been imported: %d", len(list))
 	}
 }
+
+// TestDropJSONAsksBeforeReplacing walks the .json drop end to end: the
+// drop raises the same confirmation dialog a paste does, the old rules
+// stand until the dialog is confirmed, and only the confirmation
+// replaces them. A drop is a gesture — the replacement is a decision.
+func TestDropJSONAsksBeforeReplacing(t *testing.T) {
+	a := testApp(t)
+	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
+		Name: "会被替换的旧规则", Protocol: model.TCP, Enabled: true, ListenPort: 16003,
+		UpstreamHost: "10.9.0.3", UpstreamPort: 80,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	backup := `{"version":2,"exportedAt":1,"mappings":[{"name":"备份规则","protocol":"tcp","enabled":true,"listenPort":16004,"upstreamHost":"10.9.0.4","upstreamPort":443}]}`
+	path := filepath.Join(t.TempDir(), "backup.json")
+	if err := os.WriteFile(path, []byte(backup), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tt := tester(t, a, 1200, 760)
+	njui.DropFilesForTest(a, []string{path})
+
+	// The dialog a paste raises is the one the drop raises now; it is
+	// the only place that says what the backup is.
+	waitFor(t, tt, "the backup preview", func() bool { return tt.HasText("JumpBoard 备份") })
+	if !tt.HasText("替换") {
+		t.Errorf("a dropped backup should warn about replacement: %v", tt.Texts())
+	}
+	// The dialog is up and the old rule is still the whole rule set.
+	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 1 || list[0].Name != "会被替换的旧规则" {
+		t.Fatalf("a dropped backup must not replace before confirmation: %+v", list)
+	}
+
+	// The paste dialog's source-neutral confirm — the drop raised the
+	// same dialog a paste does.
+	if err := tt.Click("确认导入"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the preview gone", func() bool { return a.PastePreview() == nil })
+
+	list, err := a.Store.ListMappings(a.ActiveWorkspace())
+	if err != nil || len(list) != 1 || list[0].Name != "备份规则" {
+		t.Fatalf("a confirmed drop replaces the rules: %d %v", len(list), err)
+	}
+}

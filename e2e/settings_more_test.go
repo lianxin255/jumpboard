@@ -238,6 +238,10 @@ func TestImportBackupButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	// The caption size the redesign raised sits the second row of cards
+	// lower, so the import button rests at this window's fold: the test
+	// scrolls to it, as the user would.
+	reveal(t, tt, "导入备份")
 	if err := tt.Click("导入备份"); err != nil {
 		t.Fatal(err)
 	}

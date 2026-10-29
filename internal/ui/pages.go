@@ -22,24 +22,21 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 	_, logs, _, _, _, _, busy, _ := a.Snapshot()
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		v.actionRow(c, t)
+		// The window bar carries this page's name and the engine's state;
+		// what it leaves behind — the pending strip, an apply failure —
+		// is the page's one conditional block.
+		v.pageNotices(c, t, busy)
 
-		ui.Row(c).AlignItems(ui.End).Children(func() {
-			ui.Column(c).Gap(3).Children(func() {
-				ui.Text(c, "日志").FontSize(TitleSize).Bold().TextColor(t.FG)
-				ui.Text(c, "操作记录与内置引擎的访问日志").FontSize(NoteSize).TextColor(t.Muted)
-			})
-			ui.Spacer(c)
+		// The page's one toolbar: the tab and level pickers, the search,
+		// and the row's own actions, wrapping on a narrow window.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
 			// No fixed width: the control sizes to its labels. Width(220)
 			// was tighter than the CJK labels and clipped them.
 			ui.Segmented(c, &v.logTab, "操作日志", "访问日志").Label("日志类型")
 			if v.logTab == 0 {
 				ui.Segmented(c, &v.logLevel, "全部", "错误", "警告", "信息").Label("级别")
 			}
-		})
-
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(280)
+			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(260)
 			ui.Spacer(c)
 			if v.logTab == 0 {
 				if ui.Button(c, "导出").Disabled(busy).
@@ -84,7 +81,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			v.interpretSection(c, t, "logs")
 		}
 
-		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		panelShell(c, t).Children(func() {
 			if v.logTab == 0 {
 				v.appLogList(c, t, logs)
 			} else {
@@ -186,7 +183,7 @@ func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 		if len(errs) > 0 {
 			ui.Text(c, "错误").FontSize(CaptionSize).Bold().TextColor(t.Danger).Padding(6, 14)
 			ui.List(c, nil, len(errs), func(i int) {
-				ui.Text(c, errs[i]).Font("monospace").FontSize(CaptionSize).TextColor(t.Danger).
+				ui.Text(c, errs[i]).Font(FontMono).FontSize(CaptionSize).TextColor(t.Danger).
 					Padding(2, 14).SingleLine()
 			}).MaxHeight(200)
 		}
@@ -196,7 +193,7 @@ func (v *View) nginxLogList(c *ui.Context, t Tokens) {
 			return
 		}
 		ui.List(c, nil, len(access), func(i int) {
-			ui.Text(c, access[i]).Font("monospace").FontSize(CaptionSize).TextColor(t.FG2).
+			ui.Text(c, access[i]).Font(FontMono).FontSize(CaptionSize).TextColor(t.FG2).
 				Padding(2, 14).SingleLine()
 		}).Grow(1)
 	}).Grow(1)
@@ -224,31 +221,20 @@ func formatClock(ms int64) string {
 // historyPage lists the saved configurations.
 func (v *View) historyPage(c *ui.Context, t Tokens) {
 	a := v.App
-	_, _, snaps, _, _, dirty, busy, _ := a.Snapshot()
+	_, _, snaps, _, _, _, busy, _ := a.Snapshot()
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		v.actionRow(c, t)
-
-		ui.Column(c).Gap(3).Children(func() {
-			ui.Text(c, "配置历史").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "每次成功应用都会存一份快照，最多保留 50 份。回滚会把当时的规则恢复回来并立即生效。").
-				FontSize(NoteSize).TextColor(t.Muted).Wrap()
-		})
-		if dirty {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
-				Background(t.Warning.Alpha(0.12)).Border(1, t.Warning.Alpha(0.32)).Children(func() {
-				ui.Box(c).Size(6, 6).Radius(3).Background(t.Warning)
-				ui.Text(c, "有改动还没应用；映射页的状态点会显示哪些规则还没生效。").
-					FontSize(CaptionSize).TextColor(t.Warning)
-			})
-		}
+		// The window bar carries the page's name and the engine's state;
+		// the pending strip below is the same one the mappings page
+		// shows — one place 未应用 is said.
+		v.pageNotices(c, t, busy)
 
 		if len(snaps) == 0 {
 			v.emptyState(c, t, "还没有快照", "成功应用一次配置后，这里会出现第一条记录。")
 			return
 		}
 
-		ui.Column(c).Fill().Radius(RadiusPanel).Background(t.Surface).Border(1, t.Border).Clip().Children(func() {
+		panelShell(c, t).Children(func() {
 			ls := &v.historyList
 			ls.Key = func(i int) any { return snaps[i].ID }
 			ui.List(c, ls, len(snaps), func(i int) {
@@ -326,16 +312,18 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	}
 
 	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		ui.Column(c).Gap(3).Children(func() {
-			ui.Text(c, "设置").FontSize(TitleSize).Bold().TextColor(t.FG)
-			ui.Text(c, "AI 配置、外观、访问控制与数据管理").FontSize(NoteSize).TextColor(t.Muted)
-		})
+		// The window bar says the page's name; the cards start at once.
 
 		ui.Scroll(c).Children(func() {
+			// The cards read in the order a user needs them: the AI card
+			// leads — the chat page's 去设置 lands on it, and a card below
+			// the fold would need the user to scroll to the one thing they
+			// came for — then the desktop's looks, who may connect, the
+			// data tools, the scenes those tools feed, and the least-visited
+			// cards (快捷键, 更新) last. The danger band stays a band across
+			// the page below them all, apart from the cards it outclasses
+			// in consequence.
 			ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
-				// The AI card leads the page: the chat page's 去设置 lands
-				// here for it, and a card below the fold would need the
-				// user to scroll to the one thing they came for.
 				v.aiCard(c, t)
 
 				v.card(c, t, "外观", func() {
@@ -409,7 +397,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 								a.RunBackground(func() error { return a.ToggleWhitelist(e.ID, on) })
 							})
 							ui.Column(c).Gap(1).Grow(1).Children(func() {
-								ui.Text(c, e.IP).FontSize(NoteSize).TextColor(t.FG).Font("monospace")
+								ui.Text(c, e.IP).FontSize(NoteSize).TextColor(t.FG).Font(FontMono)
 								if e.Note != "" {
 									ui.Text(c, e.Note).FontSize(CaptionSize).TextColor(t.Muted)
 								}
@@ -479,6 +467,13 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					}
 				})
 
+				// The scene card rides the same flow, after the data tools
+				// it sits beside in spirit: a scene is renamed and retired
+				// rarely enough that the tools around it keep the first
+				// rows, and the page scrolls. The one-click switch is on
+				// the mappings page, where it belongs.
+				v.workspaceCard(c, t, busy)
+
 				v.card(c, t, "快捷键", func() {
 					// The global binding is a setting; the in-app
 					// shortcuts below it are not — they are wired in the
@@ -487,10 +482,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					// on demand, and the card must say what is stored, not
 					// what it remembers.
 					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-						ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
-							Border(1, t.Border).Children(func() {
-							ui.Text(c, a.Hotkey()).FontSize(CaptionSize).Bold().TextColor(t.FG).Font("monospace")
-						})
+						kbdKey(c, t, a.Hotkey())
 						ui.Text(c, "全局显示/隐藏主窗口").FontSize(NoteSize).TextColor(t.FG2)
 					})
 					// A typed accelerator, not a key recorder: the string
@@ -522,10 +514,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 					for _, r := range rows {
 						r := r
 						ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-							ui.Box(c).Padding(2, 8).Radius(RadiusBadge).Background(t.Surface3).
-								Border(1, t.Border).Children(func() {
-								ui.Text(c, r[0]).FontSize(CaptionSize).Bold().TextColor(t.FG).Font("monospace")
-							})
+							kbdKey(c, t, r[0])
 							ui.Text(c, r[1]).FontSize(NoteSize).TextColor(t.FG2)
 						})
 					}
@@ -569,18 +558,13 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				})
 			})
 
-			// The scene card comes last: a scene is renamed and retired
-			// rarely enough that the tools around it keep the first rows,
-			// and the page scrolls. The one-click switch is on the
-			// mappings page, where it belongs.
-			v.workspaceCard(c, t, busy)
-
 			// The danger zone is a band across the page, not a button
 			// among the tools: wiping everything deserves to look
 			// different from exporting a backup.
+			zoneFill, zoneLine := statusOutline(t.Danger)
 			ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
 				Padding(14, 16).Radius(RadiusPanel).
-				Background(t.Danger.Alpha(0.08)).Border(1, t.Danger.Alpha(0.45)).
+				Background(zoneFill).Border(1, zoneLine).
 				Children(func() {
 					ui.Column(c).Gap(2).Grow(1).Children(func() {
 						ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)

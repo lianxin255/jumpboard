@@ -17,8 +17,9 @@ func (v *View) confImportBar(c *ui.Context, t Tokens, busy bool) {
 	if !ok {
 		return
 	}
+	fill, line := statusTint(t.Success)
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
-		Background(t.Success.Alpha(0.10)).Border(1, t.Success.Alpha(0.30)).Children(func() {
+		Background(fill).Border(1, line).Children(func() {
 		ui.Textf(c, "已导入 %s（合并 %d 条映射）", imp.Name, imp.Count).
 			FontSize(CaptionSize).TextColor(t.FG)
 		ui.Spacer(c)
@@ -46,8 +47,7 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 	if src != source || (!busy && errText == "" && interp == nil) {
 		return
 	}
-	ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
-		Background(t.Surface).Border(1, t.Border).Children(func() {
+	resultCard(c, t).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "AI 解读").FontSize(NoteSize).Bold().TextColor(t.FG)

@@ -1,13 +1,16 @@
 package e2e
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/lianxin255/jumpboard/internal/model"
 )
 
-// TestCloneMapping checks the clone button: a copy appears, disabled, with
-// no listen port (the original still holds it).
+// TestCloneMapping checks the row's context menu: 克隆 moved off the row's
+// buttons and into the menu, so the 操作 column is a pair (编辑, 删除)
+// rather than a toolbar. The copy appears, disabled, with no listen port
+// (the original still holds it).
 func TestCloneMapping(t *testing.T) {
 	a := testApp(t)
 	if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
@@ -20,8 +23,20 @@ func TestCloneMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := tester(t, a, 1200, 760)
+	waitFor(t, tt, "the row", func() bool { return tt.HasText("原始") })
 
-	if err := tt.Click("克隆"); err != nil {
+	// The menu belongs to the 规则 cell, so the click goes just inside the
+	// row's left edge, on the cell's own content.
+	row, ok := tt.Find("原始")
+	if !ok {
+		t.Fatalf("the row 原始 is missing: %v", tt.Texts())
+	}
+	tt.RightClickAt(row.X+20, row.Y+row.H/2)
+	menu := tt.Menu()
+	if !slices.Contains(menu, "克隆") {
+		t.Fatalf("the row's menu lacks 克隆: %v", menu)
+	}
+	if err := tt.ChooseMenuItem("克隆"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the clone", func() bool {

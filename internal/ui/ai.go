@@ -44,9 +44,7 @@ func (v *View) aiDialog(c *ui.Context, t Tokens) {
 	busy, errMsg, note, drafts := v.ai.snapshot()
 	open := true
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Width(620).Gap(12).Padding(24).Radius(RadiusModal).
-			Background(t.Surface).Border(1, t.Border).
-			Shadow(0, 12, 40, 0, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+		modalCard(c, t, 620, 12).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, "用一句话新建映射").FontSize(HeadSize).Bold().TextColor(t.FG)
 				ui.Spacer(c)
@@ -116,8 +114,7 @@ func (v *View) draftCard(c *ui.Context, t Tokens, i int, d appt.AIDraft) {
 	if m.ListenPort != 0 {
 		listen = strconv.Itoa(m.ListenPort)
 	}
-	ui.Column(c).Gap(6).Padding(10).Radius(RadiusChip).
-		Background(t.Surface3).Border(1, t.Border).Children(func() {
+	draftCardShell(c, t).Children(func() {
 		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
 			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
 			FontSize(NoteSize).TextColor(t.FG)
@@ -125,7 +122,7 @@ func (v *View) draftCard(c *ui.Context, t Tokens, i int, d appt.AIDraft) {
 			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		if m.ExtraDirectives != "" {
-			ui.Text(c, m.ExtraDirectives).Font("monospace").FontSize(CaptionSize).TextColor(t.Muted)
+			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if DangerQuietButton(c, t, "丢弃").Clicked() {

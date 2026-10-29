@@ -29,7 +29,9 @@ func TestPasteImportConf(t *testing.T) {
 	// The button and the dialog carry the same words, so wait for the one
 	// thing only the dialog says.
 	waitFor(t, tt, "the paste preview", func() bool { return tt.HasText("剪贴板内容是 nginx 配置") })
-	if err := tt.Click("导入粘贴内容"); err != nil {
+	// The dialog's confirm button is source-neutral now — the same dialog
+	// answers a paste and a dropped file.
+	if err := tt.Click("确认导入"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the preview gone", func() bool { return a.PastePreview() == nil })
@@ -78,7 +80,7 @@ func TestPasteImportBackupReplaces(t *testing.T) {
 	if !tt.HasText("替换") {
 		t.Errorf("a backup preview should warn about replacement: %v", tt.Texts())
 	}
-	if err := tt.Click("导入粘贴内容"); err != nil {
+	if err := tt.Click("确认导入"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the preview gone", func() bool { return a.PastePreview() == nil })
