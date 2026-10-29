@@ -1,7 +1,7 @@
 // The AI chat page's orchestration: the conversation the app holds, the
 // request that extends it, and the import that turns the drafts a reply
-// proposed into mappings in the current scene. The one-shot panel in
-// ai.go stays as it is; this is the conversation's own state, written by
+// proposed into mappings in the current scene. The conversation is the
+// one place a draft is proposed now; this is its own state, written by
 // its request goroutine and read by every frame.
 package appt
 
@@ -46,8 +46,8 @@ func (a *App) SendChatMessage(text string) {
 }
 
 // RunChatSync is sendChat on the calling thread, for the tests: the
-// state lands before the call returns, the way RunAISync stands in for
-// the panel's ask.
+// state lands before the call returns, so a test reads what the page
+// will draw without driving the goroutine.
 func (a *App) RunChatSync(text string) error {
 	return a.sendChat(strings.TrimSpace(text))
 }
@@ -85,6 +85,7 @@ func (a *App) sendChat(text string) error {
 		a.notify()
 	})
 
+	draftCount := 0
 	a.mu.Lock()
 	a.chatBusy, a.chatStreaming, a.chatPartial = false, false, ""
 	if err != nil {
@@ -97,24 +98,28 @@ func (a *App) sendChat(text string) error {
 	} else {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleAssistant, Content: reply})
 		a.chatDrafts, a.chatNote = chatDraftsOf(reply)
+		draftCount = len(a.chatDrafts)
 	}
 	a.mu.Unlock()
 	if err != nil {
 		a.Log.Warn("AI 对话失败: %v", err)
 	} else {
-		a.Log.Info("AI 对话回复：%d 字，%d 条草稿", len([]rune(reply)), len(a.chatDrafts))
+		a.Log.Info("AI 对话回复：%d 字，%d 条草稿", len([]rune(reply)), draftCount)
 	}
 	a.notify()
 	return err
 }
 
-// chatDraftsOf sanitizes the drafts a reply carries, the way AskAIMulti
-// does: each goes through Draft.Mapping's validators, and one that
+// chatDraftsOf sanitizes the drafts a reply carries: each goes through
+// Draft.Mapping's validators, and one that
 // cannot become a mapping is dropped with a note rather than shown as a
-// card whose import could only fail.
+// card whose import could only fail. A reply that parsed to more drafts
+// than the preview keeps says the cut too — the tail the cap dropped is
+// as much the user's business as the draft a validator refused.
 func chatDraftsOf(reply string) (drafts []AIDraft, note string) {
+	parsed, overCap, explicitlyEmpty := ai.ParseChatDrafts(reply)
 	var dropped []string
-	for _, d := range ai.DraftsFrom(reply) {
+	for _, d := range parsed {
 		m, explanation, err := d.Mapping()
 		if err != nil {
 			dropped = append(dropped, err.Error())
@@ -122,11 +127,19 @@ func chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 		}
 		drafts = append(drafts, AIDraft{Mapping: m, Explanation: explanation})
 	}
-	if len(drafts) == 0 && len(dropped) > 0 {
-		note = fmt.Sprintf("已丢弃 %d 条不完整的草稿：%s", len(dropped), strings.Join(dropped, "；"))
-	} else if len(dropped) > 0 {
-		note = fmt.Sprintf("已丢弃 %d 条不完整的草稿", len(dropped))
+	var notes []string
+	if len(dropped) > 0 {
+		// Keep the validators' concrete reasons beside usable cards too; a
+		// count alone does not tell the user what to ask the model to fix.
+		notes = append(notes, fmt.Sprintf("已丢弃 %d 条不完整的草稿：%s", len(dropped), strings.Join(dropped, "；")))
 	}
+	if explicitlyEmpty {
+		notes = append(notes, "没有可用草稿，可继续描述服务、上游地址和端口")
+	}
+	if overCap {
+		notes = append(notes, "草稿仅保留前 5 条")
+	}
+	note = strings.Join(notes, "；")
 	return drafts, note
 }
 

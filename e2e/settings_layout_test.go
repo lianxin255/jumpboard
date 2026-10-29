@@ -88,9 +88,9 @@ func TestSettingsCardsPairAt1280(t *testing.T) {
 	// scrolled back to by a page that only scrolls down.
 	pairW := float32(0)
 	for _, pair := range [][2]string{
-		{"外观", "访问控制"},
-		{"备份与快照", "场景"},
-		{"快捷键", "更新"},
+		{"外观与显示", "通用"},
+		{"访问控制", "备份与快照"},
+		{"场景", "快捷键"},
 	} {
 		rects := settingsCardRects(t, tt, pair[0], pair[1])
 		left, right := rects[0], rects[1]
@@ -106,6 +106,36 @@ func TestSettingsCardsPairAt1280(t *testing.T) {
 		if right.X < left.X+left.W+16 {
 			t.Errorf("%s should sit beside %s with the row's gap, at %v and %v", pair[1], pair[0], left.X, right.X)
 		}
+		// The switches are the compact ones — measured while the pair is
+		// in view, before the page scrolls on: 40×22, not the 54×30 the
+		// theme's spacing drew, a control half as wide again as the lines
+		// it rides. The login-item switch rides the 通用 pair.
+		if pair[1] == "通用" {
+			sw, ok := tt.Find("开机自启动")
+			if !ok {
+				t.Fatalf("the login-item switch is missing: %v", tt.Texts())
+			}
+			if d := sw.W - 40; d < -1 || d > 1 {
+				t.Errorf("the switch should be the compact 40 wide, got %.0f", sw.W)
+			}
+			if d := sw.H - 22; d < -1 || d > 1 {
+				t.Errorf("the switch should be the compact 22 tall, got %.0f", sw.H)
+			}
+		}
+	}
+
+	// 更新 has no partner: alone on its row, it spans the page the way
+	// the AI card does, below the last pair. Its place is measured on one
+	// frame with the pair above it — rects from different scrolls sit at
+	// different window offsets and cannot be compared.
+	rects = settingsCardRects(t, tt, "快捷键", "更新")
+	hotkey, upd := rects[0], rects[1]
+	settingsNoOverflow(t, "更新", upd, pageRight-16)
+	if d := upd.W - ai.W; d < -1 || d > 1 {
+		t.Errorf("the lone 更新 card should span the page like the AI card: %v vs %v", upd.W, ai.W)
+	}
+	if upd.Y < hotkey.Y {
+		t.Errorf("更新 should sit below the pairs, at %v under %v", upd.Y, hotkey.Y)
 	}
 
 	// The AI card is wider than a pair's two cards side by side would
@@ -115,10 +145,13 @@ func TestSettingsCardsPairAt1280(t *testing.T) {
 	}
 
 	// The privacy lines stay whole on the card, neither folded away nor
-	// trimmed for the two-column shape.
+	// trimmed for the two-column shape. The interpretation line tells the
+	// two paths apart: a file over the cap is refused, the access log
+	// sends only its tail.
 	for _, line := range []string{
 		"Key 存在系统凭据库",
-		"超过 256 KB 的文件会被拒绝",
+		"超过 256 KB 会被拒绝",
+		"访问日志只发送末尾 200 行",
 		"映射摘要里永远不含密钥",
 	} {
 		if !tt.HasText(line) {
@@ -158,9 +191,9 @@ func TestSettingsCardsStackAt960(t *testing.T) {
 	// Every pair stacks: the second card below the first, both the width
 	// of the page, which is also the AI card's width.
 	for _, p := range [][2]string{
-		{"外观", "访问控制"},
-		{"备份与快照", "场景"},
-		{"快捷键", "更新"},
+		{"外观与显示", "通用"},
+		{"访问控制", "备份与快照"},
+		{"场景", "快捷键"},
 	} {
 		rects := settingsCardRects(t, tt, p[0], p[1])
 		left, right := rects[0], rects[1]
@@ -175,6 +208,19 @@ func TestSettingsCardsStackAt960(t *testing.T) {
 		if d := left.W - ai.W; d < -1 || d > 1 {
 			t.Errorf("%s should fill the page's width like the AI card, %v vs %v", p[0], left.W, ai.W)
 		}
+	}
+
+	// 更新 alone stacks with them: the page's own width, below the pairs,
+	// measured on one frame with the pair above it — rects from different
+	// scrolls sit at different window offsets and cannot be compared.
+	rects = settingsCardRects(t, tt, "快捷键", "更新")
+	hotkey, upd := rects[0], rects[1]
+	settingsNoOverflow(t, "更新", upd, pageRight-16)
+	if d := upd.W - ai.W; d < -1 || d > 1 {
+		t.Errorf("the lone 更新 card should fill the page's width like the AI card, %v vs %v", upd.W, ai.W)
+	}
+	if upd.Y < hotkey.Y {
+		t.Errorf("更新 should sit below the pairs, at %v under %v", upd.Y, hotkey.Y)
 	}
 
 	// The bottom of the page still answers: the danger band scrolls into

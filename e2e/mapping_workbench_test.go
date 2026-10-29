@@ -103,6 +103,19 @@ func TestMappingRowActionsFitWindow(t *testing.T) {
 			if right := edit.X + edit.W; right > del.X {
 				t.Errorf("编辑 (%.0f) should sit left of 删除 (%.0f)", edit.X+edit.W, del.X)
 			}
+			// The row's switch is the compact one — 40×22, inside the
+			// 64-wide 启用 column — not the 54×30 the theme's spacing drew,
+			// which stood taller than the row it rode.
+			sw, ok := tt.Find("启用-宽行")
+			if !ok {
+				t.Fatalf("the row's switch is missing: %v", tt.Texts())
+			}
+			if d := sw.W - 40; d < -1 || d > 1 {
+				t.Errorf("the row's switch should be the compact 40 wide, got %.0f", sw.W)
+			}
+			if d := sw.H - 22; d < -1 || d > 1 {
+				t.Errorf("the row's switch should be the compact 22 tall, got %.0f", sw.H)
+			}
 			// The pair is a pair: the clone button is gone from the column.
 			if _, ok := tt.Find("克隆"); ok {
 				t.Error("克隆 should live in the row's context menu, not the column")

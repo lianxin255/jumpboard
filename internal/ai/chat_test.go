@@ -21,6 +21,7 @@ type chatGateway struct {
 	mu    sync.Mutex
 	body  []byte
 	reply string
+	calls int
 	// sse says the reply travels as server-sent events.
 	sse bool
 }
@@ -29,6 +30,7 @@ func (g *chatGateway) handler(w http.ResponseWriter, r *http.Request) {
 	b, _ := io.ReadAll(r.Body)
 	g.mu.Lock()
 	g.body = b
+	g.calls++
 	reply, sse := g.reply, g.sse
 	g.mu.Unlock()
 	if sse {
@@ -115,11 +117,11 @@ func TestChatSendsTheConversation(t *testing.T) {
 	}
 }
 
-// TestChatStreamFallsBackToOneShot checks the conversation through a
-// gateway that cannot stream: the one-shot reply arrives whole, and the
-// raw prose is kept — a JSON conversation reply must not be sliced by
+// TestChatStreamUsesPlainJSONResponse checks the conversation through a
+// gateway that ignores stream:true: the first plain-JSON reply arrives whole,
+// costs one request, and keeps its raw prose rather than being sliced by
 // the one-shot paths' extractJSON.
-func TestChatStreamFallsBackToOneShot(t *testing.T) {
+func TestChatStreamUsesPlainJSONResponse(t *testing.T) {
 	g := &chatGateway{}
 	g.reply = "两条映射如下：\n\n```json\n{\"drafts\":[{\"name\":\"内网 MySQL\",\"protocol\":\"tcp\",\"listenPort\":9000,\"upstreamHost\":\"192.168.1.10\",\"upstreamPort\":3306,\"explanation\":\"x\"}]}\n```\n\n导入前可改端口。"
 	c := serveChat(t, g)
@@ -134,6 +136,12 @@ func TestChatStreamFallsBackToOneShot(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("a one-shot fallback must deliver no fragments: %v", got)
+	}
+	g.mu.Lock()
+	calls := g.calls
+	g.mu.Unlock()
+	if calls != 1 {
+		t.Errorf("plain JSON chat used %d requests, want 1", calls)
 	}
 	if !strings.HasPrefix(reply, "两条映射如下") || !strings.HasSuffix(reply, "导入前可改端口。") {
 		t.Fatalf("the prose reply must travel whole: %q", reply)
@@ -258,6 +266,72 @@ func TestDraftsFromCapsAtMax(t *testing.T) {
 	}
 	if drafts := DraftsFrom(strings.Join(blocks, "\n\n")); len(drafts) != maxDrafts {
 		t.Fatalf("drafts = %d, want the cap %d", len(drafts), maxDrafts)
+	}
+}
+
+// capDraftItems builds n usable draft objects for the cap's signal test.
+func capDraftItems(n int) []string {
+	items := make([]string, n)
+	for i := 0; i < n; i++ {
+		items[i] = `{"name":"服务` + itochat(i) + `","protocol":"tcp","listenPort":910` + itochat(i) +
+			`,"upstreamHost":"10.0.0.1","upstreamPort":3306,"explanation":"x"}`
+	}
+	return items
+}
+
+// TestDraftsOverCap pins the signal behind the cap's note: a reply that
+// parses to more than maxDrafts drafts says so — in one block, across
+// blocks, and in the unfenced fallback — and nothing else does.
+func TestDraftsOverCap(t *testing.T) {
+	fenced := func(n int) string {
+		return "```json\n{\"drafts\":[" + strings.Join(capDraftItems(n), ",") + "]}\n```"
+	}
+	bare := func(n int) string {
+		return "{\"drafts\":[" + strings.Join(capDraftItems(n), ",") + "]}"
+	}
+	if got := len(DraftsFrom(fenced(maxDrafts + 1))); got != maxDrafts {
+		t.Fatalf("DraftsFrom keeps the cap, got %d drafts", got)
+	}
+	for _, tc := range []struct {
+		name  string
+		reply string
+		want  bool
+	}{
+		{"one over the cap", fenced(maxDrafts + 1), true},
+		{"exactly the cap", fenced(maxDrafts), false},
+		{"under the cap", fenced(2), false},
+		{"blocks summing over", fenced(3) + "\n\n" + fenced(3), true},
+		{"blocks summing under", fenced(2) + "\n\n" + fenced(2), false},
+		{"unfenced over the cap", "好的，这样配：" + bare(maxDrafts+1), true},
+		{"unfenced under", "好的，这样配：" + bare(2), false},
+		{"prose", "9000 是本机监听端口。", false},
+		{"a fence that is not drafts", "```bash\nlsof -i :9000\n```", false},
+		{"empty", "", false},
+	} {
+		if got := DraftsOverCap(tc.reply); got != tc.want {
+			t.Errorf("%s: DraftsOverCap = %v, want %v", tc.name, got, tc.want)
+		}
+		kept, overCap, empty := ParseChatDrafts(tc.reply)
+		if overCap != tc.want || len(kept) != len(DraftsFrom(tc.reply)) || empty {
+			t.Errorf("%s: shared parse = %d drafts, over=%v empty=%v", tc.name, len(kept), overCap, empty)
+		}
+	}
+}
+
+// TestParseChatDraftsExplicitEmpty distinguishes an explicit empty array
+// from prose and strips both its fenced and bare machine-only displays.
+func TestParseChatDraftsExplicitEmpty(t *testing.T) {
+	for _, reply := range []string{
+		`{"drafts":[]}`,
+		"```json\n{\"drafts\":[]}\n```",
+	} {
+		drafts, overCap, empty := ParseChatDrafts(reply)
+		if len(drafts) != 0 || overCap || !empty {
+			t.Errorf("ParseChatDrafts(%q) = %v, over=%v, empty=%v", reply, drafts, overCap, empty)
+		}
+		if got := WithoutDraftBlocks(reply); got != "" {
+			t.Errorf("machine-only reply should leave no raw JSON: %q", got)
+		}
 	}
 }
 

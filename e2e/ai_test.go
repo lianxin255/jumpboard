@@ -14,15 +14,21 @@ import (
 // without a network or a bill.
 func fakeOpenAI(t *testing.T, content string) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(fakeOpenAIHandler(content))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// fakeOpenAIHandler also lets a multi-round test replace the next reply
+// after the previous request has completely finished.
+func fakeOpenAIHandler(content string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := json.Marshal(map[string]any{
 			"choices": []any{map[string]any{"message": map[string]any{"content": content}}},
 		})
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(body)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
+	})
 }
 
 // TestAIEntryHiddenWithoutConfig checks that the AI button does not appear
@@ -56,13 +62,16 @@ func TestAIDraftFillsTheForm(t *testing.T) {
 		t.Fatal("AI should be ready once the endpoint and model are set")
 	}
 
-	if err := a.RunAISync("把内网 mysql 暴露到 9000"); err != nil {
+	// The chat page's synchronous round: a bare draft object is a reply
+	// of one draft, read the way the page reads any reply.
+	if err := a.RunChatSync("把内网 mysql 暴露到 9000"); err != nil {
 		t.Fatalf("asking the model: %v", err)
 	}
-	draft := a.AIDraftForTest()
-	if draft == nil {
-		t.Fatal("no draft came back")
+	_, _, _, _, _, _, drafts := a.AIChatState()
+	if len(drafts) != 1 {
+		t.Fatalf("drafts = %d, want one: %+v", len(drafts), drafts)
 	}
+	draft := drafts[0].Mapping
 	if draft.Name != "内网 MySQL" || draft.ListenPort != 9000 || draft.UpstreamHost != "192.168.1.10" {
 		t.Fatalf("draft: %+v", draft)
 	}
@@ -72,7 +81,7 @@ func TestAIDraftFillsTheForm(t *testing.T) {
 
 	// The draft reaches the form, and saving it goes through the same
 	// validation as a typed one.
-	a.OpenNewFormFrom(*draft)
+	a.OpenNewFormFrom(draft)
 	if _, _, f, _ := a.FormState(); f.UpstreamHost != "192.168.1.10" {
 		t.Fatalf("the form was not filled: %+v", f)
 	}
@@ -88,18 +97,24 @@ func TestAIDraftFillsTheForm(t *testing.T) {
 	}
 }
 
-// TestAIBadJSONDegrades checks that a model returning rubbish leaves the
-// app usable.
-func TestAIBadJSONDegrades(t *testing.T) {
+// TestAIChatProseReplyStoresNothing checks the chat's reading of a plain
+// answer: a reply without any drafts is a normal conversational turn — no
+// error, nothing waiting to import, nothing stored.
+func TestAIChatProseReplyStoresNothing(t *testing.T) {
 	a := testApp(t)
 	srv := fakeOpenAI(t, "I'm sorry, I can't help with that.")
 	a.SetAI(srv.URL, "test-model")
 
-	if err := a.RunAISync("把 mysql 暴露到 9000"); err == nil {
-		t.Fatal("a reply that is not JSON should be an error")
+	if err := a.RunChatSync("把 mysql 暴露到 9000"); err != nil {
+		t.Fatalf("a prose reply is a normal answer, not an error: %v", err)
 	}
-	if a.AIDraftForTest() != nil {
-		t.Error("no draft should come from rubbish")
+	turns, _, _, busy, errText, note, drafts := a.AIChatState()
+	if len(turns) != 2 || turns[1].Content != "I'm sorry, I can't help with that." {
+		t.Fatalf("the reply should join the conversation: %+v", turns)
+	}
+	if busy || errText != "" || note != "" || len(drafts) != 0 {
+		t.Fatalf("a prose reply leaves no drafts and no trouble: busy=%v err=%q note=%q drafts=%d",
+			busy, errText, note, len(drafts))
 	}
 	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
 		t.Error("nothing should have been saved")
@@ -122,13 +137,14 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 		"upstreamHost":"10.0.0.1","upstreamPort":3306,"explanation":"x"}`
 	srv := fakeOpenAI(t, reply)
 	a.SetAI(srv.URL, "test-model")
-	if err := a.RunAISync("x"); err != nil {
+	if err := a.RunChatSync("x"); err != nil {
 		t.Fatal(err)
 	}
-	draft := a.AIDraftForTest()
-	if draft == nil {
-		t.Fatal("no draft")
+	_, _, _, _, _, _, drafts := a.AIChatState()
+	if len(drafts) != 1 {
+		t.Fatalf("drafts = %d, want one: %+v", len(drafts), drafts)
 	}
+	draft := drafts[0].Mapping
 	if !a.PortTaken(draft.ListenPort) {
 		t.Errorf("port %d should read as taken", draft.ListenPort)
 	}
@@ -136,7 +152,7 @@ func TestAIPortConflictIsVisible(t *testing.T) {
 	// The draft opens in the form; saving it is refused at the form, with
 	// the occupier named and a free port offered — the save does not
 	// succeed until the port is one the machine lets the app bind.
-	a.OpenNewFormFrom(*draft)
+	a.OpenNewFormFrom(draft)
 	if err := a.SaveForm(); err == nil {
 		t.Fatal("saving a draft onto a taken port should be refused")
 	}

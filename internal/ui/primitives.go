@@ -34,13 +34,40 @@ func IconButton(c *ui.Context, t Tokens, icon *ui.SVG, ink ui.Color, disabled bo
 	return btn
 }
 
-// modalCard is a dialog's chrome: the surface, the border, the radius and
-// the drop every modal carries. The width and the gap are the dialog's
-// own; the padding, the shadow and the rest are the family's.
-func modalCard(c *ui.Context, t Tokens, width, gap float32) ui.Element {
-	return ui.Column(c).Width(width).Gap(gap).Padding(24).Radius(RadiusModal).
-		Background(t.Surface).Border(1, t.Border).
-		Shadow(0, 12, 40, 0, t.Shadow)
+// CompactSwitch is the app's switch at its compact size: 40×22 with the
+// capsule radius. The toolkit's own switch scales with the theme's
+// Spacing, which this app raises to 6, so the stock control draws 54×30 —
+// as tall as the table rows and the settings lines it rides. The compact
+// one changes only the geometry: the switch's whole behavior — Label,
+// Changed, OnChange, the click target the track itself is — stays the
+// toolkit's, and the wording stays the caller's.
+func CompactSwitch(c *ui.Context, on *bool) ui.Element {
+	return ui.Switch(c, on).Size(40, 22).Radius(11)
+}
+
+// dialog shows a modal whose panel is the one surface it draws.
+//
+// DialogBase, not Modal: the toolkit's Modal dresses a panel of its own —
+// the theme's background, a padding of its own and a shadow — and a card
+// styled inside it would draw a second frame around the first, a box in a
+// box. DialogBase hands the backdrop and the panel over, so the app draws
+// the one card the design has, while Escape, the backdrop click, the
+// dialog role and the focus behavior stay the toolkit's. The width and the
+// gap are the dialog's own; the padding, the shadow and the rest are the
+// family's.
+func dialog(c *ui.Context, t Tokens, open *bool, width, gap float32, children func()) {
+	ui.DialogBase(c, open, func(backdrop, panel ui.Element) {
+		backdrop.Background(ui.RGBA(0, 0, 0, 0.4))
+		// The room the window leaves: the toolkit's Modal caps its panel at
+		// the window less a margin, and a dialog wider than the window would
+		// hang off both edges with its actions unreachable.
+		w, h := c.Size()
+		panel.Width(width).Gap(gap).Padding(24).Radius(RadiusModal).
+			Background(t.Surface).Border(1, t.Border).
+			Shadow(0, 12, 40, 0, t.Shadow).
+			MaxWidth(w - 60).MaxHeight(h - 60)
+		children()
+	})
 }
 
 // panelShell is the page-level shell around a list or a pane: the surface

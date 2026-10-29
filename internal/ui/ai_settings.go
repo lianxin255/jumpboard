@@ -144,7 +144,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 				ui.Column(c).Gap(3).Children(func() {
 					ui.Text(c, "Key 存在系统凭据库，不写进数据库或导出文件。").
 						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-					ui.Text(c, "生成草稿（一次可生成多条，最多 5 条）只发送你输入的那句话；失败诊断会发送错误信息、涉及映射的摘要（至多两条）和两份日志的尾部片段；解读会发送所选配置或日志的文件内容，超过 256 KB 的文件会被拒绝；自然语言筛选会把全部映射的摘要（名称/协议/端口/上游/启用状态，不含密钥）发送到所配置的网关。").
+					ui.Text(c, "生成草稿（一次可生成多条，最多 5 条）会发送当前对话里的消息；失败诊断会发送错误信息、涉及映射的摘要（至多两条）和两份日志的尾部片段；解读会发送导入或选择的文件内容（超过 256 KB 会被拒绝）；应用当前的访问日志只发送末尾 200 行；自然语言筛选会把全部映射的摘要（名称/协议/端口/上游/启用状态，不含密钥）发送到所配置的网关。").
 						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 					ui.Text(c, "除自然语言筛选发送全部映射的摘要外，其余功能均不上传完整映射列表；映射摘要里永远不含密钥。").
 						FontSize(CaptionSize).TextColor(t.Muted).Wrap()

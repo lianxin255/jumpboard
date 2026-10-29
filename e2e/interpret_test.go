@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -79,9 +80,10 @@ func TestAIInterpretDroppedConf(t *testing.T) {
 	}
 }
 
-// TestAIInterpretFromFilePicker walks the panel's picker path: a file
-// chosen in the dialog — here an external nginx's error.log — is read,
-// interpreted, and explained on the card inside the panel.
+// TestAIInterpretFromFilePicker walks the logs page's picker path: a
+// file chosen in the dialog — here an external nginx's error.log — is
+// read, interpreted, and explained on the card under the logs page's
+// toolbar, the same card the 访问日志 interpretation lands on.
 func TestAIInterpretFromFilePicker(t *testing.T) {
 	a := testApp(t)
 	errLog := "2026/10/26 10:00:00 [error] 8#0: *1 connect() failed (111: Connection refused) " +
@@ -103,10 +105,16 @@ func TestAIInterpretFromFilePicker(t *testing.T) {
 	}
 
 	tt := tester(t, a, 1200, 760)
-	if err := tt.Click("✨ AI 建映射"); err != nil {
+	if err := tt.Click("日志"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	if err := tt.Click("访问日志"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	// The picker's button needs only AI: it reads an outside file, not
+	// the engine's own log.
 	if err := tt.Click("解读文件…"); err != nil {
 		t.Fatal(err)
 	}
@@ -119,4 +127,35 @@ func TestAIInterpretFromFilePicker(t *testing.T) {
 	// Each testApp is its own instance, so the hook cannot leak; it is
 	// cleared anyway so this file reads as self-contained.
 	a.OpenDialog = nil
+}
+
+// TestAIInterpretFilePickerErrorIsVisible separates an OS dialog failure
+// from cancellation: the error reaches the app's toast with its cause.
+func TestAIInterpretFilePickerErrorIsVisible(t *testing.T) {
+	a := testApp(t)
+	srv := fakeOpenAI(t, `{"summary":"不应请求","listeners":[],"forwards":[],"risks":[],"notes":[]}`)
+	a.SetAI(srv.URL, "test-model")
+	a.OpenDialog = func(mygo.OpenDialogOptions) ([]string, error) {
+		return nil, errors.New("native dialog unavailable")
+	}
+	tt := tester(t, a, 1200, 760)
+	if err := tt.Click("日志"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("访问日志"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("解读文件…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("打开文件选择器失败") || !tt.HasText("native dialog unavailable") {
+		t.Fatalf("the dialog error should be visible with context: %v", tt.Texts())
+	}
+	st, ok := a.Status()
+	if !ok || !st.IsErr {
+		t.Fatalf("the dialog failure should be an error status: %+v ok=%v", st, ok)
+	}
 }

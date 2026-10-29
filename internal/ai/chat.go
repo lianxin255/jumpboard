@@ -7,6 +7,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -166,38 +167,84 @@ func fencedBlocks(s string) []string {
 	return out
 }
 
-// draftsIn reads one block, nil when it holds none. A fenced example of
-// something else — a command, an unrelated object — parses to nothing and
-// stays out of the preview.
-func draftsIn(block string) []Draft {
+// draftsInAll reads one block's drafts without the cap, so one traversal
+// can return both the kept cards and whether anything was cut.
+func draftsInAll(block string) []Draft {
 	list, err := parseDrafts(extractJSON(block))
 	if err != nil {
 		return nil
 	}
+	return list
+}
+
+// draftsIn reads one block, nil when it holds none. A fenced example of
+// something else — a command, an unrelated object — parses to nothing and
+// stays out of the preview.
+func draftsIn(block string) []Draft {
+	list := draftsInAll(block)
 	if len(list) > maxDrafts {
 		list = list[:maxDrafts]
 	}
 	return list
 }
 
-// DraftsFrom scans a chat reply for mapping drafts: each fenced block
-// first, then — for a model that skipped the fence — whatever JSON the
-// prose embeds, through the same extractJSON the one-shot paths use. A
-// reply with no drafts is a normal conversational answer and returns nil,
-// not an error. Across all blocks the answer keeps at most maxDrafts
-// drafts, the one-shot cap.
-func DraftsFrom(reply string) []Draft {
-	var out []Draft
+// emptyDraftsJSON recognizes an explicit empty drafts array. It deliberately
+// does not treat a malformed array or an unrelated empty object as drafts.
+func emptyDraftsJSON(content string) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(strings.TrimSpace(content)), &fields) != nil {
+		return false
+	}
+	raw, ok := fields["drafts"]
+	if !ok {
+		return false
+	}
+	var items []json.RawMessage
+	return json.Unmarshal(raw, &items) == nil && len(items) == 0
+}
+
+func emptyDraftsIn(block string) bool {
+	return emptyDraftsJSON(extractJSON(block))
+}
+
+// ParseChatDrafts walks a reply once and returns the kept drafts, whether
+// more than maxDrafts were present, and whether it explicitly supplied an
+// empty drafts array. Fenced blocks come first; the whole reply remains the
+// fallback when none of them held a draft.
+func ParseChatDrafts(reply string) (drafts []Draft, overCap, explicitlyEmpty bool) {
+	empty := false
 	for _, block := range fencedBlocks(reply) {
-		out = append(out, draftsIn(block)...)
-		if len(out) >= maxDrafts {
-			return out[:maxDrafts]
+		list := draftsInAll(block)
+		if len(list) == 0 && emptyDraftsIn(block) {
+			empty = true
+		}
+		drafts = append(drafts, list...)
+	}
+	if len(drafts) == 0 {
+		drafts = draftsInAll(reply)
+		if len(drafts) == 0 && emptyDraftsIn(reply) {
+			empty = true
 		}
 	}
-	if len(out) == 0 {
-		return draftsIn(reply)
+	overCap = len(drafts) > maxDrafts
+	if overCap {
+		drafts = drafts[:maxDrafts]
 	}
-	return out
+	return drafts, overCap, len(drafts) == 0 && empty
+}
+
+// DraftsFrom scans a chat reply for mapping drafts. It retains the original
+// public API; callers that also need the cap or empty signal use
+// ParseChatDrafts to avoid parsing the same reply again.
+func DraftsFrom(reply string) []Draft {
+	drafts, _, _ := ParseChatDrafts(reply)
+	return drafts
+}
+
+// DraftsOverCap reports whether a reply parses to more drafts than the cap.
+func DraftsOverCap(reply string) bool {
+	_, overCap, _ := ParseChatDrafts(reply)
+	return overCap
 }
 
 // WithoutDraftBlocks strips the fenced blocks DraftsFrom reads as drafts,
@@ -210,7 +257,8 @@ func WithoutDraftBlocks(s string) string {
 	var cur []string
 	in := false
 	drop := func(closed bool) {
-		if len(draftsIn(strings.Join(cur, "\n"))) == 0 {
+		block := strings.Join(cur, "\n")
+		if len(draftsInAll(block)) == 0 && !emptyDraftsIn(block) {
 			out = append(out, open)
 			out = append(out, cur...)
 			if closed {
@@ -239,6 +287,11 @@ func WithoutDraftBlocks(s string) string {
 		drop(false)
 	}
 	joined := strings.Join(out, "\n")
+	// An unfenced empty drafts object is machine output too; do not leave it
+	// as the bubble's sole contents when there is no prose to render.
+	if emptyDraftsJSON(joined) {
+		return ""
+	}
 	for strings.Contains(joined, "\n\n\n") {
 		joined = strings.ReplaceAll(joined, "\n\n\n", "\n\n")
 	}

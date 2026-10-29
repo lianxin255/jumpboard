@@ -119,8 +119,11 @@ func waitStatus(t *testing.T, port, want int) int {
 	return last
 }
 
-// TestEngineSwitch starts the engine from the window and stops it again
-// through the confirmation.
+// TestEngineSwitch drives the forwarding service's master switch in the
+// rail's foot: on while the engine runs, and turning it off asks the
+// confirmation before the forwarding really stops; turning it on again
+// applies the rules back, which is what a start is. The confirmation's
+// own words are the ones that stop it.
 func TestEngineSwitch(t *testing.T) {
 	a := testApp(t)
 	upPort, stopUp := upstream(t)
@@ -139,13 +142,40 @@ func TestEngineSwitch(t *testing.T) {
 	if !tt.HasText("运行中") {
 		t.Errorf("the window should say the engine is running: %v", tt.Texts())
 	}
+	if !tt.HasText("转发服务") {
+		t.Errorf("the rail's foot should name the service: %v", tt.Texts())
+	}
+	// The switch is held while the window is busy, so the click waits for
+	// the calm the apply leaves behind.
+	waitFor(t, tt, "the window calm", func() bool {
+		_, _, _, _, _, _, busy, _ := a.Snapshot()
+		return !busy
+	})
+	tt.Frame()
 
-	if err := tt.Click("停止"); err != nil {
+	// Turning the service off asks first; nothing has stopped yet.
+	if err := tt.Click("转发服务开关"); err != nil {
 		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.ConfirmState() == nil || !tt.HasText("停止引擎") {
+		t.Fatalf("stopping should ask first: %v", tt.Texts())
 	}
 	confirm(t, tt, "停止")
 	waitFor(t, tt, "the engine stopped", func() bool { return a.Eng.Status() == "stopped" })
 	waitPort(t, listen, false)
+
+	// Turning it back on applies the rules again, without asking.
+	waitFor(t, tt, "the window calm", func() bool {
+		_, _, _, _, _, _, busy, _ := a.Snapshot()
+		return !busy
+	})
+	tt.Frame()
+	if err := tt.Click("转发服务开关"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the engine running again", func() bool { return a.Eng.Status() == "running" })
+	waitPort(t, listen, true)
 }
 
 // TestMappingTrafficLifecycle creates a mapping in the form, applies it,

@@ -106,7 +106,7 @@ func TestInterpretConfSendsLocalParse(t *testing.T) {
 		t.Fatalf("InterpretFile: %v", err)
 	}
 	busy, errText, interp, target, source := a.Interpretation()
-	if busy || errText != "" || interp == nil || target != "site.conf" || source != "panel" {
+	if busy || errText != "" || interp == nil || target != "site.conf" || source != "logs" {
 		t.Fatalf("interpretation = %v %q %v %q %q", busy, errText, interp, target, source)
 	}
 

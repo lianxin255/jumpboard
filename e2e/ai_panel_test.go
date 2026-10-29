@@ -1,19 +1,73 @@
 package e2e
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/lianxin255/jumpboard/internal/appt"
 )
 
-// TestAIPanelWalkthrough drives the AI panel as the user does: configure
-// the endpoint in the settings card, ask with one sentence, and adopt the
-// draft into the form.
-//
-// It clicks the real 生成 button, so it also exercises the panel's
-// goroutine against the race detector.
-func TestAIPanelWalkthrough(t *testing.T) {
+// refusingGateway is an endpoint that answers 500 on everything, so a
+// request fails the way a broken gateway does.
+func refusingGateway(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// oneDraftReply is the fake model's chat answer for the walkthrough
+// tests: words around one fenced json block, the shape the chat system
+// prompt asks for, carrying a single draft.
+func oneDraftReply(port int, name string) string {
+	return "草稿如下：\n\n```json\n{\"name\":\"" + name + "\",\"protocol\":\"tcp\",\"listenPort\":" +
+		itoa(port) + ",\"upstreamHost\":\"192.168.1.10\",\"upstreamPort\":3306,\"explanation\":\"明白\"}\n```\n"
+}
+
+// TestAIMappingEntryGoesToChat pins the entry's new contract: the ✨
+// button on the mappings page is a door to the AI chat page, not a
+// dialog of its own. The page it lands on carries the composer, and no
+// dialog rides over it — the form a draft later fills in opens alone.
+func TestAIMappingEntryGoesToChat(t *testing.T) {
 	a := testApp(t)
-	srv := fakeOpenAI(t, `{"name":"面板里的 MySQL","protocol":"tcp","listenPort":9001,
-		"upstreamHost":"192.168.1.10","upstreamPort":3306,"explanation":"明白"}`)
+	srv := fakeOpenAI(t, chatReply())
+	a.SetAI(srv.URL, "test-model")
+	tt := tester(t, a, 1200, 760)
+
+	if err := tt.Click("✨ AI 建映射"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.Page() != appt.PageAIChat {
+		t.Fatalf("the entry should land on the AI chat page, got %v", a.Page())
+	}
+	for _, want := range []string{"发送", "说说你想转发的服务"} {
+		if !tt.HasText(want) {
+			t.Errorf("the chat page should show %q: %v", want, tt.Texts())
+		}
+	}
+	// The retired panel's own words must not come back either.
+	if tt.HasText("用一句话新建映射") {
+		t.Errorf("the one-sentence panel should be gone: %v", tt.Texts())
+	}
+	if open, _, _, _ := a.FormState(); open {
+		t.Error("no form should open from the entry itself")
+	}
+}
+
+// TestAIMappingWalkthrough drives the converged flow the way a user
+// does: configure the endpoint in the settings card, take the mappings
+// page's AI entry to the chat page, ask with one sentence through the
+// real composer, and fill the draft into the form.
+//
+// It clicks the real 发送 button, so it also exercises the chat's
+// goroutine against the race detector.
+func TestAIMappingWalkthrough(t *testing.T) {
+	a := testApp(t)
+	srv := fakeOpenAI(t, oneDraftReply(9001, "面板里的 MySQL"))
 	tt := tester(t, a, 1200, 900)
 
 	// Configure the endpoint through the settings card.
@@ -41,7 +95,8 @@ func TestAIPanelWalkthrough(t *testing.T) {
 		t.Fatalf("the diagnosis model should round-trip, got %q", a.AIDiagModel())
 	}
 
-	// Back on the mappings page, the entry appears and opens the panel.
+	// Back on the mappings page, the entry leads to the chat page, and
+	// the conversation's composer takes the sentence there.
 	if err := tt.Click("映射"); err != nil {
 		t.Fatal(err)
 	}
@@ -50,23 +105,22 @@ func TestAIPanelWalkthrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("用一句话新建映射") {
-		t.Fatalf("the AI panel did not open: %v", tt.Texts())
+	if a.Page() != appt.PageAIChat {
+		t.Fatalf("the entry should land on the AI chat page, got %v", a.Page())
 	}
 
-	fillField(t, tt, "描述", "把内网 mysql 暴露到 9001")
-	if err := tt.Click("生成"); err != nil {
+	fillField(t, tt, "消息", "把内网 mysql 暴露到 9001")
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
-	// The fake answers the single-draft shape; the panel takes it as a
-	// list of one.
 	waitFor(t, tt, "the draft card", func() bool {
-		return tt.HasText("草稿（1 条）") && tt.HasText("面板里的 MySQL")
+		return tt.HasText("规则草稿（1 条）") && tt.HasText("面板里的 MySQL")
 	})
 
-	// Adopting the draft fills the ordinary form, and saving goes through
-	// the same validation as a typed mapping.
-	if err := tt.Click("采用"); err != nil {
+	// Filling the draft in opens the ordinary form over the chat page —
+	// the one dialog on it — and saving goes through the same validation
+	// as a typed mapping.
+	if err := tt.Click("填入表单 面板里的 MySQL"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -87,11 +141,11 @@ func TestAIPanelWalkthrough(t *testing.T) {
 	}
 }
 
-// TestAIPanelShowsAnError checks that a model that answers rubbish leaves
-// the panel open with the error visible, and nothing saved.
-func TestAIPanelShowsAnError(t *testing.T) {
+// TestAIMappingShowsAnError checks that a gateway that refuses the
+// request leaves the error visible on the chat page, and nothing saved.
+func TestAIMappingShowsAnError(t *testing.T) {
 	a := testApp(t)
-	srv := fakeOpenAI(t, "不是 JSON 的话")
+	srv := refusingGateway(t)
 	a.SetAI(srv.URL, "test-model")
 	tt := tester(t, a, 1200, 760)
 
@@ -99,13 +153,13 @@ func TestAIPanelShowsAnError(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	fillField(t, tt, "描述", "x")
-	if err := tt.Click("生成"); err != nil {
+	fillField(t, tt, "消息", "x")
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, tt, "the error text", func() bool { return tt.HasText("JSON") })
-	// The adopt button only renders when a draft came back.
-	if tt.HasText("采用") {
+	waitFor(t, tt, "the error text", func() bool { return tt.HasText("AI 服务返回 500") })
+	// The fill button only renders when a draft came back.
+	if tt.HasText("填入表单") {
 		t.Errorf("no draft card should show: %v", tt.Texts())
 	}
 	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {

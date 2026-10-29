@@ -1,8 +1,8 @@
 // The AI chat page: the conversation as bubbles over a list that follows
-// the newest message, the drafts a reply proposed as preview cards under
+// the newest message, the drafts a reply proposed as rule cards under
 // it, and the import that turns them into mappings in the current scene.
-// The one-sentence panel (aiDialog) stays for what it is good at; this
-// page is for the conversation that arrives at a configuration.
+// This is the one place a mapping draft is proposed — the mappings
+// page's ✨ entry is a door here, not a panel of its own.
 package ui
 
 import (
@@ -14,6 +14,7 @@ import (
 
 	"github.com/lianxin255/jumpboard/internal/ai"
 	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/ui/icons"
 )
 
 // chatItem is one row of the page's list: a turn, the busy line, the
@@ -21,7 +22,7 @@ import (
 // index over a slice built per frame, the way a list of one kind would
 // be; the kinds only differ in how they draw.
 type chatItem struct {
-	kind  int // 0 turn, 1 busy, 2 error, 3 preview head, 4 draft card, 5 import bar
+	kind  int // 0 turn, 1 busy, 2 error, 3 preview head, 4 draft card, 5 import bar, 6 lone note
 	turn  ai.ChatTurn
 	draft appt.AIDraft
 	index int // the draft's place in the waiting list
@@ -39,7 +40,13 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 	a := v.App
 	turns, partial, streaming, busy, errText, note, drafts := a.AIChatState()
 
-	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(12).Children(func() {
+	// Grow, not Fill: the page shares a column with the window bar above
+	// it, and a Fill page claims the column's whole height — which puts
+	// the page's own bottom, and the composer riding it, below the
+	// window's edge no matter how the conversation inside is laid out.
+	// Grow takes the room the bar leaves, so the page's bottom is the
+	// window's.
+	ui.Column(c).Grow(1).MinWidth(0).Padding(PagePadY, PagePadX).Gap(12).Children(func() {
 		// The window bar carries the page's name and its 清空对话 action,
 		// so the conversation starts with itself.
 
@@ -100,6 +107,11 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 			items = append(items, chatItem{kind: 4, draft: d, index: i})
 		}
 		items = append(items, chatItem{kind: 5})
+	} else if note != "" {
+		// A reply whose every draft was dropped leaves only its note; it
+		// rides the list as its own line rather than inside a preview
+		// head that would have nothing under it.
+		items = append(items, chatItem{kind: 6})
 	}
 
 	v.chatListState.Key = func(i int) any {
@@ -163,7 +175,9 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 				markdown.View(c, ai.WithoutDraftBlocks(it.turn.Content), &markdown.Options{})
 			}
 			if it.turn.Content != "" && ai.WithoutDraftBlocks(it.turn.Content) == "" {
-				ui.Text(c, "（这条回复只有配置草稿，见下方预览）").FontSize(CaptionSize).TextColor(t.Muted)
+				// This text belongs to its own historical turn. Never point at
+				// the global waiting list, which may belong to a later reply.
+				ui.Text(c, "（这条回复只有配置草稿）").FontSize(CaptionSize).TextColor(t.Muted)
 			}
 		})
 	case 1:
@@ -174,41 +188,58 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 	case 2:
 		ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap()
 	case 3:
-		ui.Column(c).Gap(2).Children(func() {
-			ui.Textf(c, "配置预览（%d 条）", len(drafts)).FontSize(NoteSize).Bold().TextColor(t.FG)
-			if note != "" {
-				ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-			}
+		// The preview's head carries the workbench's own mark, so what
+		// follows reads as rules waiting for a decision rather than as
+		// more chat text.
+		ui.Column(c).Gap(4).Children(func() {
+			ui.Row(c).Gap(10).AlignItems(ui.Center).MaxWidth(760).Children(func() {
+				ui.Box(c).Size(28, 28).Radius(RadiusButton).
+					Background(t.Accent.Alpha(0.14)).Border(1, t.Accent.Alpha(0.28)).Children(func() {
+					ui.Column(c).Fill().Center().Children(func() {
+						ui.Icon(c, icons.Connector).Size(18, 11).TextColor(t.Accent)
+					})
+				})
+				ui.Column(c).Gap(2).Grow(1).Children(func() {
+					ui.Textf(c, "规则草稿（%d 条）", len(drafts)).FontSize(NoteSize).Bold().TextColor(t.FG)
+					ui.Text(c, "AI 按描述生成的转发规则：丢弃不要的，把单条填进表单改，或整批导入当前场景").
+						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+				})
+			})
 			ui.Text(c, "草稿不会自动生效；确认导入后仍需点「应用配置」").FontSize(CaptionSize).TextColor(t.Muted)
 		})
 	case 4:
 		v.chatDraftCard(c, t, it.draft, it.index, busy)
 	case 5:
-		v.chatImportBar(c, t, drafts, busy)
+		v.chatImportBar(c, t, drafts, note, busy)
+	case 6:
+		// The reply's note with no preview to carry it: what was dropped,
+		// or what the cap cut, said on the line the cards would have led.
+		ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap().MaxWidth(760)
 	}
 }
 
-// chatDraftCard draws one proposed mapping. 丢弃 removes just this card;
-// 采用 opens the ordinary form prefilled, the one-sentence panel's own
-// escape hatch for a draft that wants editing rather than importing.
+// chatDraftCard draws one proposed mapping as the rule it would become,
+// in the workbench's own shape rather than a line of text: the name with
+// the protocol's badge and the two actions on the head row, then the
+// forwarding relation the table's rows carry — a mono 监听 chip, the
+// connector mark, the upstream — with the model's explanation as the
+// secondary line under it. 丢弃 removes just this card; 填入表单 opens
+// the ordinary form prefilled, the escape hatch for a draft that wants
+// editing rather than importing. The actions ride the head row instead
+// of a row of their own: the preview must fit a small window's scroll
+// without pushing the composer off screen.
 func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, busy bool) {
 	a := v.App
 	m := d.Mapping
-	listen := "待定"
-	if m.ListenPort != 0 {
-		listen = strconv.Itoa(m.ListenPort)
-	}
+	listen, defaultPort := localListenLabel(m)
 	draftCardShell(c, t).MaxWidth(760).Children(func() {
-		ui.Textf(c, "%s · %s · 监听 %s → %s:%d",
-			m.Name, m.Protocol.Label(), listen, m.UpstreamHost, m.UpstreamPort).
-			FontSize(NoteSize).TextColor(t.FG)
-		if d.Explanation != "" {
-			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-		}
-		if m.ExtraDirectives != "" {
-			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
-		}
-		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+		// The rule's head: its name, the protocol's classification patch
+		// — the same badge the table's proto column draws — and the two
+		// decisions a draft waits for, on the right.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG).SingleLine()
+			v.protoCell(c, t, m)
+			ui.Spacer(c)
 			if DangerQuietButton(c, t, "丢弃").FontSize(CaptionSize).
 				Label("丢弃草稿 " + m.Name).Clicked() {
 				a.DropChatDraft(i)
@@ -221,26 +252,59 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 				a.Info("草稿已填入表单，确认后保存")
 			}
 		})
+		// The forwarding relation: 监听 :端口 on the left, the upstream on
+		// the right, the connector mark and its arrow between — the row
+		// this draft would join, drawn before it exists.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, listen).Font(FontMono).FontSize(NoteSize).
+				TextColor(t.FG).Padding(2, 8).Radius(RadiusChip).
+				Background(t.Chip).Border(1, t.Border).Tooltip("生效后在本机监听的地址")
+			if defaultPort {
+				ui.Text(c, "（默认）").FontSize(CaptionSize).TextColor(t.Meta).NoWrap().
+					Tooltip("监听端口留空时，Web 规则用默认端口：HTTP 80，HTTPS 443")
+			}
+			ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Meta).
+				Label("转发-" + m.Name).Tooltip("本地端口转发到上游")
+			ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
+			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font(FontMono).
+				FontSize(NoteSize).TextColor(t.FG2).SingleLine().Tooltip("上游目标")
+		})
+		if d.Explanation != "" {
+			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		}
+		if m.ExtraDirectives != "" {
+			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
+		}
 	})
 }
 
 // chatImportBar is the preview section's foot: the one button that
 // writes every waiting draft into the current scene, behind the
 // confirmation an import deserves.
-func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, busy bool) {
+//
+// The note rides here, at the section's tail rather than under its head:
+// the list follows its end, so the tail is the part the eye lands on — a
+// cap's cut or a dropped draft said only in the head would sit above the
+// fold of a five-card reply, read by no one.
+func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, note string, busy bool) {
 	a := v.App
-	ui.Row(c).Gap(8).AlignItems(ui.Center).MaxWidth(760).Children(func() {
-		ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(CaptionSize).TextColor(t.Muted).Grow(1)
-		if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).
-			Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
-			n := len(drafts)
-			a.Ask(&appt.Confirm{
-				Title: "导入映射",
-				Body:  "把 " + strconv.Itoa(n) + " 条草稿写入当前场景，端口冲突会整批拒绝。导入后点「应用配置」才会生效。",
-				Label: "导入",
-				Run:   a.ImportChatDrafts,
-			})
+	ui.Column(c).Gap(6).MaxWidth(760).Children(func() {
+		if note != "" {
+			ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(CaptionSize).TextColor(t.Muted).Grow(1)
+			if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).
+				Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
+				n := len(drafts)
+				a.Ask(&appt.Confirm{
+					Title: "导入映射",
+					Body:  "把 " + strconv.Itoa(n) + " 条草稿写入当前场景，端口冲突会整批拒绝。导入后点「应用配置」才会生效。",
+					Label: "导入",
+					Run:   a.ImportChatDrafts,
+				})
+			}
+		})
 	})
 }
 

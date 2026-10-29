@@ -39,14 +39,13 @@ func (a *App) errAINotReady() error {
 	return fmt.Errorf("还没有配置 AI 服务，请先在设置里填写")
 }
 
-// InterpretFile interprets one file the user picked: .conf, .log or .txt
-// — an external nginx error.log enters here. kind "" infers from the
-// name.
+// InterpretFile interprets one file the user picked on the logs page:
+// .conf, .log or .txt — an external nginx error.log enters here.
 func (a *App) InterpretFile(kind, path string) error {
 	if err := a.errAINotReady(); err != nil {
 		return err
 	}
-	return a.interpretPath(kind, path, "panel")
+	return a.interpretPath(kind, path, "logs")
 }
 
 // InterpretText interprets content already in memory — the engine's own

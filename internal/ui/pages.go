@@ -51,7 +51,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					})
 				}
 			} else {
-				if ui.Switch(c, boolPtr(a.NginxLogRead())).Label("读取访问日志").Changed() {
+				if CompactSwitch(c, boolPtr(a.NginxLogRead())).Label("读取访问日志").Changed() {
 					a.SetNginxLogRead(!a.NginxLogRead())
 				}
 				// The interpretation is offered only when there is a log to
@@ -61,6 +61,17 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					if ui.Button(c, "解读访问日志").Disabled(busy).
 						Tooltip("把当前 access.log 的尾部交给模型总结").Clicked() {
 						a.RunBackground(a.InterpretAccessLog)
+					}
+				}
+				// The picker reads a file the app itself did not write — an
+				// external nginx's error.log, a hand-written conf — and its
+				// answer lands on the card below, beside the access log's
+				// own interpretation. It asks only for AI: the file it reads
+				// is not the engine's log, so the read switch is not its gate.
+				if a.AIReady() {
+					if ui.Button(c, "解读文件…").Disabled(busy).
+						Tooltip("选一份 .conf / .log / .txt 交给模型解读，比如外部 nginx 的 error.log").Clicked() {
+						v.interpretFilePicker()
 					}
 				}
 				if ui.Button(c, "导出").Disabled(busy).
@@ -329,28 +340,35 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 			// The cards read in the order a user needs them: the AI card
 			// leads — the chat page's 去设置 lands on it, and a card below
 			// the fold would need the user to scroll to the one thing they
-			// came for — then the desktop's looks beside who may connect,
-			// the data tools beside the scenes they feed, and the
-			// least-visited pair (快捷键, 更新) last. The danger band stays a
-			// band across the page below them all, apart from the cards it
-			// outclasses in consequence.
+			// came for — then the desktop's looks beside the app's own
+			// facts, who may connect beside the data tools, the scenes
+			// beside the keys that reach them. 更新 has no partner: it
+			// takes a row of its own, late, where the least-visited things
+			// sit. The danger band stays a band across the page below them
+			// all, apart from the cards it outclasses in consequence.
 			ui.Column(c).Gap(16).Children(func() {
 				v.aiCard(c, t)
 
 				pair(
 					func() { v.appearanceCard(c, t) },
+					func() { v.generalCard(c, t) },
+				)
+
+				pair(
 					func() { v.accessCard(c, t, wl, busy) },
-				)
-
-				pair(
 					func() { v.backupCard(c, t) },
-					func() { v.workspaceCard(c, t, busy) },
 				)
 
 				pair(
+					func() { v.workspaceCard(c, t, busy) },
 					func() { v.hotkeyCard(c, t) },
-					func() { v.updateCard(c, t) },
 				)
+
+				// 更新 alone: the row holds the one card, which grows to
+				// span the page the way the AI card's row does.
+				ui.Row(c).AlignItems(ui.Start).Wrap().Children(func() {
+					v.updateCard(c, t)
+				})
 
 				// The danger zone is a band across the page, not a button
 				// among the tools: wiping everything deserves to look
@@ -379,14 +397,10 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	})
 }
 
-// appearanceCard is the settings page's 外观 card: the theme, the
-// gateway's name, the login item and the traffic display.
+// appearanceCard is the settings page's 外观与显示 card: the theme and
+// the traffic display — how the app looks, and only that.
 func (v *View) appearanceCard(c *ui.Context, t Tokens) {
 	a := v.App
-	if !v.nameLoaded {
-		v.settingsName = a.HostName()
-		v.nameLoaded = true
-	}
 	themeIdx := 0
 	switch a.Theme() {
 	case appt.ThemeLight:
@@ -395,7 +409,7 @@ func (v *View) appearanceCard(c *ui.Context, t Tokens) {
 		themeIdx = 2
 	}
 
-	card(c, t, "外观", func() {
+	card(c, t, "外观与显示", func() {
 		ui.Field(c, "主题", func() {
 			if ui.Segmented(c, &themeIdx, "跟随系统", "亮色", "暗色").Label("主题").Changed() {
 				switch themeIdx {
@@ -410,19 +424,6 @@ func (v *View) appearanceCard(c *ui.Context, t Tokens) {
 		})
 		ui.Text(c, "亮色与暗色各有一套配色；跟随系统时随桌面的外观自动切换。").
 			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
-		ui.Field(c, "网关名称", func() {
-			if ui.TextInput(c, &v.settingsName).Submitted() {
-				a.SetHostName(v.settingsName)
-			}
-		})
-		ui.Field(c, "开机自启", func() {
-			on := a.OpenAtLogin()
-			if ui.Switch(c, &on).Label("开机自启动").Changed() {
-				_ = a.SetOpenAtLogin(on)
-			}
-		})
-		ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
-			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		// The traffic switch rides the same row as its words, the
 		// whitelist switch's shape: a settings page whose cards
 		// grow one line each would push the cards beside them
@@ -433,11 +434,39 @@ func (v *View) appearanceCard(c *ui.Context, t Tokens) {
 				ui.Text(c, "映射表与详情显示连接数和流量").FontSize(CaptionSize).TextColor(t.Muted)
 			})
 			on := a.ShowTraffic()
-			if ui.Switch(c, &on).Label("显示流量").
+			if CompactSwitch(c, &on).Label("显示流量").
 				Tooltip("关闭后映射表和详情不再显示连接数与流量，转发本身不受影响").Changed() {
 				a.SetShowTraffic(on)
 			}
 		})
+	})
+}
+
+// generalCard is the settings page's 通用 card: the gateway's own name
+// and the login item — the app-level facts that are neither its looks
+// nor its rules.
+func (v *View) generalCard(c *ui.Context, t Tokens) {
+	a := v.App
+	if !v.nameLoaded {
+		v.settingsName = a.HostName()
+		v.nameLoaded = true
+	}
+	card(c, t, "通用", func() {
+		ui.Field(c, "网关名称", func() {
+			if ui.TextInput(c, &v.settingsName).Submitted() {
+				a.SetHostName(v.settingsName)
+			}
+		})
+		ui.Field(c, "开机自启", func() {
+			on := a.OpenAtLogin()
+			if CompactSwitch(c, &on).Label("开机自启动").Changed() {
+				if err := a.SetOpenAtLogin(on); err != nil {
+					a.Fail("设置开机自启失败：%v", err)
+				}
+			}
+		})
+		ui.Text(c, "登录系统后自动启动 JumpBoard；需要安装打包后的应用。").
+			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 	})
 }
 
@@ -455,7 +484,7 @@ func (v *View) accessCard(c *ui.Context, t Tokens, wl []model.WhitelistEntry, bu
 			// text beside it: two elements with one name would
 			// make the click ambiguous.
 			on := a.WhitelistOn()
-			if ui.Switch(c, &on).Label("启用白名单").Changed() {
+			if CompactSwitch(c, &on).Label("启用白名单").Changed() {
 				a.SetWhitelistOn(on)
 			}
 		})
@@ -467,7 +496,7 @@ func (v *View) accessCard(c *ui.Context, t Tokens, wl []model.WhitelistEntry, bu
 			e := e
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				on := e.Enabled
-				ui.Switch(c, &on).Label("启用-" + e.IP).OnChange(func() {
+				CompactSwitch(c, &on).Label("启用-" + e.IP).OnChange(func() {
 					a.RunBackground(func() error { return a.ToggleWhitelist(e.ID, on) })
 				})
 				ui.Column(c).Gap(1).Grow(1).Children(func() {

@@ -1,14 +1,58 @@
 package ai
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
 )
+
+// plainCompletionCapture holds the one successful JSON body a gateway sent
+// to a stream request. go-openai's stream reader owns SSE, but exposes no way
+// to recover a non-SSE body after it reads that body as an empty stream.
+type plainCompletionCapture struct {
+	body []byte
+}
+
+type plainCompletionContextKey struct{}
+
+// plainCompletionTransport buffers only successful JSON responses to the
+// auto-stream requests marked with a capture. Event streams and error bodies
+// pass through untouched, preserving go-openai's streaming and error behavior.
+type plainCompletionTransport struct {
+	base http.RoundTripper
+}
+
+func (t plainCompletionTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	resp, err := base.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	capture, _ := req.Context().Value(plainCompletionContextKey{}).(*plainCompletionCapture)
+	mediaType := resp.Header.Get("Content-Type")
+	if capture == nil || resp.StatusCode < 200 || resp.StatusCode >= 300 ||
+		!strings.HasPrefix(strings.ToLower(mediaType), "application/json") {
+		return resp, nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	capture.body = body
+	return resp, nil
+}
 
 // postChatStream sends the same chat completion as postChat — same URL,
 // headers, model and temperature 0.2 — with "stream": true and no JSON
@@ -89,10 +133,12 @@ func (c *Client) postChatStreamMsgs(ctx context.Context, msgs []openai.ChatCompl
 // The fallback rule: if the streaming attempt fails — request error,
 // non-200, an empty stream, a body that was not one — before a single
 // fragment has been handed to onDelta, nothing has been shown yet, and
-// the existing one-shot postChat is retried once and its result
-// returned. After the first delivered fragment the answer has started
-// arriving: a mid-stream failure returns the partial text with the error
-// rather than restarting, so the caller can show what arrived instead of
+// the existing one-shot postChat is retried once and its result returned.
+// A successful plain JSON completion is the exception: its first body is
+// decoded directly, so a gateway that ignores stream:true costs one POST.
+// After the first delivered fragment the answer has started arriving: a
+// mid-stream failure returns the partial text with the error rather than
+// restarting, so the caller can show what arrived instead of
 // waiting twice. Check err before using the text in that case.
 func (c *Client) postChatAuto(ctx context.Context, system, user string, onDelta func(string)) (string, error) {
 	return c.postChatAutoMsgs(ctx, []openai.ChatCompletionMessage{
@@ -109,6 +155,8 @@ func (c *Client) postChatAuto(ctx context.Context, system, user string, onDelta 
 // true for the one-shot features' JSON object, false for the
 // conversation's prose. The conversation in chat.go is the false caller.
 func (c *Client) postChatAutoMsgs(ctx context.Context, msgs []openai.ChatCompletionMessage, jsonFormat bool, onDelta func(string)) (string, error) {
+	capture := new(plainCompletionCapture)
+	ctx = context.WithValue(ctx, plainCompletionContextKey{}, capture)
 	var started bool
 	text, err := c.postChatStreamMsgs(ctx, msgs, func(frag string) {
 		started = true
@@ -118,6 +166,16 @@ func (c *Client) postChatAutoMsgs(ctx context.Context, msgs []openai.ChatComplet
 	})
 	if err == nil && text != "" {
 		return text, nil
+	}
+	if !started && err == nil && len(capture.body) > 0 {
+		// The gateway ignored stream:true but already returned the complete
+		// completion. Use that first response; a second POST would repeat a
+		// non-idempotent model request just to decode the body differently.
+		var resp openai.ChatCompletionResponse
+		if err := json.Unmarshal(capture.body, &resp); err != nil {
+			return "", mapOpenAIError(err)
+		}
+		return chatCompletionContent(resp, jsonFormat)
 	}
 	if !started {
 		return c.postChatMsgs(ctx, msgs, jsonFormat)

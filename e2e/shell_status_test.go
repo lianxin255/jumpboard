@@ -30,6 +30,144 @@ func TestSidebarRailWidth(t *testing.T) {
 	}
 }
 
+// TestEngineFooterMasterSwitch checks the rail's foot as the forwarding
+// service's master control: the row names the service, its state and its
+// engine, and the switch is the compact one — 40×22, not the 54×30 the
+// theme's spacing drew — whole inside the rail, right of the row's words.
+func TestEngineFooterMasterSwitch(t *testing.T) {
+	a := testApp(t)
+	tt := tester(t, a, 1280, 800)
+	tt.Frame()
+
+	sw, ok := tt.Find("转发服务开关")
+	if !ok {
+		t.Fatalf("the master switch is missing: %v", tt.Texts())
+	}
+	if d := sw.W - 40; d < -1 || d > 1 {
+		t.Errorf("the master switch should be the compact 40 wide, got %.0f", sw.W)
+	}
+	if d := sw.H - 22; d < -1 || d > 1 {
+		t.Errorf("the master switch should be the compact 22 tall, got %.0f", sw.H)
+	}
+	// The rail is 216 + its border; the switch sits inside it, right of
+	// the service's name.
+	if right := sw.X + sw.W; right > 217 {
+		t.Errorf("the switch should sit inside the rail: right edge %.0f", right)
+	}
+	title, ok := tt.Find("转发服务")
+	if !ok {
+		t.Fatalf("the service's name is missing: %v", tt.Texts())
+	}
+	if sw.X < title.X+title.W {
+		t.Errorf("the switch should sit right of the title: %.0f vs %.0f", sw.X, title.X+title.W)
+	}
+	// A fresh app's engine is running, and the foot says the state and
+	// the engine it runs on; the stopped word arrives when it stops.
+	if !tt.HasText("运行中") || !tt.HasText("内置引擎（Go）") {
+		t.Errorf("the foot should say the service's state and engine: %v", tt.Texts())
+	}
+	// The window bar keeps its own, separate word — the status row the
+	// header owns is not the control.
+	if !tt.HasText("引擎 运行中") {
+		t.Errorf("the window bar should keep its engine status: %v", tt.Texts())
+	}
+	if err := a.StopEngine(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the stopped words", func() bool {
+		return tt.HasText("已停止") && tt.HasText("引擎 已停止")
+	})
+}
+
+// TestMappingsToolbarSplitsCreationFromFilters checks the two tool rows'
+// one meaning each: the scene chips, the search and the create actions
+// share the first row; the status segments and the group chips hold the
+// second. The rows may wrap — a narrow window moves a row's own tools to
+// its next line — but a create action never lands on the filter row.
+func TestMappingsToolbarSplitsCreationFromFilters(t *testing.T) {
+	for _, size := range []struct {
+		name          string
+		width, height int
+	}{
+		{"default 1280x800", 1280, 800},
+		{"minimum 960x640", 960, 640},
+	} {
+		t.Run(size.name, func(t *testing.T) {
+			a := testApp(t)
+			if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), model.Mapping{
+				Name: "分组站", Protocol: model.TCP, Enabled: true, ListenPort: freePort(t),
+				Group: "数据库", UpstreamHost: "127.0.0.1", UpstreamPort: 1,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.Reload(); err != nil {
+				t.Fatal(err)
+			}
+			tt := tester(t, a, size.width, size.height)
+			waitFor(t, tt, "the row", func() bool { return tt.HasText("分组站") })
+
+			creates := map[string]string{
+				"从模板新建": "the template door",
+				"粘贴导入":  "the paste door",
+				"新建映射":  "the primary create",
+				"场景":    "the scene chips",
+			}
+			filters := map[string]string{
+				"筛选":    "the status segments",
+				"组 数据库": "the group chips",
+			}
+			var createBottom float32
+			for label, what := range creates {
+				r, ok := tt.Find(label)
+				if !ok {
+					t.Fatalf("%s is missing: %v", what, tt.Texts())
+				}
+				if r.W <= 0 || r.H <= 0 {
+					t.Fatalf("%s has no geometry: %+v", what, r)
+				}
+				if b := r.Y + r.H; b > createBottom {
+					createBottom = b
+				}
+			}
+			for label, what := range filters {
+				r, ok := tt.Find(label)
+				if !ok {
+					t.Fatalf("%s is missing: %v", what, tt.Texts())
+				}
+				if r.W <= 0 || r.H <= 0 {
+					t.Fatalf("%s has no geometry: %+v", what, r)
+				}
+				// However the first row wrapped, every filter sits below
+				// every create action: the meanings never share a line.
+				if r.Y < createBottom-1 {
+					t.Errorf("%s should sit below the create row: %.0f under %.0f", what, r.Y, createBottom)
+				}
+			}
+			// On the wide window neither row needs to wrap: the create
+			// actions share one line and the filters another.
+			if size.width >= 1280 {
+				rects := make([]float32, 0, len(creates))
+				for label := range creates {
+					r, _ := tt.Find(label)
+					rects = append(rects, r.Y)
+				}
+				lo, hi := rects[0], rects[0]
+				for _, y := range rects {
+					if y < lo {
+						lo = y
+					}
+					if y > hi {
+						hi = y
+					}
+				}
+				if hi-lo > 12 {
+					t.Errorf("the create actions should share one line, %.0f DIPs apart", hi-lo)
+				}
+			}
+		})
+	}
+}
+
 // TestMappingEngineStatusOnTheWindowHeader checks the consolidation: the
 // engine's state rides the window bar the mappings and history pages
 // share, so the page states its engine without the eye going to the

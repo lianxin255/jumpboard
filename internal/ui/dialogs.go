@@ -36,7 +36,6 @@ func (v *View) dialogs(c *ui.Context, t Tokens) {
 	if pv := a.PastePreview(); pv != nil {
 		v.pasteDialog(c, t, pv)
 	}
-	v.aiDialog(c, t)
 }
 
 // formDialog is the mapping editor.
@@ -94,233 +93,230 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 		})
 	}
 
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 640, 16).Children(func() {
+	dialog(c, t, &open, 640, 16, func() {
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+			if isWeb(f.Protocol) {
+				ui.Text(c, "反代").FontSize(CaptionSize).Bold().TextColor(t.HTTP).
+					Padding(2, 8).Radius(RadiusBadge).Background(protoTint(t.HTTP))
+			}
+			ui.Spacer(c)
+			if ui.Text(c, "×").FontSize(HeadSize).TextColor(t.Muted).Label("关闭").Clicked() {
+				a.CloseForm()
+			}
+		})
+		// Live forward preview so the rule reads as an address path
+		// while editing: the Relay mark between the two ends, the
+		// same connector the table's rows carry.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
+			Background(t.Surface3).Border(1, t.Border).Children(func() {
+			ui.Text(c, formPreviewLocal(f)).Font(FontMono).FontSize(NoteSize).Bold().TextColor(t.Accent)
+			ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Accent).Label("转发预览")
+			ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Muted)
+			ui.Text(c, formPreviewUpstream(f)).Font(FontMono).FontSize(NoteSize).TextColor(t.FG2)
+			ui.Spacer(c)
+			ui.Text(c, f.Protocol).FontSize(CaptionSize).TextColor(t.Muted)
+		})
 
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
-				if isWeb(f.Protocol) {
-					ui.Text(c, "反代").FontSize(CaptionSize).Bold().TextColor(t.HTTP).
-						Padding(2, 8).Radius(RadiusBadge).Background(protoTint(t.HTTP))
-				}
-				ui.Spacer(c)
-				if ui.Text(c, "×").FontSize(HeadSize).TextColor(t.Muted).Label("关闭").Clicked() {
-					a.CloseForm()
-				}
-			})
-			// Live forward preview so the rule reads as an address path
-			// while editing: the Relay mark between the two ends, the
-			// same connector the table's rows carry.
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 12).Radius(RadiusChip).
-				Background(t.Surface3).Border(1, t.Border).Children(func() {
-				ui.Text(c, formPreviewLocal(f)).Font(FontMono).FontSize(NoteSize).Bold().TextColor(t.Accent)
-				ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Accent).Label("转发预览")
-				ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Muted)
-				ui.Text(c, formPreviewUpstream(f)).Font(FontMono).FontSize(NoteSize).TextColor(t.FG2)
-				ui.Spacer(c)
-				ui.Text(c, f.Protocol).FontSize(CaptionSize).TextColor(t.Muted)
-			})
+		// The scroll view fills a box of a fixed height: a modal
+		// stretches its children, so the box, not the view itself,
+		// is what bounds the form. A short form stays short and a
+		// long one (HTTPS with every field) scrolls.
+		ui.Box(c).Height(formHeight(f, windowHeight(c))).Clip().Children(func() {
+			ui.Scroll(c).Fill().Children(func() {
+				ui.Column(c).Gap(16).Children(func() {
 
-			// The scroll view fills a box of a fixed height: a modal
-			// stretches its children, so the box, not the view itself,
-			// is what bounds the form. A short form stays short and a
-			// long one (HTTPS with every field) scrolls.
-			ui.Box(c).Height(formHeight(f, windowHeight(c))).Clip().Children(func() {
-				ui.Scroll(c).Fill().Children(func() {
-					ui.Column(c).Gap(16).Children(func() {
-
-						// The name and its group share a row: the group is
-						// the name's qualifier, a label beside a label. The
-						// groups already in use suggest themselves, the way
-						// the upstream hosts do.
-						ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-							fld("名称", "Name", func() {
-								ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
-							}).Grow(1)
-							fld("分组", "", func() {
-								ui.Autocomplete(c, &f.Group, v.App.GroupSuggestions()).
-									Placeholder("可选，如 数据库").Width(220)
-							})
+					// The name and its group share a row: the group is
+					// the name's qualifier, a label beside a label. The
+					// groups already in use suggest themselves, the way
+					// the upstream hosts do.
+					ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+						fld("名称", "Name", func() {
+							ui.TextInput(c, &f.Name).AutoFocus().Placeholder("例如：内网 MySQL").Grow(1)
+						}).Grow(1)
+						fld("分组", "", func() {
+							ui.Autocomplete(c, &f.Group, v.App.GroupSuggestions()).
+								Placeholder("可选，如 数据库").Width(220)
 						})
-						ui.Field(c, "协议", func() {
-							protoIdx := appt.ProtocolIndex(f.Protocol)
-							ui.Segmented(c, &protoIdx, appt.ProtocolChoices...).OnChange(func() {
-								f.Protocol = appt.ProtocolChoices[protoIdx]
+					})
+					ui.Field(c, "协议", func() {
+						protoIdx := appt.ProtocolIndex(f.Protocol)
+						ui.Segmented(c, &protoIdx, appt.ProtocolChoices...).OnChange(func() {
+							f.Protocol = appt.ProtocolChoices[protoIdx]
+							a.SetForm(f)
+						})
+					})
+
+					groupHead("转发")
+					ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+						fld("监听端口", "ListenPort", func() {
+							if isWeb(f.Protocol) {
+								ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443").Width(180)
+							} else {
+								ui.TextInput(c, &f.ListenPort).Placeholder("9000").Width(180)
+							}
+						})
+						if isWeb(f.Protocol) {
+							fld("server_name", "ServerNames", func() {
+								ui.TextInput(c, &f.ServerNames).Placeholder("git.example.com").Grow(1)
+							})
+						}
+					})
+					// A save that found the port taken comes back with the
+					// nearest free port: one button fills the field, so
+					// "who holds the port" leads to "move to this one"
+					// without retyping or investigating further.
+					if portFix != 0 {
+						port := strconv.Itoa(portFix)
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Textf(c, "或改用 %d：", portFix).FontSize(CaptionSize).TextColor(t.Muted)
+							if ui.Button(c, "改用 "+port).FontSize(CaptionSize).Clicked() {
+								// f is this frame's copy of the form;
+								// the app holds its own. Writing only
+								// the app's would not do: the input
+								// built this frame against f writes f
+								// back over the app's at the frame's
+								// end, and the editor, mid-input, can
+								// still prefer its own text. Both
+								// sides get the port: the app's, and
+								// the copy the next frame builds from.
+								f.ListenPort = port
+								a.UseFormPortFix()
+								a.SetForm(f)
+							}
+							if ui.Button(c, "忽略").FontSize(CaptionSize).Clicked() {
+								a.ClearFormPortFix()
+							}
+						})
+					}
+					ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+						if isWeb(f.Protocol) {
+							fld("location 路径", "", func() {
+								ui.TextInput(c, &f.ListenPath).Placeholder("/").Width(140)
+							})
+						}
+						// Host and port on one line, the way an address
+						// is written. Each keeps its own label: two
+						// controls in one field have to say which is
+						// which, to a screen reader and to the tests.
+						ui.Field(c, "上游地址", func() {
+							ui.Row(c).Gap(8).Children(func() {
+								// The host is the form's most repetitive
+								// typing: an internal network has a handful
+								// of servers, so the ones already in use
+								// suggest themselves here.
+								e := ui.Autocomplete(c, &f.UpstreamHost, v.App.UpstreamHostSuggestions()).
+									Label("上游主机").Placeholder("192.168.1.10")
+								if msg := errs["UpstreamHost"]; msg != "" {
+									e.Error(msg)
+								}
+								e.Grow(1)
+								e2 := ui.TextInput(c, &f.UpstreamPort).Label("上游端口").Placeholder("3306").Width(90)
+								if msg := errs["UpstreamPort"]; msg != "" {
+									e2.Error(msg)
+								}
+							})
+						}).Grow(1)
+					})
+
+					if isWeb(f.Protocol) {
+						groupHead("反向代理")
+						modeIdx := appt.ProxyModeIndex(f.ProxyMode)
+						ui.Field(c, "代理模式", func() {
+							ui.Segmented(c, &modeIdx, appt.ProxyModes...).OnChange(func() {
+								f.ProxyMode = appt.ProxyModes[modeIdx]
 								a.SetForm(f)
 							})
 						})
+						if f.ProxyMode == appt.ProxyModes[2] {
+							fld("自定义代理头", "", func() {
+								ui.TextArea(c, &f.ProxyHeaders).Lines(3, 8).
+									Placeholder("proxy_set_header Host $host;")
+							})
+						}
+						fld("自定义 proxy_pass", "ProxyPassURL", func() {
+							ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用上面的上游地址")
+						})
+					}
 
-						groupHead("转发")
+					if f.Protocol == appt.ProtocolChoices[3] {
+						groupHead("TLS 证书")
 						ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-							fld("监听端口", "ListenPort", func() {
-								if isWeb(f.Protocol) {
-									ui.TextInput(c, &f.ListenPort).Placeholder("留空用 80 / 443").Width(180)
-								} else {
-									ui.TextInput(c, &f.ListenPort).Placeholder("9000").Width(180)
-								}
+							fld("证书文件", "TLSCertPath", func() {
+								ui.TextInput(c, &f.TLSCertPath).Placeholder("/etc/ssl/cert.pem").Grow(1)
+							})
+							fld("私钥文件", "", func() {
+								ui.TextInput(c, &f.TLSKeyPath).Placeholder("/etc/ssl/key.pem").Grow(1)
+							})
+						})
+						ui.Field(c, "HTTP 跳转 HTTPS", func() {
+							CompactSwitch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
+						})
+					}
+
+					groupHead("健康检查")
+					ui.Field(c, "启用检查", func() {
+						CompactSwitch(c, &f.HealthCheckEnabled).OnChange(func() { a.SetForm(f) })
+					})
+					if f.HealthCheckEnabled {
+						ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+							fld("间隔（秒）", "HealthCheckInterval", func() {
+								ui.TextInput(c, &f.HealthCheckInterval).Placeholder("30").Width(140)
 							})
 							if isWeb(f.Protocol) {
-								fld("server_name", "ServerNames", func() {
-									ui.TextInput(c, &f.ServerNames).Placeholder("git.example.com").Grow(1)
+								fld("检查路径", "", func() {
+									ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health").Width(180)
+								})
+								fld("期望状态码", "HealthCheckCode", func() {
+									ui.TextInput(c, &f.HealthCheckCode).Placeholder("200").Width(140)
 								})
 							}
 						})
-						// A save that found the port taken comes back with the
-						// nearest free port: one button fills the field, so
-						// "who holds the port" leads to "move to this one"
-						// without retyping or investigating further.
-						if portFix != 0 {
-							port := strconv.Itoa(portFix)
-							ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-								ui.Textf(c, "或改用 %d：", portFix).FontSize(CaptionSize).TextColor(t.Muted)
-								if ui.Button(c, "改用 "+port).FontSize(CaptionSize).Clicked() {
-									// f is this frame's copy of the form;
-									// the app holds its own. Writing only
-									// the app's would not do: the input
-									// built this frame against f writes f
-									// back over the app's at the frame's
-									// end, and the editor, mid-input, can
-									// still prefer its own text. Both
-									// sides get the port: the app's, and
-									// the copy the next frame builds from.
-									f.ListenPort = port
-									a.UseFormPortFix()
-									a.SetForm(f)
-								}
-								if ui.Button(c, "忽略").FontSize(CaptionSize).Clicked() {
-									a.ClearFormPortFix()
-								}
-							})
-						}
-						ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-							if isWeb(f.Protocol) {
-								fld("location 路径", "", func() {
-									ui.TextInput(c, &f.ListenPath).Placeholder("/").Width(140)
-								})
+					}
+
+					advHead("额外指令")
+					fld("", "", func() {
+						ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
+							Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
+					})
+					// Quick inserts for the directives the engine
+					// honors: a click appends one to the box, so the
+					// common cases need no typing.
+					ui.Row(c).Gap(8).Children(func() {
+						for _, chip := range directiveChips {
+							if ui.Button(c, chip.label).FontSize(CaptionSize).
+								Tooltip("插入 " + chip.directive).Clicked() {
+								f.ExtraDirectives = appendDirective(f.ExtraDirectives, chip.directive)
+								a.SetForm(f)
 							}
-							// Host and port on one line, the way an address
-							// is written. Each keeps its own label: two
-							// controls in one field have to say which is
-							// which, to a screen reader and to the tests.
-							ui.Field(c, "上游地址", func() {
-								ui.Row(c).Gap(8).Children(func() {
-									// The host is the form's most repetitive
-									// typing: an internal network has a handful
-									// of servers, so the ones already in use
-									// suggest themselves here.
-									e := ui.Autocomplete(c, &f.UpstreamHost, v.App.UpstreamHostSuggestions()).
-										Label("上游主机").Placeholder("192.168.1.10")
-									if msg := errs["UpstreamHost"]; msg != "" {
-										e.Error(msg)
-									}
-									e.Grow(1)
-									e2 := ui.TextInput(c, &f.UpstreamPort).Label("上游端口").Placeholder("3306").Width(90)
-									if msg := errs["UpstreamPort"]; msg != "" {
-										e2.Error(msg)
-									}
-								})
-							}).Grow(1)
-						})
-
-						if isWeb(f.Protocol) {
-							groupHead("反向代理")
-							modeIdx := appt.ProxyModeIndex(f.ProxyMode)
-							ui.Field(c, "代理模式", func() {
-								ui.Segmented(c, &modeIdx, appt.ProxyModes...).OnChange(func() {
-									f.ProxyMode = appt.ProxyModes[modeIdx]
-									a.SetForm(f)
-								})
-							})
-							if f.ProxyMode == appt.ProxyModes[2] {
-								fld("自定义代理头", "", func() {
-									ui.TextArea(c, &f.ProxyHeaders).Lines(3, 8).
-										Placeholder("proxy_set_header Host $host;")
-								})
-							}
-							fld("自定义 proxy_pass", "ProxyPassURL", func() {
-								ui.TextInput(c, &f.ProxyPassURL).Placeholder("留空则用上面的上游地址")
-							})
 						}
-
-						if f.Protocol == appt.ProtocolChoices[3] {
-							groupHead("TLS 证书")
-							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-								fld("证书文件", "TLSCertPath", func() {
-									ui.TextInput(c, &f.TLSCertPath).Placeholder("/etc/ssl/cert.pem").Grow(1)
-								})
-								fld("私钥文件", "", func() {
-									ui.TextInput(c, &f.TLSKeyPath).Placeholder("/etc/ssl/key.pem").Grow(1)
-								})
-							})
-							ui.Field(c, "HTTP 跳转 HTTPS", func() {
-								ui.Switch(c, &f.RedirectHTTP).OnChange(func() { a.SetForm(f) })
-							})
-						}
-
-						groupHead("健康检查")
-						ui.Field(c, "启用检查", func() {
-							ui.Switch(c, &f.HealthCheckEnabled).OnChange(func() { a.SetForm(f) })
-						})
-						if f.HealthCheckEnabled {
-							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-								fld("间隔（秒）", "HealthCheckInterval", func() {
-									ui.TextInput(c, &f.HealthCheckInterval).Placeholder("30").Width(140)
-								})
-								if isWeb(f.Protocol) {
-									fld("检查路径", "", func() {
-										ui.TextInput(c, &f.HealthCheckPath).Placeholder("/health").Width(180)
-									})
-									fld("期望状态码", "HealthCheckCode", func() {
-										ui.TextInput(c, &f.HealthCheckCode).Placeholder("200").Width(140)
-									})
-								}
-							})
-						}
-
-						advHead("额外指令")
-						fld("", "", func() {
-							ui.TextArea(c, &f.ExtraDirectives).Lines(3, 8).
-								Placeholder("proxy_timeout 1h; —— 引擎能识别的指令会生效，其余会在应用时提示")
-						})
-						// Quick inserts for the directives the engine
-						// honors: a click appends one to the box, so the
-						// common cases need no typing.
-						ui.Row(c).Gap(8).Children(func() {
-							for _, chip := range directiveChips {
-								if ui.Button(c, chip.label).FontSize(CaptionSize).
-									Tooltip("插入 " + chip.directive).Clicked() {
-									f.ExtraDirectives = appendDirective(f.ExtraDirectives, chip.directive)
-									a.SetForm(f)
-								}
-							}
-						})
 					})
 				})
 			})
+		})
 
-			if n := len(errs); n > 0 {
-				ui.Textf(c, "还有 %d 处需要修正", n).FontSize(CaptionSize).TextColor(t.Danger)
+		if n := len(errs); n > 0 {
+			ui.Textf(c, "还有 %d 处需要修正", n).FontSize(CaptionSize).TextColor(t.Danger)
+		}
+
+		ui.Divider(c)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(CaptionSize).TextColor(t.Muted)
+			ui.Spacer(c)
+			if ui.Button(c, "取消").Clicked() {
+				a.CloseForm()
 			}
-
-			ui.Divider(c)
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(CaptionSize).TextColor(t.Muted)
-				ui.Spacer(c)
-				if ui.Button(c, "取消").Clicked() {
-					a.CloseForm()
-				}
-				if ui.Button(c, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
-					f := f
-					a.SetForm(f)
-					a.RunBackground(a.SaveForm)
-				}
-				if ui.PrimaryButton(c, "应用配置").
-					Tooltip("保存规则并应用配置").Clicked() {
-					f := f
-					a.SetForm(f)
-					a.RunBackground(a.SaveFormAndApply)
-				}
-			})
+			if ui.Button(c, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
+				f := f
+				a.SetForm(f)
+				a.RunBackground(a.SaveForm)
+			}
+			if ui.PrimaryButton(c, "应用配置").
+				Tooltip("保存规则并应用配置").Clicked() {
+				f := f
+				a.SetForm(f)
+				a.RunBackground(a.SaveFormAndApply)
+			}
 		})
 	})
 	a.SetForm(f)
@@ -423,44 +419,42 @@ func formHeight(f appt.FormValues, maxHeight float32) float32 {
 func (v *View) templateDialog(c *ui.Context, t Tokens) {
 	a := v.App
 	open := true
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 680, 12).Children(func() {
-			ui.Text(c, "从模板新建").FontSize(HeadSize).Bold().TextColor(t.FG)
-			ui.Text(c, "选一个模板，表单会预先填好常用端口和指令。").FontSize(NoteSize).TextColor(t.Muted)
-			ui.Scroll(c).Children(func() {
-				ui.Column(c).Gap(6).Children(func() {
-					for _, tpl := range a.Tpl.List() {
-						tpl := tpl
-						ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(10, 12).Radius(RadiusChip).
-							Background(t.Surface2).Border(1, t.Border).Children(func() {
-							ui.Text(c, tpl.Name).FontSize(BodySize).Bold().TextColor(t.FG).Width(160)
-							ui.Text(c, tpl.Category).FontSize(CaptionSize).TextColor(t.Muted).Width(70)
-							ui.Text(c, tpl.Description).FontSize(CaptionSize).TextColor(t.FG2).Grow(1).SingleLine()
-							// Each row's buttons name their template: a list of
-							// identical "使用" buttons is ambiguous to a
-							// screen reader, and to the tests.
-							if ui.Button(c, "使用 "+tpl.Name).FontSize(CaptionSize).Label("使用 " + tpl.Name).Clicked() {
-								a.SetTemplatePicker(false)
-								a.OpenFormFromTemplate(tpl)
-							}
-							if !tpl.Builtin {
-								if DangerQuietButton(c, t, "删除 "+tpl.Name).FontSize(CaptionSize).Label("删除模板 " + tpl.Name).Clicked() {
-									if err := a.Tpl.Delete(tpl.ID); err != nil {
-										a.Fail("%v", err)
-									} else {
-										a.Info("已删除模板「%s」", tpl.Name)
-									}
+	dialog(c, t, &open, 680, 12, func() {
+		ui.Text(c, "从模板新建").FontSize(HeadSize).Bold().TextColor(t.FG)
+		ui.Text(c, "选一个模板，表单会预先填好常用端口和指令。").FontSize(NoteSize).TextColor(t.Muted)
+		ui.Scroll(c).Children(func() {
+			ui.Column(c).Gap(6).Children(func() {
+				for _, tpl := range a.Tpl.List() {
+					tpl := tpl
+					ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(10, 12).Radius(RadiusChip).
+						Background(t.Surface2).Border(1, t.Border).Children(func() {
+						ui.Text(c, tpl.Name).FontSize(BodySize).Bold().TextColor(t.FG).Width(160)
+						ui.Text(c, tpl.Category).FontSize(CaptionSize).TextColor(t.Muted).Width(70)
+						ui.Text(c, tpl.Description).FontSize(CaptionSize).TextColor(t.FG2).Grow(1).SingleLine()
+						// Each row's buttons name their template: a list of
+						// identical "使用" buttons is ambiguous to a
+						// screen reader, and to the tests.
+						if ui.Button(c, "使用 "+tpl.Name).FontSize(CaptionSize).Label("使用 " + tpl.Name).Clicked() {
+							a.SetTemplatePicker(false)
+							a.OpenFormFromTemplate(tpl)
+						}
+						if !tpl.Builtin {
+							if DangerQuietButton(c, t, "删除 "+tpl.Name).FontSize(CaptionSize).Label("删除模板 " + tpl.Name).Clicked() {
+								if err := a.Tpl.Delete(tpl.ID); err != nil {
+									a.Fail("%v", err)
+								} else {
+									a.Info("已删除模板「%s」", tpl.Name)
 								}
 							}
-						})
-					}
-				})
-			}).Height(380)
-			ui.Row(c).Justify(ui.End).Children(func() {
-				if ui.Button(c, "关闭").Clicked() {
-					a.SetTemplatePicker(false)
+						}
+					})
 				}
 			})
+		}).Height(380)
+		ui.Row(c).Justify(ui.End).Children(func() {
+			if ui.Button(c, "关闭").Clicked() {
+				a.SetTemplatePicker(false)
+			}
 		})
 	})
 	if !open && a.TemplatePickerOpen() {
@@ -471,30 +465,28 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 // confirmDialog asks a question with an OK and a cancel.
 func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	open := true
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 420, 12).Children(func() {
-			ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG)
-			ui.Text(c, q.Body).FontSize(NoteSize).TextColor(t.FG2)
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Clicked() {
-					v.App.ResolveConfirm(false)
-				}
-				// The label names the confirmation apart from the button
-				// that opened it: both say 清空 or 回滚, and a test
-				// clicking the first match would hit the opener.
-				// Destructive confirms answer in the danger color, the
-				// same step every destructive page button takes — and only
-				// the one button is built, so the click finds it.
-				var btn ui.Element
-				if q.Destructive {
-					btn = DangerButton(c, t, q.Label).Label("确认" + q.Label)
-				} else {
-					btn = ui.PrimaryButton(c, q.Label).Label("确认" + q.Label)
-				}
-				if btn.Clicked() {
-					v.App.ResolveConfirm(true)
-				}
-			})
+	dialog(c, t, &open, 420, 12, func() {
+		ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG)
+		ui.Text(c, q.Body).FontSize(NoteSize).TextColor(t.FG2)
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				v.App.ResolveConfirm(false)
+			}
+			// The label names the confirmation apart from the button
+			// that opened it: both say 清空 or 回滚, and a test
+			// clicking the first match would hit the opener.
+			// Destructive confirms answer in the danger color, the
+			// same step every destructive page button takes — and only
+			// the one button is built, so the click finds it.
+			var btn ui.Element
+			if q.Destructive {
+				btn = DangerButton(c, t, q.Label).Label("确认" + q.Label)
+			} else {
+				btn = ui.PrimaryButton(c, q.Label).Label("确认" + q.Label)
+			}
+			if btn.Clicked() {
+				v.App.ResolveConfirm(true)
+			}
 		})
 	})
 	if !open && v.App.ConfirmState() != nil {
@@ -523,38 +515,36 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 	added, deleted := diff.Stats()
 
 	open := true
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 760, 12).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "配置快照").FontSize(HeadSize).Bold().TextColor(t.FG)
-				ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(CaptionSize).TextColor(t.Meta)
-				ui.Spacer(c)
-				ui.Text(c, formatTime(sn.CreatedAt)).FontSize(CaptionSize).TextColor(t.Muted)
-			})
-			ui.Scroll(c).Height(460).Children(func() {
-				editor.DiffView(c, diff)
-			})
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "关闭").Clicked() {
-					a.SetSnapshotView(nil)
-				}
-				// The button used to roll back the moment it was clicked, with
-				// nothing to confirm against. The diff above is what the
-				// question refers to. Rolling back replaces the running
-				// configuration: a destructive main action, so the danger
-				// face; the confirm it opens still asks before it acts.
-				if DangerButton(c, t, "回滚到此配置").Clicked() {
-					snap := *sn
-					a.SetSnapshotView(nil)
-					a.Ask(&appt.Confirm{
-						Title: "回滚配置",
-						Body: fmt.Sprintf("回滚到 %s 的配置，相对当前 %+d −%d 行。当前配置会先存为一条快照。",
-							formatTime(snap.CreatedAt), added, deleted),
-						Label: "回滚",
-						Run:   func() error { return a.RollbackSnapshot(snap) },
-					})
-				}
-			})
+	dialog(c, t, &open, 760, 12, func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "配置快照").FontSize(HeadSize).Bold().TextColor(t.FG)
+			ui.Text(c, fmt.Sprintf("差异 +%d −%d", added, deleted)).FontSize(CaptionSize).TextColor(t.Meta)
+			ui.Spacer(c)
+			ui.Text(c, formatTime(sn.CreatedAt)).FontSize(CaptionSize).TextColor(t.Muted)
+		})
+		ui.Scroll(c).Height(460).Children(func() {
+			editor.DiffView(c, diff)
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "关闭").Clicked() {
+				a.SetSnapshotView(nil)
+			}
+			// The button used to roll back the moment it was clicked, with
+			// nothing to confirm against. The diff above is what the
+			// question refers to. Rolling back replaces the running
+			// configuration: a destructive main action, so the danger
+			// face; the confirm it opens still asks before it acts.
+			if DangerButton(c, t, "回滚到此配置").Clicked() {
+				snap := *sn
+				a.SetSnapshotView(nil)
+				a.Ask(&appt.Confirm{
+					Title: "回滚配置",
+					Body: fmt.Sprintf("回滚到 %s 的配置，相对当前 %+d −%d 行。当前配置会先存为一条快照。",
+						formatTime(snap.CreatedAt), added, deleted),
+					Label: "回滚",
+					Run:   func() error { return a.RollbackSnapshot(snap) },
+				})
+			}
 		})
 	})
 	if !open && a.SnapshotView() != nil {
@@ -678,26 +668,24 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 	}
 
 	open := true
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 860, 12).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "当前配置").FontSize(HeadSize).Bold().TextColor(t.FG)
-				ui.Textf(c, "%d 条规则", n).FontSize(CaptionSize).TextColor(t.Meta)
-				ui.Spacer(c)
-				ui.Text(c, "只读").FontSize(CaptionSize).TextColor(t.Muted)
-				if ui.Button(c, "复制全文").FontSize(CaptionSize).
-					Tooltip("把这份配置复制到剪贴板").Clicked() {
-					a.RunBackground(func() error { return a.CopyText(conf) })
-				}
-			})
-			ui.Box(c).Height(520).Clip().Children(func() {
-				editor.View(c, v.confEditor).Grow(1).FillWidth()
-			})
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "关闭").Clicked() {
-					a.SetConfViewOpen(false)
-				}
-			})
+	dialog(c, t, &open, 860, 12, func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "当前配置").FontSize(HeadSize).Bold().TextColor(t.FG)
+			ui.Textf(c, "%d 条规则", n).FontSize(CaptionSize).TextColor(t.Meta)
+			ui.Spacer(c)
+			ui.Text(c, "只读").FontSize(CaptionSize).TextColor(t.Muted)
+			if ui.Button(c, "复制全文").FontSize(CaptionSize).
+				Tooltip("把这份配置复制到剪贴板").Clicked() {
+				a.RunBackground(func() error { return a.CopyText(conf) })
+			}
+		})
+		ui.Box(c).Height(520).Clip().Children(func() {
+			editor.View(c, v.confEditor).Grow(1).FillWidth()
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "关闭").Clicked() {
+				a.SetConfViewOpen(false)
+			}
 		})
 	})
 	if !open {
@@ -715,44 +703,42 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 	a := v.App
 	open := true
 	title := "粘贴导入"
-	ui.Modal(c, &open, func() {
-		modalCard(c, t, 520, 12).Children(func() {
-			ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
-			kind := "nginx 配置"
-			if pv.Replace {
-				kind = "JumpBoard 备份"
+	dialog(c, t, &open, 520, 12, func() {
+		ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+		kind := "nginx 配置"
+		if pv.Replace {
+			kind = "JumpBoard 备份"
+		}
+		ui.Text(c, "剪贴板内容是 "+kind).FontSize(NoteSize).TextColor(t.FG2)
+		ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
+			Background(t.Surface2).Border(1, t.Border).Children(func() {
+			ui.Text(c, pv.Detail).FontSize(NoteSize).TextColor(t.FG).Wrap()
+		})
+		if pv.Replace {
+			ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
+				FontSize(CaptionSize).TextColor(t.Warning).Wrap()
+		} else {
+			ui.Text(c, "与现有规则合并，只新增，不改动已有的映射。").
+				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+		}
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.CancelPasteImport()
 			}
-			ui.Text(c, "剪贴板内容是 "+kind).FontSize(NoteSize).TextColor(t.FG2)
-			ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
-				Background(t.Surface2).Border(1, t.Border).Children(func() {
-				ui.Text(c, pv.Detail).FontSize(NoteSize).TextColor(t.FG).Wrap()
-			})
+			// Replacing everything is the destructive path, so its
+			// button answers in the danger color; either way one
+			// button is built, so the click finds it. The label names
+			// the click, which is the same wherever the preview came
+			// from — the clipboard or a dropped file.
+			var btn ui.Element
 			if pv.Replace {
-				ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
-					FontSize(CaptionSize).TextColor(t.Warning).Wrap()
+				btn = DangerButton(c, t, "导入").Label("确认导入")
 			} else {
-				ui.Text(c, "与现有规则合并，只新增，不改动已有的映射。").
-					FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+				btn = ui.PrimaryButton(c, "导入").Label("确认导入")
 			}
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Clicked() {
-					a.CancelPasteImport()
-				}
-				// Replacing everything is the destructive path, so its
-				// button answers in the danger color; either way one
-				// button is built, so the click finds it. The label names
-				// the click, which is the same wherever the preview came
-				// from — the clipboard or a dropped file.
-				var btn ui.Element
-				if pv.Replace {
-					btn = DangerButton(c, t, "导入").Label("确认导入")
-				} else {
-					btn = ui.PrimaryButton(c, "导入").Label("确认导入")
-				}
-				if btn.Clicked() {
-					a.RunBackground(a.ConfirmPasteImport)
-				}
-			})
+			if btn.Clicked() {
+				a.RunBackground(a.ConfirmPasteImport)
+			}
 		})
 	})
 	if !open {

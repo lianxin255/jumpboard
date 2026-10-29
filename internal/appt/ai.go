@@ -160,60 +160,10 @@ func (a *App) diagClient() *ai.Client {
 	return a.aiClient().ForModel(a.AIDiagModel())
 }
 
-// aiDraftsMax is how many drafts one sentence may produce.
-const aiDraftsMax = 5
-
 // AIDraft is one proposed mapping and what the model said about it.
 type AIDraft struct {
 	Mapping     model.Mapping
 	Explanation string
-}
-
-// AskAIMulti turns one sentence into several drafts at once.
-//
-// Every draft stays a draft: the caller lists them, and adopting one
-// opens the form prefilled — the same validation a hand-typed mapping
-// goes through. Nothing here stores anything. A draft so wrong that
-// Mapping refuses it is dropped with a note rather than shown as a card
-// whose adopt button could only fail; when every draft is dropped, that
-// is an error the panel shows.
-func (a *App) AskAIMulti(sentence string) (note string, drafts []AIDraft, err error) {
-	if !a.AIReady() {
-		return "", nil, fmt.Errorf("还没有配置 AI 服务，请先在设置里填写")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	list, err := a.aiClient().DraftMulti(ctx, sentence, aiDraftsMax)
-	if err != nil {
-		a.Log.Warn("AI 生成失败: %v", err)
-		return "", nil, err
-	}
-	var dropped []string
-	for _, d := range list {
-		m, explanation, mErr := d.Mapping()
-		if mErr != nil {
-			dropped = append(dropped, mErr.Error())
-			continue
-		}
-		drafts = append(drafts, AIDraft{Mapping: m, Explanation: explanation})
-	}
-	if len(drafts) == 0 {
-		return "", nil, fmt.Errorf("模型没有给出可用的草稿")
-	}
-	if len(dropped) > 0 {
-		note = fmt.Sprintf("已丢弃 %d 条不完整的草稿：%s", len(dropped), strings.Join(dropped, "；"))
-	}
-	if len(list) == aiDraftsMax {
-		// The list is capped at five before it travels back, so this is
-		// either exactly five or the first five of more.
-		if note != "" {
-			note += "\n"
-		}
-		note += "草稿最多保留 5 条"
-	}
-	a.Log.Info("AI 生成了 %d 条草稿", len(drafts))
-	return note, drafts, nil
 }
 
 // ProbeAI checks the endpoint with one small request.

@@ -187,7 +187,7 @@ type App struct {
 	// The AI interpretation: interpretBusy while the request is out,
 	// interpretErr when it failed, interpretation once it landed.
 	// interpretTarget names the file, interpretSource says which entry
-	// asked ("import", "logs" or "panel"), so the card draws where the
+	// asked ("import" or "logs"), so the card draws where the
 	// question came from.
 	interpretBusy      bool
 	interpretStreaming bool
@@ -255,9 +255,6 @@ type App struct {
 	// quieter: the engine still counts, the detail popover simply stops
 	// showing it.
 	showTraffic bool
-
-	// The last draft the model proposed, kept for the AI panel.
-	lastAIDraft *model.Mapping
 }
 
 // Confirm is a question the user must answer before an action runs.

@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,29 @@ func TestOpenAtLoginSwitch(t *testing.T) {
 	})
 	if !a.OpenAtLogin() {
 		t.Error("the switch should read on")
+	}
+}
+
+// TestOpenAtLoginSwitchFailureShowsError refuses the desktop registration and
+// checks that the switch reports the failure instead of staying silent.
+func TestOpenAtLoginSwitchFailureShowsError(t *testing.T) {
+	a := testApp(t)
+	a.OnOpenAtLogin = func(bool) error { return errors.New("desktop unavailable") }
+	tt := tester(t, a, 1200, 760)
+
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("开机自启动"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("设置开机自启失败：desktop unavailable") {
+		t.Fatalf("the login-item failure should be visible: %v", tt.Texts())
+	}
+	if a.OpenAtLogin() {
+		t.Error("a failed registration should leave the switch off")
 	}
 }
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -37,10 +38,9 @@ func (v *View) confImportBar(c *ui.Context, t Tokens, busy bool) {
 }
 
 // interpretSection draws the interpretation card for one source — the
-// import bar, the logs page or the AI panel — in the diagnosis card's
-// shape: read-only text, a fold button, and nothing that executes. It
-// draws only for the source that asked, so the answer lands where the
-// question was pressed.
+// import bar or the logs page — in the diagnosis card's shape: read-only
+// text, a fold button, and nothing that executes. It draws only for the
+// source that asked, so the answer lands where the question was pressed.
 func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 	a := v.App
 	busy, errText, interp, target, src := a.Interpretation()
@@ -80,6 +80,32 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 			})
 		})
 	})
+}
+
+// interpretFilePicker asks for one configuration or log — an external
+// nginx's error.log, a hand-written conf — and hands it to the
+// interpretation on the background goroutine: reading the file is disk
+// work no frame should wait on. The answer lands on the logs page's card,
+// where the 解读文件… button that opened the picker lives.
+func (v *View) interpretFilePicker() {
+	a := v.App
+	// A nil hook reads as a canceled dialog, the way importBackup reads it.
+	if a.OpenDialog == nil {
+		return
+	}
+	paths, err := a.OpenDialog(mygo.OpenDialogOptions{
+		Title:   "解读文件",
+		Filters: []mygo.FileFilter{{Name: "配置与日志", Extensions: []string{"conf", "log", "txt"}}},
+	})
+	if err != nil {
+		a.Fail("打开文件选择器失败：%v", err)
+		return
+	}
+	if len(paths) == 0 {
+		return
+	}
+	path := paths[0]
+	a.RunBackground(func() error { return a.InterpretFile("", path) })
 }
 
 // interpretBody draws the interpretation itself: the markdown document

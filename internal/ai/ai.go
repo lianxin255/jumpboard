@@ -354,6 +354,7 @@ func New(s Settings) *Client {
 	httpClient := &http.Client{
 		Timeout:       timeout,
 		CheckRedirect: sameOriginOnly,
+		Transport:     plainCompletionTransport{base: http.DefaultTransport},
 	}
 	c := &Client{settings: s, http: httpClient}
 	if strings.TrimSpace(s.BaseURL) != "" {
@@ -468,6 +469,12 @@ func (c *Client) postChatMsgs(ctx context.Context, msgs []openai.ChatCompletionM
 	if err != nil {
 		return "", mapOpenAIError(err)
 	}
+	return chatCompletionContent(resp, jsonFormat)
+}
+
+// chatCompletionContent reads the one content slot shared by one-shot
+// responses and gateways that answer a stream request with plain JSON.
+func chatCompletionContent(resp openai.ChatCompletionResponse, jsonFormat bool) (string, error) {
 	if len(resp.Choices) == 0 {
 		return "", errors.New("AI 服务没有返回内容")
 	}

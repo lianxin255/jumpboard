@@ -63,37 +63,38 @@ func TestPostChatStreamDeliversDeltas(t *testing.T) {
 	}
 }
 
-// TestPostChatAutoFallsBackToOneShot checks the gateway that ignores
-// stream:true and answers a normal JSON completion: the streaming attempt
-// reads it as an empty stream — no error, and no text either — so
-// postChatAuto retries once through postChat, and the caller sees the
-// one-shot result without a single delta on the way.
-func TestPostChatAutoFallsBackToOneShot(t *testing.T) {
+// TestPostChatAutoUsesPlainJSONResponse checks the gateway that ignores
+// stream:true and answers a normal JSON completion: the auto path decodes
+// that first response itself instead of repeating the model request.
+func TestPostChatAutoUsesPlainJSONResponse(t *testing.T) {
+	calls := 0
 	srv := fakeLLM(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(chatReply("```json\n{\"ok\":true}\n```"))
 	})
 	c := New(Settings{BaseURL: srv.URL, Model: "test"})
 
+	// The low-level stream reader keeps its old, narrow contract; the auto
+	// path owns compatibility with a non-SSE gateway.
 	if text, err := c.postChatStream(context.Background(), "s", "u", nil); err != nil || text != "" {
-		// A JSON body is not an event stream; the library's reader ends it
-		// at once, which is what makes the caller fall back rather than
-		// show an error of its own.
 		t.Fatalf("the stream attempt should end empty without an error: text=%q err=%v", text, err)
 	}
-
+	beforeAuto := calls
 	deltas := 0
 	text, err := c.postChatAuto(context.Background(), "s", "u", func(string) { deltas++ })
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The fence is gone: the answer went through postChat's extractJSON,
-	// not the raw stream text.
+	if calls-beforeAuto != 1 {
+		t.Fatalf("auto path made %d requests, want exactly 1", calls-beforeAuto)
+	}
+	// The fence is gone just as it is on the ordinary one-shot JSON path.
 	if text != `{"ok":true}` {
 		t.Errorf("text = %q, want the extracted JSON", text)
 	}
 	if deltas != 0 {
-		t.Errorf("deltas = %d, want 0 on the fallback path", deltas)
+		t.Errorf("deltas = %d, want 0 for a non-SSE response", deltas)
 	}
 }
 

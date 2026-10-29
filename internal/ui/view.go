@@ -97,8 +97,6 @@ type View struct {
 	termNewKind int
 	termInit    sync.Once
 
-	ai aiState
-
 	// Last status shown as a toast, so that it is not added every frame.
 	shownStatusAt   time.Time
 	shownStatusText string
@@ -336,10 +334,15 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 	})
 }
 
-// engineFooter is the rail's foot: the engine's state as one compact row —
-// the dot, the word, and the mode while it runs — with the start or stop
-// control as an icon button beside it. The words stay the ones the tests
-// click; the stop keeps its confirmation.
+// engineFooter is the rail's foot: the forwarding service's one master
+// control. The row names the service — its title, its state as a word,
+// the engine it runs on — and the switch beside it is the whole control:
+// on while the engine runs, off while it is stopped, derived from the
+// engine's real state every frame, so the switch never remembers a state
+// the service left a frame ago. Turning it off stays the destructive act
+// it always was — the confirmation asks first, with the words the tests
+// click — while a busy window holds the switch; turning it on applies
+// the rules, which is what a start is.
 func (v *View) engineFooter(c *ui.Context, t Tokens, engine string, busy bool) {
 	a := v.App
 	running := engine == "running"
@@ -352,26 +355,26 @@ func (v *View) engineFooter(c *ui.Context, t Tokens, engine string, busy bool) {
 			}
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
 			ui.Column(c).Gap(0).Grow(1).Children(func() {
-				ui.Text(c, engineLabel(engine)).FontSize(NoteSize).Bold().TextColor(t.FG)
-				if running {
-					ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
-				}
+				ui.Text(c, "转发服务").FontSize(NoteSize).Bold().TextColor(t.FG)
+				ui.Text(c, engineLabel(engine)).FontSize(CaptionSize).TextColor(dot)
+				ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
 			})
-			if running {
-				stop := IconButton(c, t, icons.Stop, t.Danger, busy).
-					Label("停止").Tooltip("停止引擎，所有转发立即失效").Disabled(busy)
-				if stop.Clicked() {
+			// The label names the switch alone — the title above already
+			// says 转发服务, and two elements with one name would make the
+			// click ambiguous, the whitelist master switch's rule.
+			on := running
+			sw := CompactSwitch(c, &on).Label("转发服务开关").
+				Tooltip("开启按当前配置转发；关闭前会确认，关闭后所有转发立即失效").
+				Disabled(busy)
+			if sw.Changed() {
+				if running {
 					a.Ask(&appt.Confirm{
 						Title: "停止引擎",
 						Body:  "停止后所有转发规则立即失效，外部无法访问。",
 						Label: "停止", Destructive: true,
 						Run: a.StopEngine,
 					})
-				}
-			} else {
-				start := IconButton(c, t, icons.Start, t.Accent, busy).
-					Label("启动").Tooltip("启动内置引擎，按当前配置开始转发").Disabled(busy)
-				if start.Clicked() {
+				} else {
 					a.RunBackground(a.StartEngine)
 				}
 			}
@@ -462,30 +465,21 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	}
 	page.Children(func() {
 
-		// The page's two tool groups. The first is the page's identity:
-		// which scene's rules, and the way to a new one. The scene chips
-		// grow and wrap on the left; the search and 新建映射 hold the
-		// right, the primary action the page has.
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		// The page's two tool rows, one meaning each. The first row is the
+		// page's identity and its ways forward: which scene's rules, the
+		// search through them, and every door that creates — a blank form,
+		// a template, a paste, the AI's drafts — with 新建映射, the primary
+		// action, last. The second is only what narrows the table: the
+		// status segments, the group chips, the AI filter. Creation and
+		// filtering never share a row, so a tool sits where its meaning
+		// is. Both rows wrap, so a narrow window moves a row's own tools
+		// onto its next line before the table's addresses give way.
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
 			v.workspaceChips(c, t, busy)
 			if len(mappings) > 0 {
 				v.searchBox(c, t)
-				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
-					Tooltip("新建一条映射（⌘N）").Clicked() {
-					a.OpenForm(nil)
-				}
-			}
-		})
-		// The second is everything that narrows the table or builds a row
-		// another way: the status and group filters, then the template,
-		// paste and AI doors. The row wraps on a narrow window, so the
-		// tools give way before the table's addresses do.
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
-			if len(mappings) > 0 {
 				// No fixed width: the control sizes to its labels. A width
 				// narrower than the CJK labels overlapped the button beside it.
-				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
-				v.groupChips(c, t, groups)
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
@@ -494,7 +488,21 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					a.RunBackground(a.StartPasteImport)
 				}
 			}
+			// The AI's door draws with an empty page too: a first run can
+			// ask for its first rules in one sentence.
 			v.aiEntry(c, t)
+			if len(mappings) > 0 {
+				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+					Tooltip("新建一条映射（⌘N）").Clicked() {
+					a.OpenForm(nil)
+				}
+			}
+		})
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
+			if len(mappings) > 0 {
+				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
+				v.groupChips(c, t, groups)
+			}
 			v.aiFilterBar(c, t)
 		})
 		// The line a filter ask leaves behind: its error, or its rationale
@@ -612,7 +620,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					v.healthCell(c, t, m)
 				case 4:
 					on := m.Enabled
-					if ui.Switch(c, &on).Label("启用-" + m.Name).Changed() {
+					if CompactSwitch(c, &on).Label("启用-" + m.Name).Changed() {
 						id := m.ID
 						a.RunBackground(func() error { return a.SetMappingEnabled(id, on) })
 					}
@@ -804,6 +812,26 @@ func (v *View) nameCell(c *ui.Context, t Tokens, m model.Mapping, chosenFiltered
 // columns rebalance to give the relation what remains.
 const forwardNarrowW = float32(1150)
 
+// localListenLabel is the one address rule shared by saved rows and draft
+// cards: a blank web port takes the protocol default, and a configured
+// server name is more useful than the loopback placeholder.
+func localListenLabel(m model.Mapping) (label string, defaultPort bool) {
+	port := m.ListenPort
+	defaultPort = port == 0 && m.IsHTTP()
+	if port == 0 {
+		if m.Protocol == model.HTTPS {
+			port = 443
+		} else {
+			port = 80
+		}
+	}
+	host := "127.0.0.1"
+	if m.ServerNames != "" {
+		host = m.ServerNames
+	}
+	return fmt.Sprintf("%s:%d", host, port), defaultPort
+}
+
 // forwardCell shows what the mapping listens on and where it goes: the
 // forwarding relation is the row's hero — the mono pair the row is for,
 // at the row title's size on a window that has room, stacked one per
@@ -813,21 +841,9 @@ const forwardNarrowW = float32(1150)
 // the row has a group or the traffic display is on — so a row's height
 // never changes as traffic arrives.
 func (v *View) forwardCell(c *ui.Context, t Tokens, m model.Mapping, narrow bool) {
-	port := m.ListenPort
-	blankPort := port == 0 && m.IsHTTP()
-	if port == 0 {
-		if m.Protocol == model.HTTPS {
-			port = 443
-		} else {
-			port = 80
-		}
-	}
+	localLabel, blankPort := localListenLabel(m)
 	info := v.App.RuleInfo(m.ID)
 	a := v.App
-	localLabel := fmt.Sprintf("127.0.0.1:%d", port)
-	if m.ServerNames != "" {
-		localLabel = fmt.Sprintf("%s:%d", m.ServerNames, port)
-	}
 	// The address is what someone shares, so a click puts it on the
 	// clipboard rather than making them select the text by hand. A local
 	// longer than the column keeps its whole self in the tooltip and the
