@@ -10,43 +10,43 @@ import (
 
 // Shape tokens keep panels, modals and chips consistent across pages.
 // The toolkit theme uses Radius/Spacing 10/6; these are for hand-drawn boxes.
-// The vocabulary is deliberately small: 14 for the window, floating bars,
-// panels, modals and the big empty-state cards; 10 for controls; 6 for
-// chips and badges. Pill (a capsule taller than its radius) and tiny
-// functional marks (the nav rail, status dots) keep their own values.
+// The plan's vocabulary: 12 for the window and modals, 10 for panels and
+// floating bars, 7 for controls, 5 for chips and badges. A tighter set of
+// corners keeps a dense workbench from reading as a stack of cards; the
+// window keeps the largest radius because it is chrome, not content.
 // SidebarW is the frosted rail's width. Page pads and gaps sit on the
-// 4/8 grid: 20 and 32 vertically and horizontally, 14 between blocks.
+// 4/8 grid: 20 and 28 horizontally, 20 vertically, 14 between blocks.
 const (
-	RadiusWindow = float32(14)
-	RadiusModal  = float32(14)
-	RadiusFloat  = float32(14)
-	RadiusPanel  = float32(14)
-	RadiusButton = float32(10)
-	RadiusChip   = float32(6)
-	RadiusBadge  = float32(6)
+	RadiusWindow = float32(12)
+	RadiusModal  = float32(12)
+	RadiusFloat  = float32(10)
+	RadiusPanel  = float32(10)
+	RadiusButton = float32(7)
+	RadiusChip   = float32(5)
+	RadiusBadge  = float32(5)
 	RadiusTiny   = float32(2)
-	RadiusPill   = float32(12)
+	RadiusPill   = float32(11)
 
-	SidebarW = float32(216)
+	SidebarW = float32(208)
 	PagePadY = float32(20)
-	PagePadX = float32(32)
+	PagePadX = float32(28)
 	PageGap  = float32(14)
 )
 
 // Type tokens: the sizes text falls into, so a page cannot grow a ninth
-// orphan size. Title heads the window bar — 20, the plan's page title,
-// not the 24 a dialog never had room for — Head a dialog or a section,
-// RowTitle is the row's own title size, Body is the toolkit's own default
-// for controls and prose, Note is the secondary line beside Body, and
-// Caption is metadata and the small controls of a row — timestamps,
-// chips, and the small buttons lists carry.
+// orphan size. Title heads the window bar — 22, the plan's page title —
+// Head a dialog or a section, RowTitle is the row's own title size, Body
+// is the toolkit's own default for controls and prose, Note is the
+// secondary line beside Body, and Caption is metadata and the small
+// controls of a row — timestamps, chips, and the small buttons lists
+// carry.
 const (
-	TitleSize    = float32(20)
-	HeadSize     = float32(16)
+	TitleSize    = float32(22)
+	HeadSize     = float32(15)
 	RowTitleSize = float32(14)
 	BodySize     = float32(13)
 	NoteSize     = float32(12)
-	CaptionSize  = float32(12)
+	CaptionSize  = float32(11)
 )
 
 // FontMono is the family addresses, commands, logs and keys draw in: a

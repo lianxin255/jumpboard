@@ -63,7 +63,7 @@ func TestAIChatImportsDraftsIntoWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the reply and its preview", func() bool {
-		return tt.HasText("两条映射如下") && tt.HasText("规则草稿（2 条）") &&
+		return tt.HasText("两条映射如下") && tt.HasText("待审草稿（2 条）") &&
 			tt.HasText("内网 MySQL") && tt.HasText("导入到当前场景")
 	})
 	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
@@ -99,7 +99,7 @@ func TestAIChatImportsDraftsIntoWorkspace(t *testing.T) {
 	}
 	// The preview is gone with its drafts, and the conversation stays.
 	tt.Frame()
-	if tt.HasText("规则草稿") {
+	if tt.HasText("待审草稿") {
 		t.Errorf("the preview should leave with its drafts: %v", tt.Texts())
 	}
 	if !tt.HasText("两条映射如下") {
@@ -137,7 +137,7 @@ func TestAIChatCapsDraftsWithNote(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "five cards and the cap's note", func() bool {
-		return tt.HasText("规则草稿（5 条）") && tt.HasText("仅保留前 5 条")
+		return tt.HasText("待审草稿（5 条）") && tt.HasText("仅保留前 5 条")
 	})
 	for _, want := range []string{"服务一", "服务五"} {
 		if !tt.HasText(want) {
@@ -180,7 +180,7 @@ func TestAIChatAllDraftsDroppedShowsNote(t *testing.T) {
 	if !tt.HasText("（这条回复只有配置草稿）") {
 		t.Errorf("the bubble should still say the reply held drafts: %v", tt.Texts())
 	}
-	if tt.HasText("规则草稿") || tt.HasText("导入到当前场景") {
+	if tt.HasText("待审草稿") || tt.HasText("导入到当前场景") {
 		t.Errorf("no preview should show without usable drafts: %v", tt.Texts())
 	}
 	if list, _ := a.Store.ListMappings(a.ActiveWorkspace()); len(list) != 0 {
@@ -270,7 +270,7 @@ func TestAIChatHistoricalDraftBubbleDoesNotUseLatestPreview(t *testing.T) {
 	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, tt, "the second reply's preview", func() bool { return tt.HasText("规则草稿（2 条）") })
+	waitFor(t, tt, "the second reply's preview", func() bool { return tt.HasText("待审草稿（2 条）") })
 	tt.Frame()
 	if tt.HasText("见下方预览") {
 		t.Errorf("a historical bubble must not borrow the latest preview: %v", tt.Texts())
@@ -306,7 +306,7 @@ func TestAIChatComposerStaysOnScreen(t *testing.T) {
 		// The longest page: a reply that carries drafts, so the list has
 		// everything a conversation can pile onto it.
 		waitFor(t, tt, "the reply and its preview", func() bool {
-			return tt.HasText("规则草稿（2 条）") && tt.HasText("导入到当前场景")
+			return tt.HasText("待审草稿（2 条）") && tt.HasText("导入到当前场景")
 		})
 		tt.Frame()
 
@@ -364,7 +364,7 @@ func TestAIChatComposerHoldsUnderFiveCards(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitFor(t, tt, "the capped preview", func() bool {
-			return tt.HasText("规则草稿（5 条）") && tt.HasText("仅保留前 5 条")
+			return tt.HasText("待审草稿（5 条）") && tt.HasText("仅保留前 5 条")
 		})
 		tt.Frame()
 

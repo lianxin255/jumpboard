@@ -111,7 +111,7 @@ func TestAIMappingWalkthrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the draft card", func() bool {
-		return tt.HasText("规则草稿（1 条）") && tt.HasText("面板里的 MySQL")
+		return tt.HasText("待审草稿（1 条）") && tt.HasText("面板里的 MySQL")
 	})
 
 	// Filling the draft in opens the ordinary form over the chat page —

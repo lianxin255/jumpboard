@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lianxin255/jumpboard/internal/model"
+	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
 // The Phase 1 mapping workbench: the forwarding relation as the row's
@@ -96,9 +97,11 @@ func TestMappingRowActionsFitWindow(t *testing.T) {
 			if !ok {
 				t.Fatalf("the delete button is missing: %v", tt.Texts())
 			}
-			// The page's right pad is 32; the table's last column ends there.
-			if right := del.X + del.W; right > float32(size.width-32)+1 {
-				t.Errorf("删除 is clipped: right edge %.0f past the table's %.0f", right, float32(size.width-32))
+			// The page's right pad is PagePadX; the table's last column
+			// ends there.
+			pad := float32(njui.PagePadX)
+			if right := del.X + del.W; right > float32(size.width)-pad+1 {
+				t.Errorf("删除 is clipped: right edge %.0f past the table's %.0f", right, float32(size.width)-pad)
 			}
 			if right := edit.X + edit.W; right > del.X {
 				t.Errorf("编辑 (%.0f) should sit left of 删除 (%.0f)", edit.X+edit.W, del.X)

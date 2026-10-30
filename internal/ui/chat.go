@@ -57,8 +57,88 @@ func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 			return
 		}
 
-		v.chatList(c, t, turns, partial, streaming, busy, errText, note, drafts)
-		v.chatComposer(c, t, busy)
+		// The plan's two columns: the conversation on the left, the
+		// drafts a reply proposed on the right, so what the model said and
+		// what it proposes to write are read side by side — the drafts no
+		// longer scroll away under later turns. The right column shows
+		// only while there is something to review; the conversation takes
+		// the room back when there is not. A narrow window keeps the one
+		// column the page has always had, the preview riding the list.
+		w, _ := c.Size()
+		if len(drafts) == 0 || w < chatTwoColumnW {
+			v.chatList(c, t, turns, partial, streaming, busy, errText, note, drafts)
+			v.chatComposer(c, t, busy)
+			return
+		}
+
+		// Stretch: both columns take the page's whole height, so the
+		// conversation's panel and the draft column end on the same line
+		// — the composer rides the bottom of the page, not the middle.
+		ui.Row(c).Grow(1).MinWidth(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
+			// The conversation's column carries the panel and the composer;
+			// the panel grows into the room the composer leaves, which is
+			// what keeps the scroll bounded and the field on screen.
+			ui.Column(c).Grow(1).MinWidth(0).Gap(12).Children(func() {
+				v.chatList(c, t, turns, partial, streaming, busy, errText, note, nil)
+				v.chatComposer(c, t, busy)
+			})
+			v.chatDraftColumn(c, t, drafts, note, busy)
+		})
+	})
+}
+
+// chatTwoColumnW is the window width from which the chat page splits into
+// the conversation and the draft column. Below it the two would each be
+// too narrow to read an address on, so the preview stays in the list.
+const chatTwoColumnW = float32(1120)
+
+// chatDraftColumn is the right column: the drafts waiting for a decision,
+// their head, and the one import that writes them into the current scene.
+// It scrolls on its own, so a five-card reply never pushes the import out
+// of reach — the fix the in-list preview needed and never had.
+func (v *View) chatDraftColumn(c *ui.Context, t Tokens, drafts []appt.AIDraft, note string, busy bool) {
+	ui.Column(c).Width(360).Shrink(0).Gap(10).Children(func() {
+		panelShell(c, t).Grow(1).MinHeight(200).Children(func() {
+			ui.Column(c).Fill().Children(func() {
+				// The column's head says what the cards are and what they
+				// are not: the same words the in-list preview carries, in
+				// the one place this column has for them.
+				ui.Column(c).Gap(2).Padding(12, 14).
+					BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Textf(c, "待审草稿（%d 条）", len(drafts)).FontSize(BodySize).Bold().TextColor(t.FG)
+					})
+					ui.Text(c, "审阅、修改或丢弃，再导入当前场景").
+						FontSize(CaptionSize).TextColor(t.Muted)
+				})
+				ui.Scroll(c).Grow(1).Children(func() {
+					ui.Column(c).Gap(8).Padding(10).Children(func() {
+						for i, d := range drafts {
+							v.chatDraftCard(c, t, d, i, busy)
+						}
+					})
+				})
+				// The foot: the note the reply carried, and the one import.
+				ui.Column(c).Gap(6).Padding(10, 12).
+					BorderWidth(1, 0, 0, 0).BorderColor(t.Hair).Children(func() {
+					if note != "" {
+						ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+					}
+					ui.Textf(c, "导入到当前场景「%s」", v.App.ActiveWorkspaceName()).
+						FontSize(CaptionSize).TextColor(t.Muted)
+					if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).FillWidth().
+						Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
+						n := len(drafts)
+						v.App.Ask(&appt.Confirm{
+							Title: "导入映射",
+							Body:  "把 " + strconv.Itoa(n) + " 条草稿写入当前场景，端口冲突会整批拒绝。导入后点「应用配置」才会生效。",
+							Label: "导入",
+							Run:   v.App.ImportChatDrafts,
+						})
+					}
+				})
+			})
+		})
 	})
 }
 
@@ -200,7 +280,7 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 					})
 				})
 				ui.Column(c).Gap(2).Grow(1).Children(func() {
-					ui.Textf(c, "规则草稿（%d 条）", len(drafts)).FontSize(NoteSize).Bold().TextColor(t.FG)
+					ui.Textf(c, "待审草稿（%d 条）", len(drafts)).FontSize(NoteSize).Bold().TextColor(t.FG)
 					ui.Text(c, "AI 按描述生成的转发规则：丢弃不要的，把单条填进表单改，或整批导入当前场景").
 						FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 				})

@@ -24,7 +24,7 @@ func TestAIMultiDraftFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "both drafts", func() bool {
-		return tt.HasText("规则草稿（2 条）") && tt.HasText("内网 MySQL") && tt.HasText("内网 Redis")
+		return tt.HasText("待审草稿（2 条）") && tt.HasText("内网 MySQL") && tt.HasText("内网 Redis")
 	})
 	// The cards read as the rules they would become: the forwarding
 	// relation the workbench's rows carry, not a bare sentence.
