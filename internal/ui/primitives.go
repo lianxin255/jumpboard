@@ -18,31 +18,31 @@ import (
 // plain button's row takes and none of it while disabled. ink is the
 // glyph's color, the danger red of a stop or the accent of a start.
 func IconButton(c *ui.Context, t Tokens, icon *ui.SVG, ink ui.Color, disabled bool) ui.Element {
-	btn := ui.ButtonBase(c).Size(28, 28).Radius(RadiusButton)
+	btn := ui.ButtonBase(c).Size(IconButtonSize, IconButtonSize).Radius(RadiusButton)
 	switch {
 	case disabled:
 		ink = t.Meta
+	case btn.Pressed():
+		btn.Background(t.Surface2)
+		ink = t.FG
 	case btn.Hovered():
 		btn.Background(t.Surface2)
 		ink = t.FG
 	}
 	btn.Children(func() {
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Icon(c, icon).Size(14, 14).TextColor(ink)
+			ui.Icon(c, icon).Size(16, 16).TextColor(ink)
 		})
 	})
 	return btn
 }
 
-// CompactSwitch is the app's switch at its compact size: 40×22 with the
-// capsule radius. The toolkit's own switch scales with the theme's
-// Spacing, which this app raises to 6, so the stock control draws 54×30 —
-// as tall as the table rows and the settings lines it rides. The compact
-// one changes only the geometry: the switch's whole behavior — Label,
-// Changed, OnChange, the click target the track itself is — stays the
-// toolkit's, and the wording stays the caller's.
+// CompactSwitch is the app's switch at its compact size: 36×22 with the
+// capsule radius. The off track keeps its own surface and a visible
+// border, so a disabled-looking gray track is not the only off state; the
+// toolkit's switch draws its knob and focus behavior as before.
 func CompactSwitch(c *ui.Context, on *bool) ui.Element {
-	return ui.Switch(c, on).Size(40, 22).Radius(11)
+	return ui.Switch(c, on).Size(SwitchWidth, SwitchHeight).Radius(SwitchHeight / 2)
 }
 
 // dialog shows a modal whose panel is the one surface it draws.
@@ -91,8 +91,16 @@ func statusOutline(col ui.Color) (fill, line ui.Color) {
 }
 
 // chipQuiet is an unselected chip's face: the glass fill and the plain
-// border, the ink the caller already gave it.
+// border, the ink the caller already gave it. Hover and press share the
+// same quiet neutral steps as every other control; selection is a
+// different state, not a stronger hover.
 func chipQuiet(e ui.Element, t Tokens) ui.Element {
+	if e.Pressed() {
+		return e.Background(t.Surface2).Border(1, t.Border)
+	}
+	if e.Hovered() {
+		return e.Background(t.Surface2).Border(1, t.Border)
+	}
 	return e.Background(t.Chip).Border(1, t.Border)
 }
 

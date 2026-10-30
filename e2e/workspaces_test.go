@@ -60,15 +60,17 @@ func TestWorkspaceSwitchRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The chips row every scene, and the table shows the active one's rule.
-	waitFor(t, tt, "the 场景 chips", func() bool {
-		return tt.HasText("场景 家里") && tt.HasText("场景 默认")
-	})
+	// The closed selector shows the active scene; its menu carries the rest.
+	waitFor(t, tt, "the default rule and scene selector", func() bool { return tt.HasText("公司规则") && tt.HasText("当前场景") })
 	if !tt.HasText("公司规则") {
 		t.Fatalf("the default scene should be shown: %v", tt.Texts())
 	}
 
-	// Switch to 家里 through the chip.
+	// Switch to 家里 through the selector's menu.
+	if err := tt.Click("当前场景"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	if err := tt.Click("场景 家里"); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,11 @@ func TestWorkspaceSwitchRoundtrip(t *testing.T) {
 		t.Error("公司's rule should have stopped when the scene left it")
 	}
 
-	// And back.
+	// And back, through the selector again.
+	if err := tt.Click("当前场景"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	if err := tt.Click("场景 默认"); err != nil {
 		t.Fatal(err)
 	}

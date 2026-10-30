@@ -32,8 +32,8 @@ func TestSidebarRailWidth(t *testing.T) {
 
 // TestEngineFooterMasterSwitch checks the rail's foot as the forwarding
 // service's master control: the row names the service, its state and its
-// engine, and the switch is the compact one — 40×22, not the 54×30 the
-// theme's spacing drew — whole inside the rail, right of the row's words.
+// engine, and the switch follows the shared 36×22 control token — whole
+// inside the rail, right of the row's words.
 func TestEngineFooterMasterSwitch(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1280, 800)
@@ -43,11 +43,11 @@ func TestEngineFooterMasterSwitch(t *testing.T) {
 	if !ok {
 		t.Fatalf("the master switch is missing: %v", tt.Texts())
 	}
-	if d := sw.W - 40; d < -1 || d > 1 {
-		t.Errorf("the master switch should be the compact 40 wide, got %.0f", sw.W)
+	if d := sw.W - njui.SwitchWidth; d < -1 || d > 1 {
+		t.Errorf("the master switch should be the standard %.0f wide, got %.0f", njui.SwitchWidth, sw.W)
 	}
-	if d := sw.H - 22; d < -1 || d > 1 {
-		t.Errorf("the master switch should be the compact 22 tall, got %.0f", sw.H)
+	if d := sw.H - njui.SwitchHeight; d < -1 || d > 1 {
+		t.Errorf("the master switch should be the standard %.0f tall, got %.0f", njui.SwitchHeight, sw.H)
 	}
 	// The rail is 216 + its border; the switch sits inside it, right of
 	// the service's name.
@@ -354,10 +354,10 @@ func TestWindowHeaderReplacesPageTitles(t *testing.T) {
 	}
 }
 
-// TestSceneChipHierarchy checks the chips' weight of choice: the active
-// scene carries the accent itself, solid, while the scenes not in use
-// stay the quiet glass the row's 管理 chip keeps.
-func TestMappingSceneChipHierarchy(t *testing.T) {
+// TestMappingSceneSelect checks the complete scene selector: the closed
+// trigger shows the active scene, the menu names every scene with its rule
+// count, and management remains a separate action.
+func TestMappingSceneSelect(t *testing.T) {
 	a := testApp(t)
 	if _, err := a.Store.CreateWorkspace("家里"); err != nil {
 		t.Fatal(err)
@@ -366,27 +366,24 @@ func TestMappingSceneChipHierarchy(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := tester(t, a, 1200, 760)
-	waitFor(t, tt, "both scene chips", func() bool {
-		return tt.HasText("场景 默认") && tt.HasText("场景 家里")
-	})
+	waitFor(t, tt, "the scene trigger", func() bool { return tt.HasText("当前场景") })
+	trigger, ok := tt.Find("当前场景")
+	if !ok {
+		t.Fatalf("the scene trigger is missing: %v", tt.Texts())
+	}
+	if d := trigger.H - njui.ControlHeight; d < -1 || d > 1 {
+		t.Errorf("the scene selector should be the standard %.0f high, got %.0f", njui.ControlHeight, trigger.H)
+	}
+	if !tt.HasText("默认") || !tt.HasText("管理场景") {
+		t.Errorf("the trigger and its separate management action are missing: %v", tt.Texts())
+	}
+	if err := tt.Click("当前场景"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
-	img := tt.Image()
-	tok := njui.Dark()
-	on, ok := tt.Find("场景 默认")
-	if !ok {
-		t.Fatalf("the active chip is missing: %v", tt.Texts())
-	}
-	// Inside the chip's padding, clear of its text and corners.
-	for _, p := range [][2]int{{int(on.X + 4), int(on.Y + on.H/2)}, {int(on.X + on.W - 4), int(on.Y + on.H/2)}} {
-		if got := img.RGBAAt(p[0], p[1]); !sameColor(got, tok.AccentSoft) {
-			t.Errorf("the active scene chip should carry the accent's wash at %v: got %v", p, got)
+	for _, text := range []string{"场景 默认", "场景 家里", "切换整套映射，当前改动会保留"} {
+		if !tt.HasText(text) {
+			t.Errorf("the open scene menu should show %q: %v", text, tt.Texts())
 		}
-	}
-	quiet, ok := tt.Find("场景 家里")
-	if !ok {
-		t.Fatalf("the quiet chip is missing: %v", tt.Texts())
-	}
-	if got := img.RGBAAt(int(quiet.X+4), int(quiet.Y+quiet.H/2)); !sameColor(got, tok.Chip) {
-		t.Errorf("an unused scene chip should stay glass: got %v", got)
 	}
 }

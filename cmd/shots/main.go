@@ -20,6 +20,10 @@ import (
 	njui "github.com/lianxin255/jumpboard/internal/ui"
 )
 
+// ttClickForShots performs a Tester click from a shot preparation, without
+// exposing the Tester outside the local closure that builds it.
+var ttClickForShots = func(tt *ui.Tester, label string) error { return tt.Click(label) }
+
 // 出图脚本：真数据 + 真视图 + Tester，不依赖窗口。
 func main() {
 	// The app declares Chinese before its first window; the shots do too, so
@@ -91,7 +95,7 @@ func main() {
 		panic(err)
 	}
 
-	shoot := func(name string, page appt.Page, theme appt.ThemeChoice, dark bool, prep func()) {
+	shoot := func(name string, page appt.Page, theme appt.ThemeChoice, dark bool, prep func(*ui.Tester)) {
 		// One app, many shots: overlays from a previous shot must close,
 		// or the next frame draws a dialog nobody asked for.
 		a.CloseForm()
@@ -99,15 +103,18 @@ func main() {
 		a.SetSnapshotView(nil)
 		a.SetPage(page)
 		a.SetTheme(theme)
-		if prep != nil {
-			prep()
-		}
 		tt := ui.NewTester(njui.NewView(a), 1280, 800)
 		tt.SetDark(dark)
 		// A Tester takes its language from the app's, which the shots set
 		// above; without this the toolkit's own strings stay English.
 		tt.SetLocale("zh-Hans")
 		tt.Frame()
+		if prep != nil {
+			// The preparation clicks may open the scene selector or a
+			// dialog; the shot is the frame after that interaction.
+			prep(tt)
+			tt.Frame()
+		}
 		// The access-log shot shows the tab, not the pending bar: the dirty
 		// state was for impl-01, and by now it has been applied away.
 		if name == "impl-03" {
@@ -133,22 +140,27 @@ func main() {
 	// the new-mapping dialog, and the access log. The dirty state is for
 	// the first two; the third applies it away first.
 	shoot("impl-01", appt.PageMappings, appt.ThemeLight, false, nil)
-	shoot("impl-02", appt.PageMappings, appt.ThemeLight, false, func() {
+	shoot("impl-02", appt.PageMappings, appt.ThemeLight, false, func(*ui.Tester) {
 		a.OpenForm(nil)
 	})
 	if err := a.Apply(); err != nil {
 		panic(err)
 	}
-	shoot("impl-03", appt.PageLogs, appt.ThemeLight, false, func() {
+	shoot("impl-03", appt.PageLogs, appt.ThemeLight, false, func(*ui.Tester) {
 		a.SetNginxLogRead(true)
 	})
 	shoot("mappings-dark", appt.PageMappings, appt.ThemeDark, true, nil)
 	shoot("mappings-light", appt.PageMappings, appt.ThemeLight, false, nil)
+	shoot("scene-picker-dark", appt.PageMappings, appt.ThemeDark, true, func(tt *ui.Tester) {
+		if err := ttClickForShots(tt, "当前场景"); err != nil {
+			panic(err)
+		}
+	})
 	shoot("logs-dark", appt.PageLogs, appt.ThemeDark, true, nil)
 	shoot("history-light", appt.PageHistory, appt.ThemeLight, false, nil)
 	shoot("settings-dark", appt.PageSettings, appt.ThemeDark, true, nil)
 	shoot("settings-light", appt.PageSettings, appt.ThemeLight, false, nil)
-	shoot("form-dark", appt.PageMappings, appt.ThemeDark, true, func() {
+	shoot("form-dark", appt.PageMappings, appt.ThemeDark, true, func(*ui.Tester) {
 		a.OpenForm(nil)
 	})
 	// The terminal page with no session open: the kind picker, the create

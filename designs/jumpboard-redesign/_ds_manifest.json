@@ -314,6 +314,13 @@
       "name": "Specific, calm language"
     },
     {
+      "path": "guidelines/control-sizes.html",
+      "group": "Geometry",
+      "viewport": "700x280",
+      "subtitle": "One size contract per control family, no page-specific exceptions",
+      "name": "Control size standards"
+    },
+    {
       "path": "guidelines/elevation.html",
       "group": "Geometry",
       "viewport": "700x160",
@@ -439,6 +446,12 @@
     },
     {
       "name": "--text-inverse",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--switch-thumb",
       "value": "#ffffff",
       "kind": "color",
       "definedIn": "tokens/colors.css"
@@ -637,7 +650,7 @@
     },
     {
       "name": "--canvas",
-      "value": "#161a19",
+      "value": "#151918",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -649,55 +662,55 @@
     },
     {
       "name": "--surface",
-      "value": "#202624",
+      "value": "#222825",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--surface-raised",
-      "value": "#252b29",
+      "value": "#29312d",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--surface-subtle",
-      "value": "#252b29",
+      "value": "#29312d",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--surface-sunken",
-      "value": "#191e1c",
+      "value": "#1a211d",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--surface-hover",
-      "value": "#2d3531",
+      "value": "#343e38",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--surface-pressed",
-      "value": "#353e38",
+      "value": "#414c44",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--text-primary",
-      "value": "#edf0eb",
+      "value": "#f2f4ef",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--text-secondary",
-      "value": "#bdc6bf",
+      "value": "#d0d7d0",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--text-tertiary",
-      "value": "#9ba79f",
+      "value": "#aab6ad",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -708,110 +721,116 @@
       "definedIn": "tokens/colors.css"
     },
     {
+      "name": "--switch-thumb",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
       "name": "--border",
-      "value": "#39423c",
+      "value": "#4a574e",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--border-subtle",
-      "value": "#303833",
+      "value": "#37433b",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--border-strong",
-      "value": "#49554d",
+      "value": "#66766b",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent",
-      "value": "#a2bdf3",
+      "value": "#a7c2f7",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent-hover",
-      "value": "#bdd0f5",
+      "value": "#bfd2f9",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent-pressed",
-      "value": "#d2def7",
+      "value": "#d5e1fb",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent-soft",
-      "value": "#2c3a50",
+      "value": "#2d3e57",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent-softer",
-      "value": "#252f3e",
+      "value": "#253144",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--accent-border",
-      "value": "#445c7e",
+      "value": "#59769e",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--success",
-      "value": "#81cfa1",
+      "value": "#8bd5a9",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--success-soft",
-      "value": "#243b2e",
+      "value": "#254031",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--success-border",
-      "value": "#375943",
+      "value": "#40694e",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--warning",
-      "value": "#e0b97b",
+      "value": "#e6c388",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--warning-soft",
-      "value": "#3d3425",
+      "value": "#413728",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--warning-border",
-      "value": "#5c4b30",
+      "value": "#705b37",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--danger",
-      "value": "#ef9a92",
+      "value": "#f2a49d",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--danger-solid",
-      "value": "#9d3e38",
+      "value": "#a94840",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--danger-solid-hover",
-      "value": "#b14a42",
+      "value": "#bd554c",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -823,43 +842,43 @@
     },
     {
       "name": "--danger-hover",
-      "value": "#f5b2ab",
+      "value": "#f5b9b1",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--danger-soft",
-      "value": "#422d2a",
+      "value": "#472f2c",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--danger-border",
-      "value": "#65413c",
+      "value": "#754941",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--tcp",
-      "value": "#a2bdf3",
+      "value": "#a7c2f7",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--udp",
-      "value": "#c7b3e9",
+      "value": "#cebced",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--http",
-      "value": "#86cec0",
+      "value": "#92d5c6",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--https",
-      "value": "#e0b97b",
+      "value": "#e6c388",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -871,7 +890,7 @@
     },
     {
       "name": "--focus-ring",
-      "value": "rgba(162, 189, 243, .25)",
+      "value": "rgba(167, 194, 247, .3)",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -889,13 +908,13 @@
     },
     {
       "name": "--terminal-text",
-      "value": "#d8e3dc",
+      "value": "#dce7df",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
     {
       "name": "--terminal-muted",
-      "value": "#93a69a",
+      "value": "#a6b9ac",
       "kind": "color",
       "definedIn": "tokens/colors.css"
     },
@@ -1046,6 +1065,48 @@
     },
     {
       "name": "--control-height-large",
+      "value": "36px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-icon-size",
+      "value": "32px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-nav-height",
+      "value": "34px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-chip-height",
+      "value": "26px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-segment-height",
+      "value": "26px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-switch-width",
+      "value": "36px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-switch-height",
+      "value": "22px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-menu-item-height",
       "value": "36px",
       "kind": "spacing",
       "definedIn": "tokens/geometry.css"

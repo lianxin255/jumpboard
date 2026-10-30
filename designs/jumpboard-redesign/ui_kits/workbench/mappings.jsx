@@ -1,18 +1,16 @@
 const { Button, IconButton, Panel, Badge, Status, Input, Switch, Segmented, Notice, Dialog, DataTable } = DS;
 
-function MappingsPage({ mappings, setMappings, dirty, setDirty, onAction, onNewMapping, onEditMapping, onDeleteMapping, onChat, onSettings }) {
+function MappingsPage({ mappings, setMappings, dirty, setDirty, scene, scenes, onSceneSelect, onAction, actionState, onNewMapping, onEditMapping, onDeleteMapping, onChat, onSettings }) {
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState("全部");
   const [group, setGroup] = React.useState("全部分组");
-  const [scene, setScene] = React.useState("默认");
   const [detailId, setDetailId] = React.useState(null);
   const shown = mappings.filter((mapping) => (filter === "全部" || (filter === "已启用" ? mapping.enabled : !mapping.enabled)) && (group === "全部分组" || mapping.group === group) && `${mapping.name} ${mapping.local} ${mapping.upstream}`.toLowerCase().includes(query.toLowerCase()));
   const detail = mappings.find((mapping) => mapping.id === detailId);
   const toggleMapping = (id, enabled) => { setMappings(mappings.map((mapping) => mapping.id === id ? { ...mapping, enabled } : mapping)); setDirty(true); };
   return <div className="page__inner" data-screen-label="映射工作台">
     <div className="toolbar">
-      <select className="scene-select" value={scene} onChange={(event) => setScene(event.target.value)} aria-label="当前场景"><option>默认</option><option>开发环境</option></select>
-      <Button variant="quiet" onClick={onSettings}>管理场景</Button>
+      <ScenePicker scene={scene} scenes={scenes} onSelect={onSceneSelect} onManage={onSettings} />
       <div className="toolbar__spacer"></div>
       <Button onClick={() => onAction("模板选择：MySQL、Redis、MongoDB、PostgreSQL、MQTT、RDP、SSH、WebSocket 等")}>从模板新建</Button>
       <Button onClick={() => onAction("粘贴导入会预览变更，逐条校验后才会写入")}>粘贴导入</Button>
@@ -29,7 +27,7 @@ function MappingsPage({ mappings, setMappings, dirty, setDirty, onAction, onNewM
         {["全部", ...new Set(mappings.map((mapping) => mapping.group))].map((item) => <button key={item} type="button" className="group-chip" aria-pressed={(item === "全部" && group === "全部分组") || item === group} onClick={() => setGroup(item === "全部" ? "全部分组" : item)}>{item}</button>)}
       </div>
     </div>
-    {dirty && <div className="pending-notice"><Notice><strong>有未生效的改动。</strong> 当前列表已保存，点击右上角「应用配置」后对外生效。</Notice></div>}
+    {dirty && <div className="pending-notice"><Notice><span><strong>有未生效的改动。</strong> <span className="pending-notice__detail">监听端口、上游地址或启用状态已修改；当前运行配置不变。使用右上角「应用配置」生效。</span></span></Notice></div>}
     <Panel className="mapping-panel">
       <DataTable label="端口转发规则" columns={[{ key: "rule", label: "规则", width: "21%" }, { key: "protocol", label: "协议", width: "72px" }, { key: "forward", label: "转发关系" }, { key: "health", label: "健康", width: "92px" }, { key: "enabled", label: "启用", width: "62px" }, { key: "actions", label: "", width: "76px" }]}>
         {shown.map((mapping) => <tr key={mapping.id} className={detailId === mapping.id ? "is-selected" : ""}>

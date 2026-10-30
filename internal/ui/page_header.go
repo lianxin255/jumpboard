@@ -135,18 +135,28 @@ func (v *View) headerApplyActions(c *ui.Context, t Tokens, engine string, busy b
 			})
 		}
 		if busy {
-			ui.Spinner(c).Label("正在处理")
+			label := "正在处理"
+			switch a.BusyAction() {
+			case "check":
+				label = "正在检查端口与上游"
+			case "apply":
+				label = "正在应用配置"
+			}
+			ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
+				ui.Spinner(c).Label(label)
+				ui.Text(c, label).FontSize(NoteSize).TextColor(t.FG2)
+			})
 		}
 		// The check binds each port for a moment and resolves the
 		// upstreams: it answers "would applying work", without touching
 		// what is running.
-		if ui.Button(c, "预检").Disabled(busy).
+		if ui.Button(c, "预检").Disabled(busy).Height(ControlHeight).
 			Tooltip("检查端口是否被占用、上游地址能否解析，不会改动正在跑的规则").Clicked() {
-			a.RunBackground(a.TestConfig)
+			a.RunAction("check", a.TestConfig)
 		}
-		if ui.PrimaryButton(c, "应用配置").Disabled(busy).
+		if ui.PrimaryButton(c, "应用配置").Disabled(busy).Height(ControlHeight).
 			Tooltip("让改动生效（⌘R）").Clicked() {
-			a.RunBackground(a.Apply)
+			a.RunAction("apply", a.Apply)
 		}
 	})
 }

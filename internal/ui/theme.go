@@ -31,6 +31,16 @@ const (
 	PagePadY = float32(20)
 	PagePadX = float32(28)
 	PageGap  = float32(14)
+
+	// Control geometry is one contract across pages: text buttons and
+	// compact search fields 32 high, icon buttons 32 square, switches
+	// 36×22. Inputs that stand as full form fields use 36. Chips are a
+	// different control, not a smaller button.
+	ControlHeight     = float32(32)
+	ControlHeightForm = float32(36)
+	IconButtonSize    = float32(32)
+	SwitchWidth       = float32(36)
+	SwitchHeight      = float32(22)
 )
 
 // Type tokens: the sizes text falls into, so a page cannot grow a ninth
@@ -126,20 +136,20 @@ type Tokens struct {
 func Dark() Tokens {
 	return Tokens{
 		Dark: true,
-		Base: ui.Hex("#161A19"), Topbar: ui.Hex("#1B201E"),
-		Surface: ui.Hex("#202624"), Surface2: ui.Hex("#2D3531"), Surface3: ui.Hex("#191E1C"),
-		Sidebar: ui.Hex("#1B201E"), Canvas: ui.Hex("#161A19"), Chip: ui.Hex("#252B29"),
-		FG: ui.Hex("#EDF0EB"), FG2: ui.Hex("#BDC6BF"), Muted: ui.Hex("#9BA79F"), Meta: ui.Hex("#9BA79F"),
-		Border: ui.Hex("#39423C"), Hair: ui.RGBA(237, 240, 235, 0.07),
-		Accent: ui.Hex("#A2BDF3"), AccentText: ui.Hex("#161A19"),
-		AccentSoft: ui.Hex("#2C3A50"), AccentLine: ui.Hex("#445C7E"),
-		Success: ui.Hex("#81CFA1"), SuccessSoft: ui.RGBA(129, 207, 161, 0.16),
-		Warning: ui.Hex("#E0B97B"), WarningSoft: ui.RGBA(224, 185, 123, 0.16),
-		Danger: ui.Hex("#EF9A92"), DangerSoft: ui.RGBA(239, 154, 146, 0.14),
-		AmberText: ui.Hex("#E0B97B"), AmberSoft: ui.RGBA(224, 185, 123, 0.12), AmberLine: ui.RGBA(224, 185, 123, 0.36),
+		Base: ui.Hex("#151918"), Topbar: ui.Hex("#1B201E"),
+		Surface: ui.Hex("#222825"), Surface2: ui.Hex("#343E38"), Surface3: ui.Hex("#29312D"),
+		Sidebar: ui.Hex("#1B201E"), Canvas: ui.Hex("#151918"), Chip: ui.Hex("#29312D"),
+		FG: ui.Hex("#F2F4EF"), FG2: ui.Hex("#D0D7D0"), Muted: ui.Hex("#AAB6AD"), Meta: ui.Hex("#AAB6AD"),
+		Border: ui.Hex("#4A574E"), Hair: ui.Hex("#37433B"),
+		Accent: ui.Hex("#A7C2F7"), AccentText: ui.Hex("#151918"),
+		AccentSoft: ui.Hex("#2D3E57"), AccentLine: ui.Hex("#59769E"),
+		Success: ui.Hex("#8BD5A9"), SuccessSoft: ui.RGBA(139, 213, 169, 0.16),
+		Warning: ui.Hex("#E6C388"), WarningSoft: ui.RGBA(230, 195, 136, 0.16),
+		Danger: ui.Hex("#F5B1AA"), DangerSoft: ui.RGBA(245, 177, 170, 0.14),
+		AmberText: ui.Hex("#E6C388"), AmberSoft: ui.RGBA(230, 195, 136, 0.12), AmberLine: ui.RGBA(230, 195, 136, 0.36),
 		Shadow: ui.RGBA(0, 0, 0, 0.55), Step: ui.Hex("#FFFFFF"),
-		TCP: ui.Hex("#A2BDF3"), UDP: ui.Hex("#C7B3E9"),
-		HTTP: ui.Hex("#86CEC0"), HTTPS: ui.Hex("#E0B97B"),
+		TCP: ui.Hex("#A7C2F7"), UDP: ui.Hex("#CEBCED"),
+		HTTP: ui.Hex("#92D5C6"), HTTPS: ui.Hex("#E6C388"),
 	}
 }
 
@@ -209,12 +219,22 @@ func theme(t Tokens) *ui.Theme {
 	}
 	th.Background, th.Surface = t.Base, t.Surface
 	th.SurfaceHover, th.SurfacePressed = t.Surface2, t.Surface2
+	if t.Dark {
+		// The form's fields stand a half-step above the panel, not into
+		// it. The night palette's text is never made dim to say disabled;
+		// the disabled face keeps a readable ink and a quiet border.
+		th.Surface = t.Surface3
+		th.TextMuted = t.Muted
+	}
+	th.SurfaceHover, th.SurfacePressed = t.Surface2, t.Surface2
 	th.Border, th.Text, th.TextMuted = t.Border, t.FG, t.Muted
 	th.Accent, th.AccentText = t.Accent, t.AccentText
 	th.Danger, th.Warning, th.Success = t.Danger, t.Warning, t.Success
 	th.Scrollbar = t.Muted
-	// Buttons, inputs and chips share the control radius.
-	th.Radius, th.Spacing = 10, 6
+	// Buttons, inputs and chips share the control radius and the plan's
+	// standard height. Custom compact switches and icon buttons keep their
+	// own geometry helpers.
+	th.Radius, th.Spacing = RadiusButton, 6
 	th.FontSize = BodySize
 	if !t.Dark {
 		// Tooltips and toasts are the theme turned over: the day ink on the

@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -25,6 +27,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 	// frame never reads a field it is writing.
 	v.aiMu.Lock()
 	models, fetching, listErr, suggest := v.aiModels, v.aiFetching, v.aiListErr, v.aiSuggest
+	probing, probeNote := v.aiProbing, v.aiProbeNote
 	v.aiMu.Unlock()
 	// The fetch's suggestion is applied here, on the frame's own thread:
 	// the goroutine never touches aiModel, the field the TextInput
@@ -47,7 +50,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 		ui.Row(c).Gap(24).AlignItems(ui.Start).Wrap().Children(func() {
 			ui.Column(c).Grow(1).MinWidth(settingsCardMin).Gap(10).Children(func() {
 				ui.Field(c, "接口地址", func() {
-					ui.TextInput(c, &v.aiBaseURL).Placeholder("https://api.openai.com 或本地网关")
+					ui.TextInput(c, &v.aiBaseURL).Placeholder("https://api.openai.com 或本地网关").Height(ControlHeightForm)
 				})
 				ui.Field(c, "模型", func() {
 					// A plain text field with a list beside it, not a combo box:
@@ -56,7 +59,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 					// gateway whose list does not mention it. The field is the
 					// truth; the menu only fills it in.
 					ui.Row(c).Gap(8).Children(func() {
-						e := ui.TextInput(c, &v.aiModel).Placeholder("gpt-4o-mini / deepseek-chat / 本地模型名")
+						e := ui.TextInput(c, &v.aiModel).Placeholder("gpt-4o-mini / deepseek-chat / 本地模型名").Height(ControlHeightForm)
 						if ui.Button(c, "从列表选").Disabled(len(models) == 0).
 							Tooltip("先点「拉取模型」").Clicked() {
 							v.modelPicker = !v.modelPicker
@@ -90,14 +93,14 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 					}
 				})
 				ui.Field(c, "诊断/解读模型", func() {
-					ui.TextInput(c, &v.aiDiagModel).Placeholder("留空 = 与主模型相同")
+					ui.TextInput(c, &v.aiDiagModel).Placeholder("留空 = 与主模型相同").Height(ControlHeightForm)
 				})
 				ui.Field(c, "API Key", func() {
 					placeholder := "sk-…"
 					if v.aiKeySet {
 						placeholder = "已保存（留空则不修改）"
 					}
-					if ui.TextInput(c, &v.aiKey).Password().Placeholder(placeholder).Submitted() {
+					if ui.TextInput(c, &v.aiKey).Password().Placeholder(placeholder).Height(ControlHeightForm).Submitted() {
 						v.saveAIKey()
 					}
 				})
@@ -109,7 +112,7 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 					if fetching {
 						ui.Spinner(c).Label("拉取中")
 					}
-					if ui.Button(c, "保存").Clicked() {
+					if ui.Button(c, "保存").Disabled(fetching || probing).Height(ControlHeight).Clicked() {
 						if err := a.SetAI(v.aiBaseURL, v.aiModel); err != nil {
 							a.Fail("AI 配置未保存：%v", err)
 						} else if err := a.SetAIDiagModel(v.aiDiagModel); err != nil {
@@ -119,8 +122,18 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 							a.Info("AI 配置已保存")
 						}
 					}
-					if ui.Button(c, "测试连接").Clicked() {
-						a.RunBackground(a.ProbeAI)
+					if ui.Button(c, "测试连接").Disabled(probing).Height(ControlHeight).Clicked() {
+						v.probeAIConnection()
+					}
+					if probing {
+						ui.Spinner(c).Label("正在验证接口与模型")
+						ui.Text(c, "正在验证接口与模型").FontSize(CaptionSize).TextColor(t.FG2)
+					} else if probeNote != "" {
+						color := t.Success
+						if strings.HasPrefix(probeNote, "连接失败") {
+							color = t.Danger
+						}
+						ui.Text(c, probeNote).FontSize(CaptionSize).TextColor(color).Wrap()
 					}
 				})
 				if listErr != "" {
@@ -156,6 +169,34 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 			})
 		})
 	})
+}
+
+// probeAIConnection tests the saved endpoint with visible pending and
+// outcome state. Only the frame touches the other fields; the goroutine
+// writes its own result behind aiMu, then asks for a frame.
+func (v *View) probeAIConnection() {
+	v.aiMu.Lock()
+	if v.aiProbing {
+		v.aiMu.Unlock()
+		return
+	}
+	v.aiProbing, v.aiProbeNote = true, ""
+	v.aiMu.Unlock()
+	a := v.App
+	go func() {
+		err := a.ProbeAI()
+		v.aiMu.Lock()
+		v.aiProbing = false
+		if err != nil {
+			v.aiProbeNote = "连接失败：" + err.Error()
+			a.Fail("连接失败：%v", err)
+		} else {
+			v.aiProbeNote = "连接成功，AI 入口已启用"
+			a.Info("连接成功，AI 入口已启用")
+		}
+		v.aiMu.Unlock()
+		a.Change()
+	}()
 }
 
 // fetchModels asks the endpoint what it offers, off the main thread.

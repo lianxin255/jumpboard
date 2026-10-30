@@ -121,7 +121,11 @@ func (a *App) ResolveConfirm(ok bool) {
 		a.notify()
 		return
 	}
-	a.RunBackground(c.Run)
+	action := ""
+	if c.Destructive {
+		action = "service"
+	}
+	a.runBackground(action, c.Run, false)
 }
 
 // Theme returns the chosen appearance. The lock is the one the frame's

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JumpBoard · UI 复核</title>
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="icon" href="../assets/icons/relay.svg" type="image/svg+xml" />
+  <style>
+    :root { --review-bg:#141817; --review-panel:#1d2421; --review-muted:#a7b3ac; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--review-bg); color:#edf0eb; font:13px/1.7 var(--font-ui); }
+    button,input { font:inherit; }
+    .review-shell { max-width:1480px; margin:auto; padding:32px; }
+    .review-head { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:24px; }
+    h1 { font-size:24px; font-weight:600; letter-spacing:-.025em; margin:0 0 6px; }
+    .review-subtitle { color:#bdc6bf; margin:0; }
+    .review-badge { color:#cbd8cf; border:1px solid #46544c; border-radius:6px; padding:4px 9px; white-space:nowrap; font-size:12px; }
+    .review-layout { display:grid; grid-template-columns:270px minmax(0,1fr); gap:20px; align-items:start; }
+    .review-brief { background:var(--review-panel); border:1px solid #36423b; border-radius:10px; padding:20px; }
+    .review-brief h2 { font-size:14px; margin:0 0 12px; font-weight:600; }
+    .review-brief p { color:#bdc6bf; margin:0 0 16px; }
+    .review-brief dl { margin:0; }
+    .review-brief dt { color:#9ba79f; font-size:11px; margin-top:12px; }
+    .review-brief dd { margin:3px 0 0; color:#edf0eb; }
+    .review-views { list-style:none; padding:0; margin:18px 0 0; display:grid; gap:9px; }
+    .review-views li { padding-left:12px; border-left:2px solid #6f8d7a; color:#d5dfd8; }
+    .review-views small { display:block; color:#9ba79f; }
+    .review-note { margin-top:18px; border-top:1px solid #36423b; padding-top:14px; font-size:11px; color:#9ba79f; }
+    .review-main { min-width:0; display:grid; gap:18px; }
+    .screen-section { background:var(--review-panel); border:1px solid #36423b; border-radius:10px; overflow:hidden; }
+    .screen-heading { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:14px 16px; border-bottom:1px solid #303a33; }
+    .screen-heading h2 { font-size:14px; margin:0; }
+    .screen-heading span { color:#a7b3ac; font-size:11px; }
+    .screen { position:relative; overflow:hidden; }
+    .screen img { display:block; width:100%; height:auto; }
+    .pin { position:absolute; border:1px solid transparent; background:transparent; }
+    .pin--scene { left:18%; top:10%; width:19%; height:5%; }
+    .pin--toolbar { left:36%; top:14%; width:63%; height:6%; }
+    .pin--rules { left:18%; top:26%; width:80%; height:45%; }
+    .pin--service { left:1%; bottom:3%; width:15%; height:10%; }
+    .pin--privacy { left:64%; top:18%; width:32%; height:33%; }
+    .pin--inputs { left:34%; top:15%; width:29%; height:35%; }
+    .pin--actions { left:33%; top:53%; width:18%; height:8%; }
+    .pin--switch { right:4%; top:35%; width:9%; height:9%; }
+    .pin--proto { left:45%; top:28%; width:9%; height:10%; }
+    .review-bottom { border:1px solid #36423b; border-radius:10px; padding:20px; background:#202a24; }
+    .review-bottom h2 { font-size:15px; margin:0 0 8px; }
+    .review-bottom p { margin:0; color:#bdc6bf; max-width:900px; }
+    .review-bottom strong { color:#edf0eb; font-weight:500; }
+    @media (max-width:1000px) { .review-layout { grid-template-columns:1fr; } .review-brief { order:2; } .review-shell { padding:18px; } }
+  </style>
+</head>
+<body>
+  <div class="review-shell">
+    <header class="review-head"><div><h1>JumpBoard / 视觉与交互复核</h1><p class="review-subtitle">面向高频端口转发使用者 · 暗色可读性、控件一致性、现有流程优化</p></div><span class="review-badge">复核版 · 2026-10-30</span></header>
+    <div class="review-layout">
+      <aside class="review-brief"><h2>这次要看什么</h2><p>不是再加一层装饰，而是让暗色下每个字都读得清、每个按钮都有明确反馈、每次改动都知道下一步。</p><dl><dt>01 / 暗色阅读</dt><dd>通用文字与底色层级</dd><dt>02 / 场景选择</dt><dd>完整的选择器，不是残缺下拉</dd><dt>03 / 控件状态</dt><dd>按钮、开关、芯片统一反馈</dd><dt>04 / 交互路径</dt><dd>改动、应用、异常与批量操作</dd></dl><ol class="review-views"><li>暗色阅读 <small>先解决“看得见”</small></li><li>场景与控件 <small>边界、悬停与开关</small></li><li>交互优化 <small>少打断、少猜测</small></li><li>值得保留 <small>现有结构继续做深</small></li></ol><div class="review-note">静态截图不能证明真实悬停或下拉展开状态；相应意见来自对现有实现的代码检查，已单独标注。页面不修改产品或原设计稿。</div></aside>
+      <main class="review-main">
+        <data-overlay src="./feedback-views.js" controls="on">
+          <section class="screen-section"><div class="screen-heading"><h2>映射工作台 · 暗色</h2><span>场景切换 / 筛选 / 启停与批量操作</span></div><div class="screen"><img src="./assets/mappings-dark.png" alt="JumpBoard 映射页暗色截图" /><div class="pin pin--scene" data-metric-id="scene-selector"></div><div class="pin pin--toolbar" data-metric-id="filter-toolbar"></div><div class="pin pin--rules" data-metric-id="mapping-rows"></div><div class="pin pin--service" data-metric-id="service-control"></div></div></section>
+          <section class="screen-section"><div class="screen-heading"><h2>设置与表单 · 暗色</h2><span>说明文字、输入边界与主操作</span></div><div class="screen"><img src="./assets/settings-dark.png" alt="JumpBoard 设置页暗色截图" /><div class="pin pin--privacy" data-metric-id="privacy-copy"></div><div class="pin pin--inputs" data-metric-id="settings-inputs"></div><div class="pin pin--actions" data-metric-id="settings-actions"></div></div></section>
+          <section class="screen-section"><div class="screen-heading"><h2>新建映射 · 暗色</h2><span>开关、协议与表单反馈</span></div><div class="screen"><img src="./assets/form-dark.png" alt="JumpBoard 新建映射暗色截图" /><div class="pin pin--switch" data-metric-id="health-switch"></div><div class="pin pin--proto" data-metric-id="protocol-segment"></div></div></section>
+        </data-overlay>
+        <section class="review-bottom"><h2>复核结论</h2><p><strong>优先修可读性和控件状态，再优化路径。</strong> 场景选择器应该收成一个完整的“场景名 + 展开入口”，管理场景独立成文字按钮；普通按钮、图标按钮、芯片和表格行共享同一套 hover / pressed / focus / disabled 规则。随后把「未应用」从一条提醒变成明确的任务状态，让改动、检查、应用和异常处理在同一条路径里闭环。</p></section>
+      </main>
+    </div>
+  </div>
+  <script src="./data-overlay.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/app.jsx":"16fed4e8becb","ui_kits/workbench/chrome.jsx":"77f76a782562","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"81e98a5c595a","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/settings.jsx":"2f0485402777","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/app.jsx":"568312dc5cd0","ui_kits/workbench/chrome.jsx":"776b3f963589","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"be9b77450d8c","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/scene.jsx":"25abc784f552","ui_kits/workbench/settings.jsx":"05700dcea691","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -332,8 +332,51 @@ function App() {
     document.documentElement.dataset.theme = theme === "暗色" ? "dark" : "light";
   }, [theme]);
   const [running, setRunning] = React.useState(true);
-  const [dirty, setDirty] = React.useState(true);
-  const [mappings, setMappings] = React.useState(initialMappings);
+  const [serviceBusy, setServiceBusy] = React.useState(false);
+  const [actionState, setActionState] = React.useState("idle");
+  const [scene, setScene] = React.useState("默认");
+  const [sceneCandidate, setSceneCandidate] = React.useState(null);
+  const [mappingsByScene, setMappingsByScene] = React.useState(() => ({
+    默认: {
+      mappings: initialMappings,
+      dirty: true
+    },
+    开发环境: {
+      mappings: initialMappings.slice(0, 3).map((mapping, index) => ({
+        ...mapping,
+        id: `dev-${mapping.id}`,
+        name: ["开发 MySQL", "开发 GitLab", "开发 Redis"][index],
+        local: mapping.local.replace(/9\d{3}/, port => String(Number(port) + 100)),
+        health: "未检查",
+        tone: "neutral",
+        group: "开发环境"
+      })),
+      dirty: false
+    }
+  }));
+  const mappings = mappingsByScene[scene].mappings;
+  const dirty = mappingsByScene[scene].dirty;
+  const scenes = [{
+    name: "默认",
+    count: mappingsByScene.默认.mappings.length
+  }, {
+    name: "开发环境",
+    count: mappingsByScene.开发环境.mappings.length
+  }];
+  const setMappings = next => setMappingsByScene(previous => ({
+    ...previous,
+    [scene]: {
+      ...previous[scene],
+      mappings: typeof next === "function" ? next(previous[scene].mappings) : next
+    }
+  }));
+  const setDirty = next => setMappingsByScene(previous => ({
+    ...previous,
+    [scene]: {
+      ...previous[scene],
+      dirty: typeof next === "function" ? next(previous[scene].dirty) : next
+    }
+  }));
   const [mappingDialog, setMappingDialog] = React.useState(null);
   const [confirmStop, setConfirmStop] = React.useState(false);
   const [deleteCandidate, setDeleteCandidate] = React.useState(null);
@@ -345,6 +388,47 @@ function App() {
     const timer = setTimeout(() => setToast(""), 3200);
     return () => clearTimeout(timer);
   }, [toast]);
+  const runAction = action => {
+    if (actionState === "checking" || actionState === "applying") return;
+    if (action === "pre-check") {
+      setActionState("checking");
+      setTimeout(() => {
+        setActionState("checked");
+        notify("预检通过：端口可用，上游地址可解析");
+      }, 850);
+    } else if (action === "apply") {
+      setActionState("applying");
+      setTimeout(() => {
+        setActionState("idle");
+        setDirty(false);
+        notify("配置已应用，转发规则已生效");
+      }, 1100);
+    } else {
+      notify(action);
+    }
+  };
+  const switchService = next => {
+    if (serviceBusy) return;
+    if (!next) {
+      setConfirmStop(true);
+      return;
+    }
+    setServiceBusy(true);
+    setTimeout(() => {
+      setRunning(true);
+      setServiceBusy(false);
+      notify("转发服务已启动");
+    }, 800);
+  };
+  const chooseScene = next => {
+    if (next === scene) return;
+    if (dirty) {
+      setSceneCandidate(next);
+      return;
+    }
+    setScene(next);
+    notify(`已切换到「${next}」`);
+  };
   const saveMapping = (mapping, apply) => {
     setMappings(previous => previous.some(item => item.id === mapping.id) ? previous.map(item => item.id === mapping.id ? mapping : item) : [...previous, mapping]);
     setMappingDialog(null);
@@ -371,20 +455,14 @@ function App() {
     page: page,
     onPage: setPage,
     running: running,
-    onRunning: next => {
-      if (!next) setConfirmStop(true);else {
-        setRunning(true);
-        notify("转发服务已启动");
-      }
-    }
+    onRunning: switchService,
+    serviceBusy: serviceBusy
   }), /*#__PURE__*/React.createElement("main", {
     className: "main"
   }, /*#__PURE__*/React.createElement(WindowBar, {
     page: page,
-    onAction: message => {
-      if (message.includes("配置已应用")) setDirty(false);
-      notify(message);
-    },
+    onAction: runAction,
+    actionState: actionState,
     onNewMapping: () => setMappingDialog({
       mapping: null
     }),
@@ -396,7 +474,11 @@ function App() {
     setMappings: setMappings,
     dirty: dirty,
     setDirty: setDirty,
-    onAction: notify,
+    scene: scene,
+    scenes: scenes,
+    onSceneSelect: chooseScene,
+    onAction: runAction,
+    actionState: actionState,
     onNewMapping: () => setMappingDialog({
       mapping: null
     }),
@@ -422,7 +504,22 @@ function App() {
     onAction: notify
   })))), /*#__PURE__*/React.createElement("div", {
     className: "prototype-notes"
-  }, /*#__PURE__*/React.createElement("span", null, "\u4EA4\u4E92\u63D0\u6848 \xB7 \u975E\u751F\u4EA7\u754C\u9762 \xB7 \u4E0D\u8C03\u7528\u5916\u90E8\u670D\u52A1"), /*#__PURE__*/React.createElement("span", null, "\u516D\u9875\u5BFC\u822A\u3001\u65B0\u5EFA/\u7F16\u8F91\u6620\u5C04\u3001\u8349\u7A3F\u5BFC\u5165\u4E0E\u8BBE\u7F6E\u5206\u7EC4\u5747\u53EF\u4F53\u9A8C")), mappingDialog && /*#__PURE__*/React.createElement(MappingDialog, {
+  }, /*#__PURE__*/React.createElement("span", null, "\u4EA4\u4E92\u63D0\u6848 \xB7 \u975E\u751F\u4EA7\u754C\u9762 \xB7 \u4E0D\u8C03\u7528\u5916\u90E8\u670D\u52A1"), /*#__PURE__*/React.createElement("span", null, "\u516D\u9875\u5BFC\u822A\u3001\u65B0\u5EFA/\u7F16\u8F91\u6620\u5C04\u3001\u8349\u7A3F\u5BFC\u5165\u4E0E\u8BBE\u7F6E\u5206\u7EC4\u5747\u53EF\u4F53\u9A8C")), sceneCandidate && /*#__PURE__*/React.createElement(Dialog, {
+    title: "\u5207\u6362\u573A\u666F",
+    onClose: () => setSceneCandidate(null),
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Button, {
+      onClick: () => setSceneCandidate(null)
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
+      variant: "primary",
+      onClick: () => {
+        setScene(sceneCandidate);
+        setSceneCandidate(null);
+        notify(`已切换到「${sceneCandidate}」，未应用改动已保留`);
+      }
+    }, "\u4FDD\u7559\u6539\u52A8\u5E76\u5207\u6362"))
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "body-copy"
+  }, "\u5F53\u524D\u573A\u666F\u6709\u672A\u5E94\u7528\u6539\u52A8\u3002\u5207\u6362\u540E\u8FD9\u4E9B\u6539\u52A8\u4F1A\u4FDD\u7559\u5728\u300C", scene, "\u300D\uFF0C\u4E0D\u4F1A\u6DF7\u5165\u300C", sceneCandidate, "\u300D\u3002")), mappingDialog && /*#__PURE__*/React.createElement(MappingDialog, {
     mapping: mappingDialog.mapping,
     onClose: () => setMappingDialog(null),
     onSave: saveMapping
@@ -434,9 +531,13 @@ function App() {
     }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
       variant: "danger",
       onClick: () => {
-        setRunning(false);
         setConfirmStop(false);
-        notify("转发服务已停止，所有转发已失效");
+        setServiceBusy(true);
+        setTimeout(() => {
+          setRunning(false);
+          setServiceBusy(false);
+          notify("转发服务已停止，所有转发已失效");
+        }, 800);
       }
     }, "\u505C\u6B62\u670D\u52A1"))
   }, /*#__PURE__*/React.createElement("p", {
@@ -502,7 +603,8 @@ function AppSidebar({
   page,
   onPage,
   running,
-  onRunning
+  onRunning,
+  serviceBusy
 }) {
   return /*#__PURE__*/React.createElement("aside", {
     className: "sidebar"
@@ -556,8 +658,9 @@ function AppSidebar({
     className: "service-control__title"
   }, /*#__PURE__*/React.createElement("i", {
     className: `service-control__dot ${running ? "" : "is-off"}`
-  }), running ? "服务运行中" : "服务已停止"), /*#__PURE__*/React.createElement(Switch, {
+  }), serviceBusy ? "正在切换…" : running ? "服务运行中" : "服务已停止"), /*#__PURE__*/React.createElement(Switch, {
     checked: running,
+    disabled: serviceBusy,
     onChange: onRunning,
     label: "\u8F6C\u53D1\u670D\u52A1\u5F00\u5173"
   })), /*#__PURE__*/React.createElement("div", {
@@ -568,9 +671,11 @@ function WindowBar({
   page,
   onAction,
   onNewMapping,
-  onClearChat
+  onClearChat,
+  actionState
 }) {
   const [title, subtitle] = pageMeta[page];
+  const busy = actionState === "checking" || actionState === "applying";
   return /*#__PURE__*/React.createElement("header", {
     className: "window-bar"
   }, /*#__PURE__*/React.createElement("div", {
@@ -581,13 +686,22 @@ function WindowBar({
     className: "window-bar__subtitle"
   }, subtitle)), /*#__PURE__*/React.createElement("div", {
     className: "window-bar__actions"
-  }, page === "mappings" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Button, {
-    onClick: () => onAction("预检通过：端口可用，上游地址可解析")
+  }, actionState === "checking" && /*#__PURE__*/React.createElement("span", {
+    className: "action-status"
+  }, "\u6B63\u5728\u68C0\u67E5\u7AEF\u53E3\u4E0E\u4E0A\u6E38"), actionState === "applying" && /*#__PURE__*/React.createElement("span", {
+    className: "action-status"
+  }, "\u6B63\u5728\u5E94\u7528\u914D\u7F6E"), actionState === "checked" && /*#__PURE__*/React.createElement("span", {
+    className: "action-status action-status--success"
+  }, "\u9884\u68C0\u901A\u8FC7"), page === "mappings" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Button, {
+    disabled: busy,
+    onClick: () => onAction("pre-check")
   }, "\u9884\u68C0"), /*#__PURE__*/React.createElement(Button, {
     variant: "primary",
-    onClick: () => onAction("配置已应用，转发规则已生效")
-  }, "\u5E94\u7528\u914D\u7F6E")), page === "mappings" && /*#__PURE__*/React.createElement(Button, {
+    disabled: busy,
+    onClick: () => onAction("apply")
+  }, actionState === "applying" ? "应用中…" : "应用配置")), page === "mappings" && /*#__PURE__*/React.createElement(Button, {
     variant: "secondary",
+    disabled: busy,
     onClick: onNewMapping
   }, "\u65B0\u5EFA\u6620\u5C04"), page === "chat" && /*#__PURE__*/React.createElement(Button, {
     variant: "quiet",
@@ -758,7 +872,11 @@ function MappingsPage({
   setMappings,
   dirty,
   setDirty,
+  scene,
+  scenes,
+  onSceneSelect,
   onAction,
+  actionState,
   onNewMapping,
   onEditMapping,
   onDeleteMapping,
@@ -768,7 +886,6 @@ function MappingsPage({
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState("全部");
   const [group, setGroup] = React.useState("全部分组");
-  const [scene, setScene] = React.useState("默认");
   const [detailId, setDetailId] = React.useState(null);
   const shown = mappings.filter(mapping => (filter === "全部" || (filter === "已启用" ? mapping.enabled : !mapping.enabled)) && (group === "全部分组" || mapping.group === group) && `${mapping.name} ${mapping.local} ${mapping.upstream}`.toLowerCase().includes(query.toLowerCase()));
   const detail = mappings.find(mapping => mapping.id === detailId);
@@ -784,15 +901,12 @@ function MappingsPage({
     "data-screen-label": "\u6620\u5C04\u5DE5\u4F5C\u53F0"
   }, /*#__PURE__*/React.createElement("div", {
     className: "toolbar"
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "scene-select",
-    value: scene,
-    onChange: event => setScene(event.target.value),
-    "aria-label": "\u5F53\u524D\u573A\u666F"
-  }, /*#__PURE__*/React.createElement("option", null, "\u9ED8\u8BA4"), /*#__PURE__*/React.createElement("option", null, "\u5F00\u53D1\u73AF\u5883")), /*#__PURE__*/React.createElement(Button, {
-    variant: "quiet",
-    onClick: onSettings
-  }, "\u7BA1\u7406\u573A\u666F"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ScenePicker, {
+    scene: scene,
+    scenes: scenes,
+    onSelect: onSceneSelect,
+    onManage: onSettings
+  }), /*#__PURE__*/React.createElement("div", {
     className: "toolbar__spacer"
   }), /*#__PURE__*/React.createElement(Button, {
     onClick: () => onAction("模板选择：MySQL、Redis、MongoDB、PostgreSQL、MQTT、RDP、SSH、WebSocket 等")
@@ -839,7 +953,9 @@ function MappingsPage({
     onClick: () => setGroup(item === "全部" ? "全部分组" : item)
   }, item)))), dirty && /*#__PURE__*/React.createElement("div", {
     className: "pending-notice"
-  }, /*#__PURE__*/React.createElement(Notice, null, /*#__PURE__*/React.createElement("strong", null, "\u6709\u672A\u751F\u6548\u7684\u6539\u52A8\u3002"), " \u5F53\u524D\u5217\u8868\u5DF2\u4FDD\u5B58\uFF0C\u70B9\u51FB\u53F3\u4E0A\u89D2\u300C\u5E94\u7528\u914D\u7F6E\u300D\u540E\u5BF9\u5916\u751F\u6548\u3002")), /*#__PURE__*/React.createElement(Panel, {
+  }, /*#__PURE__*/React.createElement(Notice, null, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("strong", null, "\u6709\u672A\u751F\u6548\u7684\u6539\u52A8\u3002"), " ", /*#__PURE__*/React.createElement("span", {
+    className: "pending-notice__detail"
+  }, "\u76D1\u542C\u7AEF\u53E3\u3001\u4E0A\u6E38\u5730\u5740\u6216\u542F\u7528\u72B6\u6001\u5DF2\u4FEE\u6539\uFF1B\u5F53\u524D\u8FD0\u884C\u914D\u7F6E\u4E0D\u53D8\u3002\u4F7F\u7528\u53F3\u4E0A\u89D2\u300C\u5E94\u7528\u914D\u7F6E\u300D\u751F\u6548\u3002")))), /*#__PURE__*/React.createElement(Panel, {
     className: "mapping-panel"
   }, /*#__PURE__*/React.createElement(DataTable, {
     label: "\u7AEF\u53E3\u8F6C\u53D1\u89C4\u5219",
@@ -1253,6 +1369,88 @@ Object.assign(window, {
 });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "ui_kits/workbench/observability.jsx", error: String((e && e.message) || e) }); }
 
+// ui_kits/workbench/scene.jsx
+try { (() => {
+const {
+  Badge
+} = DS;
+function ScenePicker({
+  scene,
+  scenes,
+  onSelect,
+  onManage
+}) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef(null);
+  const listId = "scene-options";
+  React.useEffect(() => {
+    const onPointer = event => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
+    const onKey = event => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        rootRef.current?.querySelector("button")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "scene-picker",
+    ref: rootRef
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "scene-trigger",
+    type: "button",
+    "aria-haspopup": "listbox",
+    "aria-expanded": open,
+    "aria-controls": listId,
+    onClick: () => setOpen(!open)
+  }, /*#__PURE__*/React.createElement("img", {
+    src: asset("relay"),
+    alt: ""
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "scene-trigger__label"
+  }, "\u573A\u666F"), /*#__PURE__*/React.createElement("strong", null, scene), /*#__PURE__*/React.createElement("span", {
+    className: `scene-chevron ${open ? "is-open" : ""}`,
+    "aria-hidden": "true"
+  }, "\u2304")), /*#__PURE__*/React.createElement(Button, {
+    variant: "quiet",
+    onClick: onManage
+  }, "\u7BA1\u7406\u573A\u666F"), open && /*#__PURE__*/React.createElement("div", {
+    className: "scene-menu",
+    id: listId,
+    role: "listbox",
+    "aria-label": "\u9009\u62E9\u573A\u666F"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "scene-menu__caption"
+  }, "\u5207\u6362\u6574\u5957\u6620\u5C04\uFF0C\u5F53\u524D\u6539\u52A8\u4F1A\u4FDD\u7559"), scenes.map(item => /*#__PURE__*/React.createElement("button", {
+    key: item.name,
+    type: "button",
+    role: "option",
+    "aria-selected": scene === item.name,
+    className: "scene-option",
+    onClick: () => {
+      setOpen(false);
+      onSelect(item.name);
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "scene-option__check"
+  }, scene === item.name ? "✓" : ""), /*#__PURE__*/React.createElement("span", {
+    className: "scene-option__name"
+  }, item.name), /*#__PURE__*/React.createElement("span", {
+    className: "scene-option__count"
+  }, item.count, " \u6761\u89C4\u5219"), item.name === scene && /*#__PURE__*/React.createElement(Badge, null, "\u5F53\u524D")))));
+}
+Object.assign(window, {
+  ScenePicker
+});
+})(); } catch (e) { __ds_ns.__errors.push({ path: "ui_kits/workbench/scene.jsx", error: String((e && e.message) || e) }); }
+
 // ui_kits/workbench/settings.jsx
 try { (() => {
 const {
@@ -1273,6 +1471,14 @@ function SettingsPage({
   const [traffic, setTraffic] = React.useState(true);
   const [whitelist, setWhitelist] = React.useState(false);
   const [logRead, setLogRead] = React.useState(true);
+  const [connection, setConnection] = React.useState("idle");
+  const testConnection = () => {
+    setConnection("busy");
+    setTimeout(() => {
+      setConnection("success");
+      onAction("连接成功：模型服务可用，AI 入口已启用");
+    }, 900);
+  };
   const title = settingSections.find(item => item[0] === section)?.[1];
   return /*#__PURE__*/React.createElement("div", {
     className: "page__inner settings-layout",
@@ -1384,13 +1590,20 @@ function SettingsPage({
   }, /*#__PURE__*/React.createElement("li", null, "\u751F\u6210\u8349\u7A3F\u53EA\u53D1\u9001\u5F53\u524D\u5BF9\u8BDD\uFF0C\u4E00\u6B21\u6700\u591A\u751F\u6210 5 \u6761\u3002"), /*#__PURE__*/React.createElement("li", null, "\u5931\u8D25\u8BCA\u65AD\u53D1\u9001\u9519\u8BEF\u3001\u81F3\u591A\u4E24\u6761\u6620\u5C04\u6458\u8981\u548C\u65E5\u5FD7\u5C3E\u90E8\u3002"), /*#__PURE__*/React.createElement("li", null, "\u6587\u4EF6\u89E3\u8BFB\u53D1\u9001\u6240\u9009\u6587\u4EF6\uFF1B\u8D85\u8FC7 256 KB \u4F1A\u88AB\u62D2\u7EDD\u3002"), /*#__PURE__*/React.createElement("li", null, "\u81EA\u7136\u8BED\u8A00\u7B5B\u9009\u4F1A\u53D1\u9001\u5168\u90E8\u6620\u5C04\u6458\u8981\uFF0C\u4E0D\u542B\u5BC6\u94A5\u3002"))), /*#__PURE__*/React.createElement("div", {
     className: "settings-actions"
   }, /*#__PURE__*/React.createElement(Button, {
+    disabled: connection === "busy",
     onClick: () => onAction("正在从配置的网关拉取可用模型")
   }, "\u62C9\u53D6\u6A21\u578B"), /*#__PURE__*/React.createElement(Button, {
-    onClick: () => onAction("连接测试通过")
-  }, "\u6D4B\u8BD5\u8FDE\u63A5"), /*#__PURE__*/React.createElement(Button, {
+    disabled: connection === "busy",
+    onClick: testConnection
+  }, connection === "busy" ? "正在连接…" : "测试连接"), /*#__PURE__*/React.createElement(Button, {
     variant: "primary",
+    disabled: connection === "busy",
     onClick: () => onAction("AI 配置已保存")
-  }, "\u4FDD\u5B58\u914D\u7F6E"))), section === "access" && /*#__PURE__*/React.createElement("section", {
+  }, "\u4FDD\u5B58\u914D\u7F6E"), connection === "busy" && /*#__PURE__*/React.createElement("span", {
+    className: "connection-status connection-status--busy"
+  }, "\u6B63\u5728\u9A8C\u8BC1\u63A5\u53E3\u4E0E\u6A21\u578B"), connection === "success" && /*#__PURE__*/React.createElement("span", {
+    className: "connection-status connection-status--success"
+  }, "\u2713 \u8FDE\u63A5\u6210\u529F\uFF0CAI \u5165\u53E3\u5DF2\u542F\u7528"))), section === "access" && /*#__PURE__*/React.createElement("section", {
     className: "jb-section"
   }, /*#__PURE__*/React.createElement("div", {
     className: "jb-setting-row"

@@ -1,0 +1,17 @@
+<!-- @dsCard group="Geometry" viewport="700x280" name="Control size standards" subtitle="One size contract per control family, no page-specific exceptions" -->
+<link rel="stylesheet" href="../styles.css" />
+<div style="padding:18px;display:flex;flex-direction:column;gap:16px;background:var(--canvas)">
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <button class="jb-button jb-button--primary">文字按钮</button><span class="text-secondary">32px 高</span>
+    <button class="jb-icon-button" aria-label="编辑"><img src="../assets/icons/edit.svg" width="16" height="16" alt="" /></button><span class="text-secondary">图标按钮 32 × 32</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <input class="jb-input" style="width:220px" placeholder="输入框 / 选择器" /><span class="text-secondary">36px 高；紧凑搜索框与按钮同为 32px</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div class="jb-segmented"><button class="jb-segment" aria-pressed="true">分段器</button><button class="jb-segment">32px 外框</button></div>
+    <span class="jb-badge" style="height:26px">筛选芯片 26px</span>
+    <button class="jb-switch" role="switch" aria-checked="true" aria-label="开关"></button><span class="text-secondary">开关 36 × 22</span>
+  </div>
+  <div class="text-secondary">导航行 34px · 菜单选项 36px · 表格行 64px · 所有尺寸必须使用 geometry 令牌</div>
+</div>

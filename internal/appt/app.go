@@ -137,6 +137,10 @@ type App struct {
 	engine    string
 	dirty     bool
 	busy      bool
+	// busyAction is the foreground task a view may name while busy: a
+	// config pre-check, an apply, or a service start/stop. It is set by
+	// RunAction, not by a button, so the whole window reports one truth.
+	busyAction string
 	// workspaces is the scene list and activeWS the one whose rules the
 	// app runs and shows; both live behind the mutex because CRUD and
 	// switches write them from the background goroutines.
@@ -597,10 +601,29 @@ func (a *App) Snapshot() (mappings []model.Mapping, logs []model.LogEntry,
 // RunBackground runs fn off the main thread and asks for a frame when it
 // is done, reporting a panic as an error toast rather than crashing.
 func (a *App) RunBackground(fn func() error) {
+	a.RunAction("", fn)
+}
+
+// RunAction is RunBackground with a user-visible action name. A second
+// action is refused while one is running, including from another page, so
+// an apply and a stop cannot race because two buttons looked independent.
+func (a *App) RunAction(action string, fn func() error) {
+	a.runBackground(action, fn, true)
+}
+
+// runBackground carries the optional action name. Confirmations call it
+// from their own background runner with the guard already held, so the
+// accepted stop or scene switch reports its action without being refused
+// as a second task.
+func (a *App) runBackground(action string, fn func() error, guard bool) {
 	a.bg.Add(1)
 	defer a.bg.Done()
 	a.mu.Lock()
-	a.busy = true
+	if guard && a.busy {
+		a.mu.Unlock()
+		return
+	}
+	a.busy, a.busyAction = true, action
 	a.mu.Unlock()
 	go func() {
 		var err error
@@ -613,7 +636,7 @@ func (a *App) RunBackground(fn func() error) {
 			err = fn()
 		}()
 		a.mu.Lock()
-		a.busy = false
+		a.busy, a.busyAction = false, ""
 		a.mu.Unlock()
 		if err != nil {
 			a.setStatus(err.Error(), true)
@@ -621,4 +644,11 @@ func (a *App) RunBackground(fn func() error) {
 		}
 		_ = a.Reload()
 	}()
+}
+
+// BusyAction returns the action the window should describe while busy.
+func (a *App) BusyAction() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.busyAction
 }

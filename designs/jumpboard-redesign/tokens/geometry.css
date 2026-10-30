@@ -11,6 +11,13 @@
   --content-max: 1440px;
   --control-height: 32px;
   --control-height-large: 36px;
+  --control-icon-size: 32px;
+  --control-nav-height: 34px;
+  --control-chip-height: 26px;
+  --control-segment-height: 26px;
+  --control-switch-width: 36px;
+  --control-switch-height: 22px;
+  --control-menu-item-height: 36px;
   --row-height: 64px;
   --radius-control: 7px;
   --radius-panel: 10px;

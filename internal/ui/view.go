@@ -128,6 +128,10 @@ type View struct {
 	aiModels    []string
 	aiFetching  bool
 	aiListErr   string
+	// aiProbing and aiProbeNote are the settings page's connection test:
+	// only the frame reads them; the background probe writes behind aiMu.
+	aiProbing   bool
+	aiProbeNote string
 	// aiSuggest is the first model of a landed fetch, offered once. The
 	// goroutine only writes this; the frame applies it to aiModel itself,
 	// so the field the TextInput buffers is never touched off the frame's
@@ -135,6 +139,11 @@ type View struct {
 	aiSuggest string
 	// modelPicker shows the fetched list under the model field.
 	modelPicker bool
+	// workspaceChoice is the scene select's draft. It only follows the
+	// active scene after a completed switch: a cancelled dirty-scene
+	// confirmation must not change the trigger before the engine changes.
+	workspaceChoice string
+	workspaceLoaded string
 }
 
 // NewView returns the window's content for an app.
@@ -363,7 +372,11 @@ func (v *View) engineFooter(c *ui.Context, t Tokens, engine string, busy bool) {
 			ui.Box(c).Size(7, 7).Radius(4).Background(dot)
 			ui.Column(c).Gap(0).Grow(1).Children(func() {
 				ui.Text(c, "转发服务").FontSize(NoteSize).Bold().TextColor(t.FG)
-				ui.Text(c, engineLabel(engine)).FontSize(CaptionSize).TextColor(dot)
+				state := engineLabel(engine)
+				if busy && a.BusyAction() == "service" {
+					state = "正在切换…"
+				}
+				ui.Text(c, state).FontSize(CaptionSize).TextColor(dot)
 				ui.Text(c, a.Eng.Mode()).FontSize(CaptionSize).TextColor(t.Meta)
 			})
 			// The label names the switch alone — the title above already
@@ -382,7 +395,7 @@ func (v *View) engineFooter(c *ui.Context, t Tokens, engine string, busy bool) {
 						Run: a.StopEngine,
 					})
 				} else {
-					a.RunBackground(a.StartEngine)
+					a.RunAction("service", a.StartEngine)
 				}
 			}
 		})
@@ -502,7 +515,7 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
 			if len(mappings) > 0 {
 				v.searchBox(c, t)
-				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
+				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选").Height(ControlHeight)
 			}
 			ui.Spacer(c)
 			// The AI's doors sit on the quiet right edge of the filter row:
@@ -1224,47 +1237,80 @@ func (v *View) searchBox(c *ui.Context, t Tokens) {
 	})
 }
 
-// workspaceChips is the scene switcher: one chip per workspace, the
-// active one carrying the accent itself, solid, against the quiet glass
-// of the rest. A click switches — through the confirmation a dirty scene
-// asks for — and the trailing 管理 chip opens the settings page, where a
-// scene is created, renamed and deleted. The row shows with a single
-// scene too: a switcher nobody can see is a feature nobody finds.
+// workspaceChips is the scene switcher: a complete 32-DIP select, not a
+// row of chips that breaks in a narrow window. The trigger names the
+// active scene; its menu lists every scene with the rule count. Choosing
+// another scene goes through the existing confirmation and transactional
+// apply, while 管理场景 stays a separate action beside it.
 func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	list, active := a.WorkspacesState()
-	// The row grows into the space the search and 新建映射 leave and wraps
-	// inside it, so a long scene list gives way before the page's primary
-	// action does.
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Grow(1).MinWidth(0).Children(func() {
-		ui.Text(c, "场景").FontSize(CaptionSize).TextColor(t.Muted)
+	if active != v.workspaceLoaded {
+		v.workspaceLoaded, v.workspaceChoice = active, active
+	}
+	selected := active
+	if v.workspaceChoice != "" {
+		selected = v.workspaceChoice
+	}
+	choice := ui.SelectBase(c, &selected)
+	choice.Trigger.Height(ControlHeight).MinWidth(190).Padding(0, 11).Gap(8).
+		AlignItems(ui.Center).Radius(RadiusButton).
+		Background(t.Surface3).Border(1, t.Border).
+		Label("当前场景").Tooltip("选择整套映射；有未应用改动时会先确认").
+		Children(func() {
+			ui.Icon(c, icons.Relay).Size(15, 15).TextColor(t.FG2)
+			ui.Text(c, "场景").FontSize(NoteSize).TextColor(t.FG2)
+			ui.Text(c, a.WorkspaceName(selected)).FontSize(BodySize).FontWeight(500).TextColor(t.FG)
+			ui.Spacer(c)
+			ui.Text(c, "⌄").FontSize(NoteSize).TextColor(t.FG2)
+		})
+	choice.Popup(func(panel ui.Element) {
+		panel.Padding(6).Radius(RadiusButton).Background(t.Surface3).
+			Border(1, t.Border).Shadow(0, 8, 24, 0, t.Shadow).MinWidth(250)
+		ui.Text(c, "切换整套映射，当前改动会保留").FontSize(CaptionSize).
+			TextColor(t.FG2).Padding(4, 8, 8, 8)
 		for _, w := range list {
 			w := w
 			on := w.ID == active
-			chip := ui.Text(c, w.Name).FontSize(CaptionSize).SingleLine().
-				Label("场景 "+w.Name).
-				Tooltip("切换到这个场景的映射；有未应用的改动会先确认").
-				Padding(3, 8).Radius(RadiusChip)
-			sceneChipStyle(chip, t, on)
-			if chip.Clicked() && !on && !busy {
-				a.RequestSwitchWorkspace(w.ID)
+			item := choice.Item(w.ID).FillWidth().Padding(7, 9).Gap(8).
+				AlignItems(ui.Center).Radius(RadiusChip).
+				Label("场景 " + w.Name).Tooltip("切换到「" + w.Name + "」")
+			if on {
+				item.Background(t.AccentSoft)
+			} else if item.Hovered() {
+				item.Background(t.Surface2)
 			}
-		}
-		manage := ui.Text(c, "管理").FontSize(CaptionSize).TextColor(t.Muted).
-			Label("管理场景").Tooltip("在设置里新建、改名、删除场景").
-			Padding(3, 8).Radius(RadiusChip)
-		chipQuiet(manage, t)
-		if manage.Clicked() {
-			a.SetPage(appt.PageSettings)
+			item.Children(func() {
+				ui.Text(c, w.Name).FontSize(BodySize).FontWeight(func() int {
+					if on {
+						return 500
+					}
+					return 400
+				}()).TextColor(t.FG)
+				ui.Spacer(c)
+				count := 0
+				if rules, err := a.Store.ListMappings(w.ID); err == nil {
+					count = len(rules)
+				}
+				ui.Textf(c, "%d 条规则", count).FontSize(CaptionSize).TextColor(t.FG2)
+				if on {
+					ui.Text(c, "当前").FontSize(CaptionSize).TextColor(t.Accent)
+				}
+			})
 		}
 	})
+	if selected != active && selected != "" {
+		v.workspaceChoice = active
+		a.RequestSwitchWorkspace(selected)
+	}
+	if ui.Button(c, "管理场景").Disabled(busy).Height(ControlHeight).
+		Tooltip("在设置里新建、改名、删除场景").Clicked() {
+		a.SetPage(appt.PageSettings)
+	}
 }
 
-// sceneChipStyle is the scene switcher's pair. The active scene is the
-// one state the row names, so it carries the accent's quiet wash with the
-// accent's own ink — the plan's tint selection — while the scenes not in
-// use and 管理 stay glass. The group chips below keep their own quieter
-// accent tint: two rows of chips, two weights of choice.
+// sceneChipStyle is kept for the scene chip's color contract in tests;
+// the workspace control itself is now the select above.
 func sceneChipStyle(e ui.Element, t Tokens, on bool) ui.Element {
 	if on {
 		return e.FontWeight(500).TextColor(t.Accent).
