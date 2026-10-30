@@ -77,10 +77,10 @@ type View struct {
 	// settings group it sits beside.
 	historyChosenID string
 	nginxAccess     []string
-	nginxErrors   []string
-	nginxLoadedAt int64
-	settingsName  string
-	nameLoaded    bool
+	nginxErrors     []string
+	nginxLoadedAt   int64
+	settingsName    string
+	nameLoaded      bool
 	// settingsSection is the settings nav's chosen group, one of the ids
 	// settingsSections lists. The view's own main-thread state, like the
 	// log tab it sits beside.

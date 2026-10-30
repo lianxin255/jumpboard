@@ -305,27 +305,27 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 					if on {
 						row.Background(t.AccentSoft)
 					}
-						row.Children(func() {
-							ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-								// The row itself is the click: choosing here is
-								// reading, so the whole row answers.
-								ui.Text(c, formatTime(sn.CreatedAt)).
-									FontSize(BodySize).FontWeight(func() int {
-									if on {
-										return 500
-									}
-									return 400
-								}()).TextColor(t.FG).Grow(1)
-							})
-							// The row's second line: why the snapshot was taken
-							// and how big it is — the plan's summary line, which
-							// says more than a bare reason.
-							ui.Textf(c, "%s · %d 行", sn.Reason, strings.Count(sn.Content, "\n")+1).
-								FontSize(CaptionSize).TextColor(t.Muted).SingleLine()
-							if on {
-								ui.Text(c, "当前查看").FontSize(CaptionSize).TextColor(t.Accent)
-							}
+					row.Children(func() {
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							// The row itself is the click: choosing here is
+							// reading, so the whole row answers.
+							ui.Text(c, formatTime(sn.CreatedAt)).
+								FontSize(BodySize).FontWeight(func() int {
+								if on {
+									return 500
+								}
+								return 400
+							}()).TextColor(t.FG).Grow(1)
 						})
+						// The row's second line: why the snapshot was taken
+						// and how big it is — the plan's summary line, which
+						// says more than a bare reason.
+						ui.Textf(c, "%s · %d 行", sn.Reason, strings.Count(sn.Content, "\n")+1).
+							FontSize(CaptionSize).TextColor(t.Muted).SingleLine()
+						if on {
+							ui.Text(c, "当前查看").FontSize(CaptionSize).TextColor(t.Accent)
+						}
+					})
 					if row.Clicked() {
 						v.historyChosenID = sn.ID
 						a.Change()
@@ -452,7 +452,7 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				s := s
 				on := s.id == v.settingsSection
 				item := ui.Text(c, s.label).FontSize(BodySize).SingleLine().
-					Label("设置分组 " + s.label).Padding(6, 10).Radius(RadiusButton)
+					Label("设置分组 "+s.label).Padding(6, 10).Radius(RadiusButton)
 				if on {
 					item.FontWeight(500).TextColor(t.Accent).
 						Background(t.AccentSoft).Border(1, t.AccentLine)
