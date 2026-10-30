@@ -225,10 +225,7 @@ func TestAITestConnectionButton(t *testing.T) {
 	a.SetAI(srv.URL, "test-model")
 
 	tt := tester(t, a, 1200, 900)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "")
 	// The AI card sits below the fold of the window's default height; the
 	// test scrolls to it, as a user would.
 	clickScrolled(t, tt, "测试连接")
@@ -268,10 +265,7 @@ func TestAIListModels(t *testing.T) {
 	srv := fakeModels(t, "deepseek-chat", "gpt-4o-mini")
 	tt := tester(t, a, 1200, 900)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "")
 	fillFieldScrolled(t, tt, "接口地址", srv.URL)
 	// The AI card sits below the fold of the window's default height.
 	clickScrolled(t, tt, "拉取模型")
@@ -337,10 +331,7 @@ func TestAIListModelsReportsFailure(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	tt := tester(t, a, 1200, 900)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "")
 	fillFieldScrolled(t, tt, "接口地址", srv.URL)
 	// The settings page has grown past the window's default height; the AI
 	// card sits below the fold until the test scrolls to it.

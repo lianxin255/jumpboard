@@ -6,226 +6,124 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The settings page's shape, at the two window sizes the design names:
-// 1280×800 sits the cards in rows of two, top aligned and equal in
-// width, with the AI card alone on a full-width row of its own; 960×640
-// stacks every card in one full-width column, and the page still scrolls
-// to what sits at its bottom. A card below the fold has no box, so each
-// measurement scrolls the pair into view first, the way a user reaches
-// it.
+// The settings page's shape: a master-detail frame — the nav of groups on
+// the left, the one chosen group's cards on the right. Every group is one
+// click away, so no card sits below the fold of another group's height;
+// the page's testable contract is the nav's completeness, the chosen
+// group's cards filling the content column, and the danger group keeping
+// its confirmation.
 
-// settingsCardRects scrolls the settings page until every named card
-// shows together — a card below the fold has no box — and returns the
-// boxes of the cards' title texts, which stretch to the cards' width.
-func settingsCardRects(t *testing.T, tt *ui.Tester, names ...string) []ui.Rect {
-	t.Helper()
-	rects := make([]ui.Rect, len(names))
-	for i := 0; i < 40; i++ {
-		ok := true
-		for j, name := range names {
-			r, found := tt.Find(name)
-			rects[j] = r
-			ok = ok && found && r.W > 0
-		}
-		if ok {
-			return rects
-		}
-		tt.Scroll(600, 400, 0, 120)
-		tt.Frame()
-	}
-	t.Fatalf("the cards %v never showed together", names)
-	return nil
-}
-
-// settingsNoOverflow holds a card inside the page: its title ends before
-// the page's right padding, which ends pageRight DIPs from the window's
-// edge.
-func settingsNoOverflow(t *testing.T, name string, r ui.Rect, pageRight float32) {
-	t.Helper()
-	if r.X < 200 {
-		t.Errorf("%s starts at %v, left of the content column", name, r.X)
-	}
-	if right := r.X + r.W; right > pageRight {
-		t.Errorf("%s ends at %v, past the page's right edge %v", name, right, pageRight)
-	}
-}
-
-// TestSettingsCardsPairAt1280 checks the wide shape: the AI card on a
-// row of its own, then rows of two cards — top aligned, equal in width,
-// nothing three abreast, nothing past the page's right edge — and the AI
-// card's form beside its reading matter rather than above it.
-func TestSettingsCardsPairAt1280(t *testing.T) {
+// TestSettingsNavListsEveryGroup checks the nav: the page opens on the AI
+// group — the chat page's 去设置 lands there — and every group the design
+// names is one row of the nav, said exactly once.
+func TestSettingsNavListsEveryGroup(t *testing.T) {
 	a := testApp(t)
-	tt := tester(t, a, 1280, 800)
+	tt := tester(t, a, 1200, 760)
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 
-	// The page's cards stop 32 DIPs before the window's edge; a card's
-	// title, inside the card's padding and border, a little sooner.
-	const pageRight = 1280 - 32
-
-	// The AI card leads the page and owns its row whole.
-	ai := settingsCardRects(t, tt, "AI 配置")[0]
-	settingsNoOverflow(t, "AI 配置", ai, pageRight-16)
-
-	// Its form and its reading matter sit side by side: the privacy
-	// heading is beside the endpoint field, not below it.
-	rects := settingsCardRects(t, tt, "接口地址", "数据与隐私")
-	form, notes := rects[0], rects[1]
-	settingsNoOverflow(t, "数据与隐私", notes, pageRight-16)
-	if notes.X < form.X+200 {
-		t.Errorf("the notes should sit beside the form, at %v and %v", form.X, notes.X)
+	// The opening group is the AI one: its card shows without a click.
+	if !tt.HasText("接口地址") {
+		t.Fatalf("the AI group should open first: %v", tt.Texts())
 	}
-	if d := notes.Y - form.Y; d < -1 || d > 120 {
-		t.Errorf("the notes should start level with the form, %v DIPs apart", d)
-	}
-
-	// Every pair: two cards, top aligned, equal in width. The first pair
-	// shows on the opening frame; the pairs below it are scrolled to,
-	// which is why its width is kept now — a card scrolled past cannot be
-	// scrolled back to by a page that only scrolls down.
-	pairW := float32(0)
-	for _, pair := range [][2]string{
-		{"外观与显示", "通用"},
-		{"访问控制", "备份与快照"},
-		{"场景", "快捷键"},
+	// The nav's rows carry the 设置分组 label prefix: each group is one
+	// reachable row, said once.
+	for _, group := range []string{
+		"AI 配置", "通用与外观", "访问控制", "备份与数据",
+		"场景", "快捷键", "更新", "危险操作",
 	} {
-		rects := settingsCardRects(t, tt, pair[0], pair[1])
-		left, right := rects[0], rects[1]
-		pairW = left.W
-		settingsNoOverflow(t, pair[0], left, pageRight-16)
-		settingsNoOverflow(t, pair[1], right, pageRight-16)
-		if d := right.Y - left.Y; d < -0.5 || d > 0.5 {
-			t.Errorf("%s and %s should start level, %v DIPs apart", pair[0], pair[1], d)
-		}
-		if d := left.W - right.W; d < -1 || d > 1 {
-			t.Errorf("%s and %s should be equal in width, %v vs %v", pair[0], pair[1], left.W, right.W)
-		}
-		if right.X < left.X+left.W+16 {
-			t.Errorf("%s should sit beside %s with the row's gap, at %v and %v", pair[1], pair[0], left.X, right.X)
-		}
-		// The switches are the compact ones — measured while the pair is
-		// in view, before the page scrolls on: 40×22, not the 54×30 the
-		// theme's spacing drew, a control half as wide again as the lines
-		// it rides. The login-item switch rides the 通用 pair.
-		if pair[1] == "通用" {
-			sw, ok := tt.Find("开机自启动")
-			if !ok {
-				t.Fatalf("the login-item switch is missing: %v", tt.Texts())
-			}
-			if d := sw.W - 40; d < -1 || d > 1 {
-				t.Errorf("the switch should be the compact 40 wide, got %.0f", sw.W)
-			}
-			if d := sw.H - 22; d < -1 || d > 1 {
-				t.Errorf("the switch should be the compact 22 tall, got %.0f", sw.H)
-			}
-		}
-	}
-
-	// 更新 has no partner: alone on its row, it spans the page the way
-	// the AI card does, below the last pair. Its place is measured on one
-	// frame with the pair above it — rects from different scrolls sit at
-	// different window offsets and cannot be compared.
-	rects = settingsCardRects(t, tt, "快捷键", "更新")
-	hotkey, upd := rects[0], rects[1]
-	settingsNoOverflow(t, "更新", upd, pageRight-16)
-	if d := upd.W - ai.W; d < -1 || d > 1 {
-		t.Errorf("the lone 更新 card should span the page like the AI card: %v vs %v", upd.W, ai.W)
-	}
-	if upd.Y < hotkey.Y {
-		t.Errorf("更新 should sit below the pairs, at %v under %v", upd.Y, hotkey.Y)
-	}
-
-	// The AI card is wider than a pair's two cards side by side would
-	// allow one of them: it spans the page while they split it.
-	if ai.W < pairW*1.5 {
-		t.Errorf("the AI card should span its own full-width row: %v vs a card's %v", ai.W, pairW)
-	}
-
-	// The privacy lines stay whole on the card, neither folded away nor
-	// trimmed for the two-column shape. The interpretation line tells the
-	// two paths apart: a file over the cap is refused, the access log
-	// sends only its tail.
-	for _, line := range []string{
-		"Key 存在系统凭据库",
-		"超过 256 KB 会被拒绝",
-		"访问日志只发送末尾 200 行",
-		"映射摘要里永远不含密钥",
-	} {
-		if !tt.HasText(line) {
-			t.Errorf("the privacy notes should keep %q", line)
+		if !tt.HasText("设置分组 " + group) {
+			t.Errorf("the nav should list %q: %v", group, tt.Texts())
 		}
 	}
 }
 
-// TestSettingsCardsStackAt960 checks the narrow shape: one full-width
-// column — each pair's second card below its first, everything the same
-// width, the AI card's notes below its form — and the page still scrolls
-// to the danger band at its bottom.
-func TestSettingsCardsStackAt960(t *testing.T) {
+// TestSettingsGroupsSwitchByClick walks the nav: each click swaps the
+// content column to that group's cards, and the previous group's cards go
+// with it — one group at a time, the master-detail promise.
+func TestSettingsGroupsSwitchByClick(t *testing.T) {
+	a := testApp(t)
+	tt := tester(t, a, 1200, 760)
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+
+	steps := []struct {
+		nav   string // the nav row to click
+		shows string // a text only that group's cards say
+	}{
+		{"通用与外观", "跟随系统"},
+		{"访问控制", "启用白名单"},
+		{"备份与数据", "导出备份"},
+		{"场景", "新建场景"},
+		{"快捷键", "保存快捷键"},
+		{"更新", "开发构建不支持自动更新"},
+		{"危险操作", "清空所有数据"},
+		{"AI 配置", "接口地址"},
+	}
+	for _, step := range steps {
+		if err := tt.Click("设置分组 " + step.nav); err != nil {
+			t.Fatalf("the nav row for %s is missing: %v (%v)", step.nav, err, tt.Texts())
+		}
+		waitFor(t, tt, step.nav+"'s cards", func() bool { return tt.HasText(step.shows) })
+	}
+}
+
+// TestSettingsContentColumnFits checks the content card inside its
+// column: the card starts right of the nav and ends before the page's
+// right padding — the master-detail frame holds it, at either window size
+// the design names.
+func TestSettingsContentColumnFits(t *testing.T) {
+	for _, size := range [][2]float32{{1280, 800}, {960, 640}} {
+		a := testApp(t)
+		tt := tester(t, a, int(size[0]), int(size[1]))
+		if err := tt.Click("设置"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+
+		// The card's title text ends where the page's right padding does;
+		// the padding itself is 32, the card's own border a little sooner.
+		pageRight := size[0] - 16
+		card, ok := tt.Find("AI 配置")
+		if !ok {
+			t.Fatalf("the AI card is missing: %v", tt.Texts())
+		}
+		if card.X < 200 {
+			t.Errorf("at %v wide the card starts at %v, left of the content column", size[0], card.X)
+		}
+		if right := card.X + card.W; right > pageRight {
+			t.Errorf("at %v wide the card ends at %v, past the page's right edge %v", size[0], right, pageRight)
+		}
+
+		// The AI card fills the column: the width the pairs used to split
+		// now belongs to the one group's card.
+		nav, ok := tt.Find("设置分组 AI 配置")
+		if !ok {
+			t.Fatalf("the nav is missing: %v", tt.Texts())
+		}
+		if card.X < nav.X+nav.W {
+			t.Errorf("the card should start right of the nav: card %v nav %v", card.X, nav.X+nav.W)
+		}
+	}
+}
+
+// TestSettingsDangerKeepsItsConfirm checks that the danger group's wipe
+// still asks first, from its new place at the nav's end.
+func TestSettingsDangerKeepsItsConfirm(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 960, 640)
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-
-	const pageRight = 960 - 32
-
-	// The AI card's reading matter sits below its form, the column the
-	// narrow window leaves the card.
-	rects := settingsCardRects(t, tt, "接口地址", "数据与隐私")
-	form, notes := rects[0], rects[1]
-	settingsNoOverflow(t, "数据与隐私", notes, pageRight-16)
-	if d := notes.X - form.X; d < -0.5 || d > 0.5 {
-		t.Errorf("the notes should stack under the form's edge, %v vs %v", form.X, notes.X)
+	if err := tt.Click("设置分组 危险操作"); err != nil {
+		t.Fatal(err)
 	}
-	if notes.Y < form.Y+150 {
-		t.Errorf("the notes should sit below the form, at %v and %v", form.Y, notes.Y)
-	}
-
-	ai := settingsCardRects(t, tt, "AI 配置")[0]
-
-	// Every pair stacks: the second card below the first, both the width
-	// of the page, which is also the AI card's width.
-	for _, p := range [][2]string{
-		{"外观与显示", "通用"},
-		{"访问控制", "备份与快照"},
-		{"场景", "快捷键"},
-	} {
-		rects := settingsCardRects(t, tt, p[0], p[1])
-		left, right := rects[0], rects[1]
-		settingsNoOverflow(t, p[0], left, pageRight-16)
-		settingsNoOverflow(t, p[1], right, pageRight-16)
-		if d := right.X - left.X; d < -0.5 || d > 0.5 {
-			t.Errorf("%s should stack at %s's edge, %v vs %v", p[1], p[0], left.X, right.X)
-		}
-		if right.Y < left.Y+left.H {
-			t.Errorf("%s should sit below %s, at %v and %v", p[1], p[0], left.Y, right.Y)
-		}
-		if d := left.W - ai.W; d < -1 || d > 1 {
-			t.Errorf("%s should fill the page's width like the AI card, %v vs %v", p[0], left.W, ai.W)
-		}
-	}
-
-	// 更新 alone stacks with them: the page's own width, below the pairs,
-	// measured on one frame with the pair above it — rects from different
-	// scrolls sit at different window offsets and cannot be compared.
-	rects = settingsCardRects(t, tt, "快捷键", "更新")
-	hotkey, upd := rects[0], rects[1]
-	settingsNoOverflow(t, "更新", upd, pageRight-16)
-	if d := upd.W - ai.W; d < -1 || d > 1 {
-		t.Errorf("the lone 更新 card should fill the page's width like the AI card, %v vs %v", upd.W, ai.W)
-	}
-	if upd.Y < hotkey.Y {
-		t.Errorf("更新 should sit below the pairs, at %v under %v", upd.Y, hotkey.Y)
-	}
-
-	// The bottom of the page still answers: the danger band scrolls into
-	// view and its button opens the confirmation it must ask first.
-	reveal(t, tt, "危险操作")
+	waitFor(t, tt, "the danger card", func() bool { return tt.HasText("清空所有数据") })
 	if err := tt.Click("清空所有数据"); err != nil {
 		t.Fatal(err)
 	}
@@ -241,3 +139,6 @@ func TestSettingsCardsStackAt960(t *testing.T) {
 		t.Error("canceling should close the confirmation")
 	}
 }
+
+// guard: the toolkit import stays referenced if the helpers above change.
+var _ = ui.Rect{}

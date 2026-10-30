@@ -37,7 +37,7 @@ func TestAIMappingEntryGoesToChat(t *testing.T) {
 	a.SetAI(srv.URL, "test-model")
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("✨ AI 建映射"); err != nil {
+	if err := tt.Click("AI 建映射"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -71,10 +71,7 @@ func TestAIMappingWalkthrough(t *testing.T) {
 	tt := tester(t, a, 1200, 900)
 
 	// Configure the endpoint through the settings card.
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "")
 	// The card explains what each kind of model is for, and offers the
 	// optional diagnosis model beside the main one.
 	if !tt.HasText("fast 类模型") {
@@ -101,7 +98,7 @@ func TestAIMappingWalkthrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("✨ AI 建映射"); err != nil {
+	if err := tt.Click("AI 建映射"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -149,7 +146,7 @@ func TestAIMappingShowsAnError(t *testing.T) {
 	a.SetAI(srv.URL, "test-model")
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("✨ AI 建映射"); err != nil {
+	if err := tt.Click("AI 建映射"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

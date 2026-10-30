@@ -81,6 +81,12 @@ type Tokens struct {
 
 	Accent     ui.Color
 	AccentText ui.Color
+	// AccentSoft is the accent's quiet wash — the selected nav row's and
+	// the active chip's fill — with AccentLine its one step stronger
+	// border. The plan's selection says itself in a tint, not in the
+	// solid: the solid stays the primary action's alone.
+	AccentSoft ui.Color
+	AccentLine ui.Color
 	Success    ui.Color
 	Warning    ui.Color
 	Danger     ui.Color
@@ -113,47 +119,50 @@ type Tokens struct {
 	HTTPS ui.Color
 }
 
-// Dark keeps the same roles as the light desktop, on a slate night
-// surface, so a widget that asks for a role still gets an answer. The
-// accent is lifted light so its ink can be the night surface itself.
+// Dark keeps the same roles as the light desktop, on a warm graphite
+// night surface, so a widget that asks for a role still gets an answer.
+// The accent is lifted light so its ink can be the night surface itself;
+// the solid danger face keeps its own deep red so a white label reads.
 func Dark() Tokens {
 	return Tokens{
 		Dark: true,
-		Base: ui.Hex("#10141B"), Topbar: ui.Hex("#151B24"),
-		Surface: ui.Hex("#171D26"), Surface2: ui.Hex("#222B38"), Surface3: ui.Hex("#131923"),
-		Sidebar: ui.Hex("#151B24"), Canvas: ui.Hex("#10141B"), Chip: ui.Hex("#1F2632"),
-		FG: ui.Hex("#EDF2F7"), FG2: ui.Hex("#C2CCDB"), Muted: ui.Hex("#9AA7B8"), Meta: ui.Hex("#8B98AC"),
-		Border: ui.Hex("#2A3442"), Hair: ui.RGBA(237, 242, 247, 0.08),
-		Accent: ui.Hex("#8FB0FF"), AccentText: ui.Hex("#10141B"),
-		Success: ui.Hex("#22C55E"), SuccessSoft: ui.RGBA(34, 197, 94, 0.16),
-		Warning: ui.Hex("#F59E0B"), WarningSoft: ui.RGBA(245, 158, 11, 0.16),
-		Danger: ui.Hex("#F77C79"), DangerSoft: ui.RGBA(247, 124, 121, 0.16),
-		AmberText: ui.Hex("#F3D7A6"), AmberSoft: ui.RGBA(243, 215, 166, 0.12), AmberLine: ui.RGBA(243, 215, 166, 0.35),
-		Shadow: ui.RGBA(0, 0, 0, 0.45), Step: ui.Hex("#FFFFFF"),
-		TCP: ui.Hex("#60A5FA"), UDP: ui.Hex("#A78BFA"),
-		HTTP: ui.Hex("#2DD4BF"), HTTPS: ui.Hex("#FBBF24"),
+		Base: ui.Hex("#161A19"), Topbar: ui.Hex("#1B201E"),
+		Surface: ui.Hex("#202624"), Surface2: ui.Hex("#2D3531"), Surface3: ui.Hex("#191E1C"),
+		Sidebar: ui.Hex("#1B201E"), Canvas: ui.Hex("#161A19"), Chip: ui.Hex("#252B29"),
+		FG: ui.Hex("#EDF0EB"), FG2: ui.Hex("#BDC6BF"), Muted: ui.Hex("#9BA79F"), Meta: ui.Hex("#9BA79F"),
+		Border: ui.Hex("#39423C"), Hair: ui.RGBA(237, 240, 235, 0.07),
+		Accent: ui.Hex("#A2BDF3"), AccentText: ui.Hex("#161A19"),
+		AccentSoft: ui.Hex("#2C3A50"), AccentLine: ui.Hex("#445C7E"),
+		Success: ui.Hex("#81CFA1"), SuccessSoft: ui.RGBA(129, 207, 161, 0.16),
+		Warning: ui.Hex("#E0B97B"), WarningSoft: ui.RGBA(224, 185, 123, 0.16),
+		Danger: ui.Hex("#EF9A92"), DangerSoft: ui.RGBA(239, 154, 146, 0.14),
+		AmberText: ui.Hex("#E0B97B"), AmberSoft: ui.RGBA(224, 185, 123, 0.12), AmberLine: ui.RGBA(224, 185, 123, 0.36),
+		Shadow: ui.RGBA(0, 0, 0, 0.55), Step: ui.Hex("#FFFFFF"),
+		TCP: ui.Hex("#A2BDF3"), UDP: ui.Hex("#C7B3E9"),
+		HTTP: ui.Hex("#86CEC0"), HTTPS: ui.Hex("#E0B97B"),
 	}
 }
 
-// Light is the day desktop: the plan's cool near-white wash (#F5F6F8)
-// behind pure white surfaces, one strong blue for the primary action, the
-// selected nav, and an open switch — dark ink on the accent where the
-// dark theme inverts it.
+// Light is the day desktop: the plan's warm near-white wash (#F5F5F3)
+// behind pure white surfaces, one restrained blue for the primary action
+// and the open switch — dark ink on the accent where the dark theme
+// inverts it. The selected nav carries the accent's tint, not the solid.
 func Light() Tokens {
 	return Tokens{
-		Base: ui.Hex("#F5F6F8"), Topbar: ui.Hex("#EFF1F4"),
-		Surface: ui.Hex("#FFFFFF"), Surface2: ui.Hex("#F1F4F9"), Surface3: ui.Hex("#F1F4F9"),
-		Sidebar: ui.Hex("#EFF1F4"), Canvas: ui.Hex("#F5F6F8"), Chip: ui.Hex("#F1F4F9"),
-		FG: ui.Hex("#172033"), FG2: ui.Hex("#3E4B61"), Muted: ui.Hex("#667085"), Meta: ui.Hex("#667085"),
-		Border: ui.Hex("#DDE4EC"), Hair: ui.Hex("#E9EEF4"),
-		Accent: ui.Hex("#315FD5"), AccentText: ui.Hex("#FFFFFF"),
-		Success: ui.Hex("#147D3F"), SuccessSoft: ui.Hex("#E9F8EE"),
-		Warning: ui.Hex("#925505"), WarningSoft: ui.Hex("#FDF3E6"),
-		Danger: ui.Hex("#B23633"), DangerSoft: ui.Hex("#FDECEC"),
-		AmberText: ui.Hex("#8A5416"), AmberSoft: ui.Hex("#FFF8EE"), AmberLine: ui.Hex("#F3D7A6"),
+		Base: ui.Hex("#F5F5F3"), Topbar: ui.Hex("#EEEEE8"),
+		Surface: ui.Hex("#FFFFFF"), Surface2: ui.Hex("#ECEEEB"), Surface3: ui.Hex("#F7F7F5"),
+		Sidebar: ui.Hex("#EEEEE8"), Canvas: ui.Hex("#F5F5F3"), Chip: ui.Hex("#F7F7F5"),
+		FG: ui.Hex("#22272B"), FG2: ui.Hex("#525C63"), Muted: ui.Hex("#616C73"), Meta: ui.Hex("#616C73"),
+		Border: ui.Hex("#DFE2DD"), Hair: ui.Hex("#E9EBE7"),
+		Accent: ui.Hex("#315FBF"), AccentText: ui.Hex("#FFFFFF"),
+		AccentSoft: ui.Hex("#E8EEF9"), AccentLine: ui.Hex("#C7D6F0"),
+		Success: ui.Hex("#26734A"), SuccessSoft: ui.Hex("#EAF5EE"),
+		Warning: ui.Hex("#87520A"), WarningSoft: ui.Hex("#FAF2E4"),
+		Danger: ui.Hex("#A83531"), DangerSoft: ui.Hex("#FBEDEB"),
+		AmberText: ui.Hex("#87520A"), AmberSoft: ui.Hex("#FAF2E4"), AmberLine: ui.Hex("#EEDCC0"),
 		Shadow: ui.RGBA(0, 0, 0, 0.45), Step: ui.Hex("#000000"),
-		TCP: ui.Hex("#315FD5"), UDP: ui.Hex("#6A4FD8"),
-		HTTP: ui.Hex("#08786D"), HTTPS: ui.Hex("#9A5B06"),
+		TCP: ui.Hex("#315FBF"), UDP: ui.Hex("#7351A6"),
+		HTTP: ui.Hex("#207569"), HTTPS: ui.Hex("#87520A"),
 	}
 }
 

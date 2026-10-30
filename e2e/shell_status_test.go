@@ -257,9 +257,9 @@ func TestMappingPendingBarHasOneApply(t *testing.T) {
 }
 
 // TestSidebarActiveNavIsSolid checks the rail's current-page state: the
-// active nav row carries the accent itself — solid, with the accent's own
-// ink — while an inactive row stays transparent over the rail's color,
-// the material's to show through.
+// active nav row carries the accent's quiet wash — the plan's tint
+// selection, with the accent's own ink — while an inactive row stays
+// transparent over the rail's color, the material's to show through.
 func TestSidebarActiveNavIsSolid(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1280, 800)
@@ -280,8 +280,8 @@ func TestSidebarActiveNavIsSolid(t *testing.T) {
 		{int(nav.X - 5), int(nav.Y + nav.H/2)},         // the gap between icon and word
 		{int(nav.X + nav.W + 6), int(nav.Y + nav.H/2)}, // the row's trailing fill
 	} {
-		if got := img.RGBAAt(p[0], p[1]); !sameColor(got, tok.Accent) {
-			t.Errorf("the active nav row should carry the accent at %v: got %v", p, got)
+		if got := img.RGBAAt(p[0], p[1]); !sameColor(got, tok.AccentSoft) {
+			t.Errorf("the active nav row should carry the accent's wash at %v: got %v", p, got)
 		}
 	}
 	other, ok := tt.Find("历史")
@@ -378,8 +378,8 @@ func TestMappingSceneChipHierarchy(t *testing.T) {
 	}
 	// Inside the chip's padding, clear of its text and corners.
 	for _, p := range [][2]int{{int(on.X + 4), int(on.Y + on.H/2)}, {int(on.X + on.W - 4), int(on.Y + on.H/2)}} {
-		if got := img.RGBAAt(p[0], p[1]); !sameColor(got, tok.Accent) {
-			t.Errorf("the active scene chip should carry the accent at %v: got %v", p, got)
+		if got := img.RGBAAt(p[0], p[1]); !sameColor(got, tok.AccentSoft) {
+			t.Errorf("the active scene chip should carry the accent's wash at %v: got %v", p, got)
 		}
 	}
 	quiet, ok := tt.Find("场景 家里")

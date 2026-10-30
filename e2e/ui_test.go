@@ -20,6 +20,24 @@ func tester(t *testing.T, a *appt.App, w, h int) *ui.Tester {
 	return tt
 }
 
+// openSettings walks into the settings page and, when group is not empty,
+// clicks the nav row that shows it — the master-detail page's own door.
+// An empty group opens the page on its first group, the AI one.
+func openSettings(t *testing.T, tt *ui.Tester, group string) {
+	t.Helper()
+	if err := tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if group == "" {
+		return
+	}
+	if err := tt.Click("设置分组 " + group); err != nil {
+		t.Fatalf("the settings nav row for %s is missing: %v", group, err)
+	}
+	tt.Frame()
+}
+
 // TestMappingLifecycle walks the path a user takes: create, see it in the
 // table, edit it, turn it off, delete it.
 func TestMappingLifecycle(t *testing.T) {
@@ -213,9 +231,7 @@ func TestThemeSwitch(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
+	openSettings(t, tt, "通用与外观")
 	for _, want := range []struct {
 		label string
 		theme appt.ThemeChoice
@@ -243,9 +259,7 @@ func TestWhitelistRefusesEmpty(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
+	openSettings(t, tt, "访问控制")
 	clickScrolled(t, tt, "启用白名单")
 	tt.Frame()
 	// The switch calls back into the app as it flips; the change lands

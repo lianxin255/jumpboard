@@ -70,13 +70,21 @@ type View struct {
 	// The log and history lists keep their scroll position in the view:
 	// a ListState built inside a frame forgets it every frame, so the
 	// list could never be scrolled past its first page.
-	logList       ui.ListState
-	historyList   ui.ListState
-	nginxAccess   []string
+	logList     ui.ListState
+	historyList ui.ListState
+	// historyChosenID is the history page's chosen snapshot — the one the
+	// reading pane shows. The view's own main-thread state, like the
+	// settings group it sits beside.
+	historyChosenID string
+	nginxAccess     []string
 	nginxErrors   []string
 	nginxLoadedAt int64
 	settingsName  string
 	nameLoaded    bool
+	// settingsSection is the settings nav's chosen group, one of the ids
+	// settingsSections lists. The view's own main-thread state, like the
+	// log tab it sits beside.
+	settingsSection int
 
 	// confEditor is the read-only configuration viewer's editor state,
 	// held here so the buffer is not rebuilt each frame.
@@ -237,11 +245,12 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 14, 16).DragWindow().Children(func() {
 			// The brand mark is the Relay itself — the two endpoints and
 			// the arrow between them — in the accent, on the accent's own
-			// tint: the product's one symbol, in the one place it lives.
+			// quiet wash: the product's one symbol, in the one place it
+			// lives, restrained the way the plan keeps it.
 			ui.Box(c).Size(28, 28).Radius(RadiusChip).
-				Background(t.Accent).Children(func() {
+				Background(t.AccentSoft).Border(1, t.AccentLine).Children(func() {
 				ui.Column(c).Fill().Center().Children(func() {
-					ui.Icon(c, icons.Relay).Size(16, 16).TextColor(t.AccentText)
+					ui.Icon(c, icons.Relay).Size(16, 16).TextColor(t.Accent)
 				})
 			})
 			ui.Column(c).Gap(0).Children(func() {
@@ -252,9 +261,9 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 
 		// The nav is two groups of the same row: the pages the rules live
 		// by, then the tools beside them. The current page is the one
-		// state the rail names, so it carries the accent itself — solid,
-		// with the accent's ink — while the rest stay transparent and let
-		// the material through.
+		// state the rail names — the accent's quiet wash with the accent's
+		// own ink, the plan's tint selection — while the rest stay
+		// transparent and let the material through.
 		type navItem struct {
 			label string
 			icon  *ui.SVG
@@ -282,18 +291,16 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 			tab := tabs.Tab(idx).FillWidth().Height(32).Radius(RadiusButton).
 				Padding(0, 9).AlignItems(ui.Center).Gap(9)
 			if on {
-				tab.Background(t.Accent)
+				tab.Background(t.AccentSoft).Border(1, t.AccentLine)
 			}
 			tab.Children(func() {
 				// The icon inherits the row's ink: the accent's own on the
 				// current page, the secondary text elsewhere.
 				ic := ui.Icon(c, item.icon).Size(15, 15)
-				if on {
-					ic.TextColor(t.AccentText)
-				}
 				text := ui.Text(c, item.label).FontSize(BodySize)
 				if on {
-					text.Bold().TextColor(t.AccentText)
+					ic.TextColor(t.Accent)
+					text.FontWeight(500).TextColor(t.Accent)
 				} else {
 					text.TextColor(t.FG2)
 				}
@@ -301,7 +308,7 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 					ui.Spacer(c)
 					cnt := ui.Text(c, item.count).FontSize(CaptionSize).FontFeatures("tnum")
 					if on {
-						cnt.TextColor(t.AccentText)
+						cnt.TextColor(t.Accent)
 					} else {
 						cnt.TextColor(t.Meta)
 					}
@@ -1245,13 +1252,14 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 }
 
 // sceneChipStyle is the scene switcher's pair. The active scene is the
-// one state the row names, so it carries the accent itself — a solid
-// chip with the accent's ink — while the scenes not in use and 管理 stay
-// glass. The group chips below keep their own quieter accent tint: two
-// rows of chips, two weights of choice.
+// one state the row names, so it carries the accent's quiet wash with the
+// accent's own ink — the plan's tint selection — while the scenes not in
+// use and 管理 stay glass. The group chips below keep their own quieter
+// accent tint: two rows of chips, two weights of choice.
 func sceneChipStyle(e ui.Element, t Tokens, on bool) ui.Element {
 	if on {
-		return e.Bold().TextColor(t.AccentText).Background(t.Accent)
+		return e.FontWeight(500).TextColor(t.Accent).
+			Background(t.AccentSoft).Border(1, t.AccentLine)
 	}
 	return chipQuiet(e.TextColor(t.FG2), t)
 }

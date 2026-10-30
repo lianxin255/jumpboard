@@ -10,6 +10,7 @@ import (
 
 	"github.com/lianxin255/jumpboard/internal/appt"
 	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/ui/icons"
 )
 
 // timeAt converts milliseconds to a time, kept here so the views need no
@@ -229,7 +230,11 @@ func formatClock(ms int64) string {
 	return timeAt(ms).Format("15:04:05")
 }
 
-// historyPage lists the saved configurations.
+// historyPage holds the saved configurations as a master-detail frame:
+// the snapshots on the left, the chosen one's content and diff summary on
+// the right. Choosing by click replaces the old 查看 dialog hop — the
+// reading matter sits beside the list it is about — while the diff
+// dialog keeps the deep compare and 回滚 keeps its confirmation.
 func (v *View) historyPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, snaps, _, _, _, busy, _ := a.Snapshot()
@@ -245,35 +250,100 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 			return
 		}
 
-		panelShell(c, t).Children(func() {
-			ls := &v.historyList
-			ls.Key = func(i int) any { return snaps[i].ID }
-			ui.List(c, ls, len(snaps), func(i int) {
-				sn := snaps[i]
-				ui.Row(c).Gap(12).Padding(10, 14).AlignItems(ui.Center).
-					BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
-					ui.Column(c).Gap(2).Grow(1).Children(func() {
-						ui.Textf(c, "%s · %d 行", formatTime(sn.CreatedAt), strings.Count(sn.Content, "\n")+1).
-							FontSize(BodySize).TextColor(t.FG)
-						ui.Text(c, sn.Reason).FontSize(CaptionSize).TextColor(t.Muted)
-					})
-					if ui.Button(c, "查看").FontSize(CaptionSize).Clicked() {
-						s := sn
-						a.SetSnapshotView(&s)
+		// The chosen snapshot rides the view's state, like the settings
+		// group: the first snapshot is the opening choice, so the page
+		// lands reading instead of asking.
+		if v.historyChosenID == "" {
+			v.historyChosenID = snaps[0].ID
+		}
+		chosenIdx := -1
+		for i, sn := range snaps {
+			if sn.ID == v.historyChosenID {
+				chosenIdx = i
+				break
+			}
+		}
+		if chosenIdx < 0 {
+			chosenIdx = 0
+			v.historyChosenID = snaps[0].ID
+		}
+		chosen := snaps[chosenIdx]
+
+		ui.Row(c).Fill().AlignItems(ui.Start).Gap(16).Children(func() {
+			// The list: one panel of snapshots, the chosen one named by
+			// the accent's wash.
+			panelShell(c, t).Width(300).Shrink(0).Children(func() {
+				ls := &v.historyList
+				ls.Key = func(i int) any { return snaps[i].ID }
+				ui.List(c, ls, len(snaps), func(i int) {
+					sn := snaps[i]
+					on := sn.ID == v.historyChosenID
+					// The row carries its snapshot's id as the label: a test
+					// — and a screen reader — reaches one snapshot rather
+					// than the first.
+					row := ui.Column(c).Gap(2).FillWidth().Padding(10, 14).
+						BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).
+						Label("快照 " + sn.ID)
+					if on {
+						row.Background(t.AccentSoft)
 					}
-					// The label names the row: every row says 回滚, and a
-					// test has to reach one snapshot rather than the first.
-					if DangerQuietButton(c, t, "回滚").FontSize(CaptionSize).Label("回滚 " + sn.ID).Disabled(busy).Clicked() {
-						s := sn
-						a.Ask(&appt.Confirm{
-							Title: "回滚配置",
-							Body:  fmt.Sprintf("把 %s 的配置写回磁盘并校验。", formatTime(sn.CreatedAt)),
-							Label: "回滚",
-							Run:   func() error { return a.RollbackSnapshot(s) },
+					row.Children(func() {
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							// The row itself is the click: choosing here is
+							// reading, so the whole row answers.
+							ui.Textf(c, "%s · %d 行", formatTime(sn.CreatedAt), strings.Count(sn.Content, "\n")+1).
+								FontSize(BodySize).FontWeight(func() int {
+								if on {
+									return 500
+								}
+								return 400
+							}()).TextColor(t.FG).Grow(1)
+							if on {
+								ui.Text(c, "当前查看").FontSize(CaptionSize).TextColor(t.Accent)
+							}
 						})
+						ui.Text(c, sn.Reason).FontSize(CaptionSize).TextColor(t.Muted).SingleLine()
+					})
+					if row.Clicked() {
+						v.historyChosenID = sn.ID
+						a.Change()
 					}
+				}).Grow(1)
+			})
+
+			// The reading: the chosen snapshot's head and its diff against
+			// the running configuration, in the panel the list leaves.
+			panelShell(c, t).Grow(1).Children(func() {
+				ui.Column(c).Fill().Children(func() {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(12, 16).
+						BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
+						ui.Text(c, "快照内容").FontSize(BodySize).Bold().TextColor(t.FG)
+						ui.Text(c, formatTime(chosen.CreatedAt)).FontSize(CaptionSize).TextColor(t.Muted)
+						ui.Spacer(c)
+						// The 查看 dialog's deep compare stays one click
+						// away; the label keeps the words the tests know.
+						if ui.Button(c, "查看差异").FontSize(CaptionSize).Clicked() {
+							s := chosen
+							a.SetSnapshotView(&s)
+						}
+						// The label names the row: every row says 回滚, and a
+						// test has to reach one snapshot rather than the first.
+						if DangerQuietButton(c, t, "回滚").FontSize(CaptionSize).Label("回滚 " + chosen.ID).Disabled(busy).Clicked() {
+							s := chosen
+							a.Ask(&appt.Confirm{
+								Title: "回滚配置",
+								Body:  fmt.Sprintf("把 %s 的配置写回磁盘并校验。", formatTime(chosen.CreatedAt)),
+								Label: "回滚",
+								Run:   func() error { return a.RollbackSnapshot(s) },
+							})
+						}
+					})
+					ui.Scroll(c).Grow(1).Children(func() {
+						ui.Text(c, chosen.Content).Font(FontMono).FontSize(CaptionSize).
+							TextColor(t.FG2).Wrap().Selectable().Padding(12, 16)
+					})
 				})
-			}).Grow(1)
+			})
 		})
 	})
 }
@@ -305,95 +375,123 @@ func hotkeyDraftFor(a *appt.App) *hotkeyDraft {
 }
 
 // settingsCardMin is the least width one of the settings page's cards
-// takes. Two cards and the gap between them need 736 DIPs, which the
-// window's content has from 1280 wide (999 DIPs once the rail and the
-// page's padding are taken out) but not at 960 (680): the pairs sit side
-// by side on a wide window and stack, each card full width, on a narrow
-// one — with nothing between the two sizes to tune.
+// takes. The master-detail layout gives the content column the window
+// minus the nav, so the min mostly guards the narrow-window stack.
 const settingsCardMin = float32(360)
 
-// settingsPage holds the appearance, the access control and the data tools.
-//
-// The page is rows, not one wrap flow: the AI card owns the first row
-// whole, the cards after it pair by affinity, and each row's two cards
-// sit top aligned and equal in width. A wrap flow of cards with
-// different heights is a waterfall — cards beside cards they have
-// nothing to do with, ragged where the pair beside them is shorter.
+// settingsSection is one entry of the settings nav: an id the view state
+// holds, the label the nav and the content header say, and the icon that
+// marks the row.
+type settingsSection struct {
+	id    int
+	label string
+	icon  *ui.SVG
+}
+
+// settingsSections lists the page's groups in the order a user needs
+// them: the AI service first — the chat page's 去设置 lands on it — then
+// the desktop's looks and the app's own facts, who may connect, the data
+// tools, the scenes, the keys, the update, and the danger zone last,
+// apart from the cards it outclasses in consequence.
+func settingsSections() []settingsSection {
+	return []settingsSection{
+		{0, "AI 配置", icons.Chat},
+		{1, "通用与外观", icons.Settings},
+		{2, "访问控制", icons.Check},
+		{3, "备份与数据", icons.History},
+		{4, "场景", icons.Relay},
+		{5, "快捷键", icons.Terminal},
+		{6, "更新", icons.Activity},
+		{7, "危险操作", icons.Alert},
+	}
+}
+
+// settingsPage holds every preference behind a master-detail frame: a
+// quiet nav of groups on the left, the one chosen group's cards on the
+// right. One group at a time replaces the old waterfall of paired cards,
+// where the AI configuration's height decided where 外观 began; now each
+// group reads as its own short page, and a group below the fold of the
+// old scroll is one click away instead.
 func (v *View) settingsPage(c *ui.Context, t Tokens) {
 	a := v.App
 	_, _, _, wl, _, _, busy, _ := a.Snapshot()
 
-	// pair is one row of the settings page: two cards that share the row
-	// while both fit beside each other and stack, each on its own
-	// full-width line, once the window is too narrow for the pair.
-	pair := func(left, right func()) {
-		ui.Row(c).Gap(16).AlignItems(ui.Start).Wrap().Children(func() {
-			left()
-			right()
-		})
+	if v.settingsSection < 0 || v.settingsSection > 7 {
+		v.settingsSection = 0
 	}
 
-	ui.Column(c).Fill().Padding(PagePadY, PagePadX).Gap(PageGap).Children(func() {
-		// The window bar says the page's name; the cards start at once.
+	ui.Row(c).Fill().AlignItems(ui.Start).Gap(24).Children(func() {
+		// The nav: the page's own list, sticky in the frame's left. The
+		// chosen group carries the accent's wash; the rest stay quiet.
+		ui.Column(c).Width(168).Shrink(0).Gap(2).Children(func() {
+			for _, s := range settingsSections() {
+				s := s
+				on := s.id == v.settingsSection
+				item := ui.Text(c, s.label).FontSize(BodySize).SingleLine().
+					Label("设置分组 " + s.label).Padding(6, 10).Radius(RadiusButton)
+				if on {
+					item.FontWeight(500).TextColor(t.Accent).
+						Background(t.AccentSoft).Border(1, t.AccentLine)
+				} else {
+					item.TextColor(t.FG2)
+				}
+				if item.Clicked() {
+					v.settingsSection = s.id
+					a.Change()
+				}
+			}
+		})
 
-		ui.Scroll(c).Children(func() {
-			// The cards read in the order a user needs them: the AI card
-			// leads — the chat page's 去设置 lands on it, and a card below
-			// the fold would need the user to scroll to the one thing they
-			// came for — then the desktop's looks beside the app's own
-			// facts, who may connect beside the data tools, the scenes
-			// beside the keys that reach them. 更新 has no partner: it
-			// takes a row of its own, late, where the least-visited things
-			// sit. The danger band stays a band across the page below them
-			// all, apart from the cards it outclasses in consequence.
-			ui.Column(c).Gap(16).Children(func() {
-				v.aiCard(c, t)
-
-				pair(
-					func() { v.appearanceCard(c, t) },
-					func() { v.generalCard(c, t) },
-				)
-
-				pair(
-					func() { v.accessCard(c, t, wl, busy) },
-					func() { v.backupCard(c, t) },
-				)
-
-				pair(
-					func() { v.workspaceCard(c, t, busy) },
-					func() { v.hotkeyCard(c, t) },
-				)
-
-				// 更新 alone: the row holds the one card, which grows to
-				// span the page the way the AI card's row does.
-				ui.Row(c).AlignItems(ui.Start).Wrap().Children(func() {
+		// The content: the chosen group's cards in one scroll, each card
+		// full width of the column — the pairs the old layout split now
+		// read one after another.
+		ui.Scroll(c).Grow(1).Children(func() {
+			ui.Column(c).FillWidth().Gap(16).Children(func() {
+				switch v.settingsSection {
+				case 0:
+					v.aiCard(c, t)
+				case 1:
+					v.appearanceCard(c, t)
+					v.generalCard(c, t)
+				case 2:
+					v.accessCard(c, t, wl, busy)
+				case 3:
+					v.backupCard(c, t)
+				case 4:
+					v.workspaceCard(c, t, busy)
+				case 5:
+					v.hotkeyCard(c, t)
+				case 6:
 					v.updateCard(c, t)
-				})
-
-				// The danger zone is a band across the page, not a button
-				// among the tools: wiping everything deserves to look
-				// different from exporting a backup.
-				zoneFill, zoneLine := statusOutline(t.Danger)
-				ui.Row(c).Gap(12).AlignItems(ui.Center).FillWidth().
-					Padding(14, 16).Radius(RadiusPanel).
-					Background(zoneFill).Border(1, zoneLine).
-					Children(func() {
-						ui.Column(c).Gap(2).Grow(1).Children(func() {
-							ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)
-							ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
-								FontSize(CaptionSize).TextColor(t.FG2)
-						})
-						if DangerButton(c, t, "清空所有数据").Disabled(busy).Clicked() {
-							a.Ask(&appt.Confirm{
-								Title: "清空所有数据",
-								Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
-								Label: "全部删除", Destructive: true,
-								Run: a.Wipe,
-							})
-						}
-					})
+				case 7:
+					v.dangerCard(c, t, busy)
+				}
 			})
-		}).Grow(1)
+		})
+	})
+}
+
+// dangerCard is the settings page's 危险操作 card: the wipe, alone, in
+// the danger's own outline — a card apart from the tools it outclasses
+// in consequence.
+func (v *View) dangerCard(c *ui.Context, t Tokens, busy bool) {
+	a := v.App
+	zoneFill, zoneLine := statusOutline(t.Danger)
+	ui.Column(c).FillWidth().Gap(4).Padding(16).Radius(RadiusPanel).
+		Background(zoneFill).Border(1, zoneLine).Children(func() {
+		ui.Text(c, "危险操作").FontSize(BodySize).Bold().TextColor(t.Danger)
+		ui.Text(c, "清空所有数据会删除映射、日志、快照和白名单，无法撤销。").
+			FontSize(CaptionSize).TextColor(t.FG2).Wrap()
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if DangerButton(c, t, "清空所有数据").Disabled(busy).Clicked() {
+				a.Ask(&appt.Confirm{
+					Title: "清空所有数据",
+					Body:  "映射、日志、快照和白名单都会被删除，无法撤销。",
+					Label: "全部删除", Destructive: true,
+					Run: a.Wipe,
+				})
+			}
+		})
 	})
 }
 

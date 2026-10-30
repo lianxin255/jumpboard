@@ -18,6 +18,10 @@ func TestSettingsUpdateCardDevBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	if err := tt.Click("设置分组 更新"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the update group", func() bool { return tt.HasText("开发构建不支持自动更新") })
 	if !tt.HasText("开发构建不支持自动更新") {
 		t.Fatalf("the card should say why there are no buttons: %v", tt.Texts())
 	}
@@ -48,8 +52,12 @@ func TestSettingsUpdateCheckAndInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	// The card sits below the fold, so the test scrolls to it as a user
-	// would before clicking.
+	if err := tt.Click("设置分组 更新"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, tt, "the update group", func() bool { return tt.HasText("检查更新") })
+	// The card can sit below the fold of a short window, so the test
+	// scrolls to it as a user would before clicking.
 	reveal(t, tt, "检查更新")
 	if err := tt.Click("检查更新"); err != nil {
 		t.Fatal(err)

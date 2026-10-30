@@ -30,13 +30,9 @@ func TestWhitelistEntryToggle(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	// The AI card now leads the settings page, so the cards these walks
-	// touch sit below the fold of the default window; they are reached
-	// the way a user reaches them, by scrolling to them.
+	openSettings(t, tt, "访问控制")
+	// The card can scroll on a short window; it is reached the way a
+	// user reaches it, by scrolling to it.
 	fillFieldScrolled(t, tt, "白名单地址", "10.1.2.3")
 	clickScrolled(t, tt, "添加")
 	waitFor(t, tt, "the address row", func() bool { return tt.HasText("10.1.2.3") })
@@ -70,10 +66,7 @@ func TestOpenAtLoginSwitch(t *testing.T) {
 	a := testApp(t)
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "通用与外观")
 	if err := tt.Click("开机自启动"); err != nil {
 		t.Fatal(err)
 	}
@@ -92,10 +85,7 @@ func TestOpenAtLoginSwitchFailureShowsError(t *testing.T) {
 	a.OnOpenAtLogin = func(bool) error { return errors.New("desktop unavailable") }
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "通用与外观")
 	if err := tt.Click("开机自启动"); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +125,7 @@ func TestSnapshotViewDialog(t *testing.T) {
 	if tt.HasText("还没有快照") {
 		t.Fatalf("the snapshot is missing: %v", tt.Texts())
 	}
-	if err := tt.Click("查看"); err != nil {
+	if err := tt.Click("查看差异"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -213,10 +203,7 @@ func TestExportNginxButton(t *testing.T) {
 	a.SaveDialog = func(mygo.SaveDialogOptions) (string, error) { return out, nil }
 
 	tt := tester(t, a, 1200, 760)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "备份与数据")
 	clickScrolled(t, tt, "导出 nginx 配置")
 	tt.Frame()
 	data, err := os.ReadFile(out)
@@ -258,13 +245,9 @@ func TestImportBackupButton(t *testing.T) {
 	a.OpenDialog = func(mygo.OpenDialogOptions) ([]string, error) { return []string{file}, nil }
 
 	tt := tester(t, a, 1200, 760)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	// The caption size the redesign raised sits the second row of cards
-	// lower, so the import button rests at this window's fold: the test
-	// scrolls to it, as the user would.
+	openSettings(t, tt, "备份与数据")
+	// The card can rest at a short window's fold: the test scrolls to it,
+	// as the user would.
 	reveal(t, tt, "导入备份")
 	if err := tt.Click("导入备份"); err != nil {
 		t.Fatal(err)

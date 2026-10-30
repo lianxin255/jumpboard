@@ -16,7 +16,9 @@ func (v *View) aiEntry(c *ui.Context, t Tokens) {
 	if !v.App.AIReady() {
 		return
 	}
-	if ui.Button(c, "✨ AI 建映射").Tooltip("去 AI 对话页：一句话生成映射草稿，可连续追问、聊配置").Clicked() {
+	// The plan drops the sparkle: the words alone say AI, and the toolbar
+	// keeps one quiet register — no emoji among the tools.
+	if ui.Button(c, "AI 建映射").Tooltip("去 AI 对话页：一句话生成映射草稿，可连续追问、聊配置").Clicked() {
 		v.App.SetPage(appt.PageAIChat)
 	}
 }

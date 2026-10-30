@@ -20,10 +20,7 @@ func TestConfViewerOpens(t *testing.T) {
 	}
 
 	tt := tester(t, a, 1280, 800)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "备份与数据")
 	// The viewer's button sits below the fold now that the AI card leads
 	// the settings page; scroll to it the way a user would.
 	clickScrolled(t, tt, "查看当前配置")

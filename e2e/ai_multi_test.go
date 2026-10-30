@@ -15,7 +15,7 @@ func TestAIMultiDraftFlow(t *testing.T) {
 	a.SetAI(srv.URL, "test-model")
 	tt := tester(t, a, 1200, 760)
 
-	if err := tt.Click("✨ AI 建映射"); err != nil {
+	if err := tt.Click("AI 建映射"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

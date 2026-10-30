@@ -21,10 +21,7 @@ func TestHotkeyCardEditsTheBinding(t *testing.T) {
 	// field is visible without scrolling.
 	tt := tester(t, a, 1200, 1400)
 
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "快捷键")
 	if !tt.HasText(appt.DefaultHotkey) {
 		t.Fatalf("the card should show the default binding: %v", tt.Texts())
 	}

@@ -336,10 +336,7 @@ func TestWhitelistBlocksTraffic(t *testing.T) {
 	}
 
 	tt := tester(t, a, 1200, 900)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "访问控制")
 
 	// A malformed address is refused and never stored.
 	fillField(t, tt, "白名单地址", "not-an-ip")
@@ -390,10 +387,7 @@ func TestWhitelistBlocksTraffic(t *testing.T) {
 	}
 
 	// Removing the address and switching the whitelist off serves traffic.
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "访问控制")
 	// The failed add left an error toast, and a toast holds the bottom of
 	// the window until its time is up. The caption size the redesign
 	// raised slid the row's 移除 into that band, so the test waits the
@@ -472,6 +466,13 @@ func TestHistoryRollbackTraffic(t *testing.T) {
 	tt := tester(t, a, 1200, 760)
 	if err := tt.Click("历史"); err != nil {
 		t.Fatal(err)
+	}
+	tt.Frame()
+	// The master-detail list chooses first: the older snapshot's row is
+	// clicked, which moves it into the reading pane, whose 回滚 then
+	// carries its id.
+	if err := tt.Click("快照 " + older.ID); err != nil {
+		t.Fatalf("choosing the older snapshot: %v\nshown: %v", err, tt.Texts())
 	}
 	tt.Frame()
 	if err := tt.Click("回滚 " + older.ID); err != nil {
@@ -578,10 +579,7 @@ func TestDataRoundTripUI(t *testing.T) {
 	a.OpenDialog = func(mygo.OpenDialogOptions) ([]string, error) { return []string{file}, nil }
 
 	tt := tester(t, a, 1200, 900)
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "备份与数据")
 	reveal(t, tt, "导入备份")
 	if err := tt.Click("导入备份"); err != nil {
 		t.Fatal(err)
@@ -591,6 +589,12 @@ func TestDataRoundTripUI(t *testing.T) {
 		return err == nil && len(got) == 1 && got[0].Name == "备份里的站"
 	})
 
+	// The wipe lives in its own group now, at the nav's end: the walk
+	// crosses to it the way a user would.
+	if err := tt.Click("设置分组 危险操作"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	reveal(t, tt, "清空所有数据")
 	if err := tt.Click("清空所有数据"); err != nil {
 		t.Fatal(err)

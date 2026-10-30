@@ -75,10 +75,7 @@ func TestShowTrafficSetting(t *testing.T) {
 	waitFor(t, tt, "the counters to land", func() bool { return tt.HasText("流量 ↓0 B ↑11 B") })
 
 	// Off: the switch sits on the settings page, which scrolls.
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "通用与外观")
 	clickScrolled(t, tt, "显示流量")
 	if a.ShowTraffic() {
 		t.Fatal("the switch should have turned the display off")
@@ -97,10 +94,7 @@ func TestShowTrafficSetting(t *testing.T) {
 	}
 
 	// And back on, the counts return without another request.
-	if err := tt.Click("设置"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
+	openSettings(t, tt, "通用与外观")
 	clickScrolled(t, tt, "显示流量")
 	if err := tt.Click("映射"); err != nil {
 		t.Fatal(err)
