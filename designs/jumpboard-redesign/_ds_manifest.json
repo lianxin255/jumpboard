@@ -1,0 +1,1116 @@
+{
+  "namespace": "JumpboardRedesign_2bf643",
+  "components": [
+    {
+      "name": "Badge",
+      "sourcePath": "components/core/Badge.jsx",
+      "props": [
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "protocol",
+          "values": [
+            "TCP",
+            "UDP",
+            "HTTP",
+            "HTTPS"
+          ]
+        },
+        {
+          "name": "className",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Button",
+      "sourcePath": "components/core/Button.jsx",
+      "props": [
+        {
+          "name": "variant",
+          "values": [
+            "primary",
+            "secondary",
+            "quiet",
+            "danger",
+            "danger-quiet"
+          ]
+        },
+        {
+          "name": "icon",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "IconButton",
+      "sourcePath": "components/core/IconButton.jsx",
+      "props": [
+        {
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "danger",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "Panel",
+      "sourcePath": "components/core/Panel.jsx",
+      "props": [
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        }
+      ]
+    },
+    {
+      "name": "Status",
+      "sourcePath": "components/core/Status.jsx",
+      "props": [
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "tone",
+          "values": [
+            "neutral",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DataTable",
+      "sourcePath": "components/data/DataTable.jsx",
+      "props": [
+        {
+          "name": "columns",
+          "type": "{ key: string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "width",
+          "type": "string }[]"
+        },
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Dialog",
+      "sourcePath": "components/feedback/Dialog.jsx",
+      "props": [
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "footer",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "onClose",
+          "type": "() => void"
+        }
+      ]
+    },
+    {
+      "name": "Notice",
+      "sourcePath": "components/feedback/Notice.jsx",
+      "props": [
+        {
+          "name": "children",
+          "type": "React.ReactNode"
+        },
+        {
+          "name": "tone",
+          "values": [
+            "warning",
+            "danger"
+          ]
+        },
+        {
+          "name": "action",
+          "type": "React.ReactNode"
+        }
+      ]
+    },
+    {
+      "name": "Input",
+      "sourcePath": "components/forms/Input.jsx",
+      "props": [
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "hint",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Segmented",
+      "sourcePath": "components/forms/Segmented.jsx",
+      "props": [
+        {
+          "name": "options",
+          "type": "string[]"
+        },
+        {
+          "name": "value",
+          "type": "string"
+        },
+        {
+          "name": "onChange",
+          "type": "(value: string) => void"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Switch",
+      "sourcePath": "components/forms/Switch.jsx",
+      "props": [
+        {
+          "name": "checked",
+          "type": "boolean"
+        },
+        {
+          "name": "onChange",
+          "type": "(checked: boolean) => void"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "disabled",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "NavItem",
+      "sourcePath": "components/navigation/NavItem.jsx",
+      "props": [
+        {
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "count",
+          "type": "number"
+        },
+        {
+          "name": "active",
+          "type": "boolean"
+        }
+      ]
+    }
+  ],
+  "startingPoints": [],
+  "cards": [
+    {
+      "path": "guidelines/icons.html",
+      "group": "Brand",
+      "viewport": "700x140",
+      "subtitle": "",
+      "name": "Original product icons"
+    },
+    {
+      "path": "guidelines/colors-accent.html",
+      "group": "Colors",
+      "viewport": "700x130",
+      "subtitle": "",
+      "name": "Restrained accent"
+    },
+    {
+      "path": "guidelines/colors-neutrals.html",
+      "group": "Colors",
+      "viewport": "700x150",
+      "subtitle": "",
+      "name": "Neutral surfaces"
+    },
+    {
+      "path": "guidelines/colors-semantic.html",
+      "group": "Colors",
+      "viewport": "700x150",
+      "subtitle": "",
+      "name": "Semantic colors"
+    },
+    {
+      "path": "components/core/card.html",
+      "group": "Components",
+      "viewport": "700x290",
+      "subtitle": "",
+      "name": "Actions, surfaces & status"
+    },
+    {
+      "path": "components/data/card.html",
+      "group": "Components",
+      "viewport": "700x240",
+      "subtitle": "",
+      "name": "Rule table"
+    },
+    {
+      "path": "components/feedback/card.html",
+      "group": "Components",
+      "viewport": "700x370",
+      "subtitle": "",
+      "name": "Notices & dialog"
+    },
+    {
+      "path": "components/forms/card.html",
+      "group": "Components",
+      "viewport": "700x290",
+      "subtitle": "",
+      "name": "Fields & choices"
+    },
+    {
+      "path": "components/navigation/card.html",
+      "group": "Components",
+      "viewport": "700x190",
+      "subtitle": "",
+      "name": "Section navigation"
+    },
+    {
+      "path": "guidelines/content.html",
+      "group": "Content",
+      "viewport": "700x160",
+      "subtitle": "",
+      "name": "Specific, calm language"
+    },
+    {
+      "path": "guidelines/elevation.html",
+      "group": "Geometry",
+      "viewport": "700x160",
+      "subtitle": "",
+      "name": "Single-layer surfaces"
+    },
+    {
+      "path": "guidelines/radii.html",
+      "group": "Geometry",
+      "viewport": "700x150",
+      "subtitle": "",
+      "name": "Purposeful radii"
+    },
+    {
+      "path": "guidelines/motion.html",
+      "group": "Interaction",
+      "viewport": "700x130",
+      "subtitle": "",
+      "name": "Quiet feedback"
+    },
+    {
+      "path": "ui_kits/workbench/index.html",
+      "group": "JumpBoard",
+      "viewport": "1440x900",
+      "subtitle": "",
+      "name": "Native desktop workbench"
+    },
+    {
+      "path": "guidelines/layout.html",
+      "group": "Layout",
+      "viewport": "700x180",
+      "subtitle": "",
+      "name": "Stable workbench skeleton"
+    },
+    {
+      "path": "guidelines/spacing.html",
+      "group": "Spacing",
+      "viewport": "700x130",
+      "subtitle": "",
+      "name": "4 / 8 grid"
+    },
+    {
+      "path": "guidelines/typography.html",
+      "group": "Type",
+      "viewport": "700x220",
+      "subtitle": "",
+      "name": "UI hierarchy"
+    }
+  ],
+  "globalCssPaths": [
+    "tokens/colors.css",
+    "tokens/typography.css",
+    "tokens/geometry.css",
+    "tokens/components.css",
+    "styles.css"
+  ],
+  "tokens": [
+    {
+      "name": "--canvas",
+      "value": "#f5f5f3",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--sidebar",
+      "value": "#eeeeeb",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-raised",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-subtle",
+      "value": "#f7f7f5",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-sunken",
+      "value": "#f0f1ef",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-hover",
+      "value": "#eceeeb",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-pressed",
+      "value": "#e3e6e1",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-primary",
+      "value": "#22272b",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-secondary",
+      "value": "#525c63",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-tertiary",
+      "value": "#68737a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-inverse",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border",
+      "value": "#dfe2dd",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border-subtle",
+      "value": "#e9ebe7",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border-strong",
+      "value": "#cbd1ca",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent",
+      "value": "#315fbf",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-hover",
+      "value": "#284fa4",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-pressed",
+      "value": "#23458f",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-soft",
+      "value": "#eaf0fb",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-softer",
+      "value": "#f3f6fc",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-border",
+      "value": "#ccd9f1",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success",
+      "value": "#26734a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success-soft",
+      "value": "#eaf5ee",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success-border",
+      "value": "#cee5d6",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning",
+      "value": "#87520a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning-soft",
+      "value": "#faf2e4",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning-border",
+      "value": "#eedcc0",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger",
+      "value": "#b33a36",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid",
+      "value": "#b33a36",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid-hover",
+      "value": "#982e2b",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid-text",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-hover",
+      "value": "#982e2b",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-soft",
+      "value": "#fbedeb",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-border",
+      "value": "#efd1ce",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--tcp",
+      "value": "#315fbf",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--udp",
+      "value": "#7351a6",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--http",
+      "value": "#207569",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--https",
+      "value": "#87520a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--shadow-modal",
+      "value": "0 20px 70px rgba(20, 28, 26, .22), 0 2px 10px rgba(20, 28, 26, .08)",
+      "kind": "shadow",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--focus-ring",
+      "value": "rgba(49, 95, 191, .24)",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--overlay",
+      "value": "rgba(23, 29, 27, .32)",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal",
+      "value": "#18211f",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal-text",
+      "value": "#d8e3dc",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal-muted",
+      "value": "#93a69a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--canvas",
+      "value": "#161a19",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--sidebar",
+      "value": "#1b201e",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface",
+      "value": "#202624",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-raised",
+      "value": "#252b29",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-subtle",
+      "value": "#252b29",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-sunken",
+      "value": "#191e1c",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-hover",
+      "value": "#2d3531",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--surface-pressed",
+      "value": "#353e38",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-primary",
+      "value": "#edf0eb",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-secondary",
+      "value": "#bdc6bf",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-tertiary",
+      "value": "#9ba79f",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--text-inverse",
+      "value": "#172033",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border",
+      "value": "#39423c",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border-subtle",
+      "value": "#303833",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--border-strong",
+      "value": "#49554d",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent",
+      "value": "#a2bdf3",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-hover",
+      "value": "#bdd0f5",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-pressed",
+      "value": "#d2def7",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-soft",
+      "value": "#2c3a50",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-softer",
+      "value": "#252f3e",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--accent-border",
+      "value": "#445c7e",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success",
+      "value": "#81cfa1",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success-soft",
+      "value": "#243b2e",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--success-border",
+      "value": "#375943",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning",
+      "value": "#e0b97b",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning-soft",
+      "value": "#3d3425",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--warning-border",
+      "value": "#5c4b30",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger",
+      "value": "#ef9a92",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid",
+      "value": "#9d3e38",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid-hover",
+      "value": "#b14a42",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-solid-text",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-hover",
+      "value": "#f5b2ab",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-soft",
+      "value": "#422d2a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--danger-border",
+      "value": "#65413c",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--tcp",
+      "value": "#a2bdf3",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--udp",
+      "value": "#c7b3e9",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--http",
+      "value": "#86cec0",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--https",
+      "value": "#e0b97b",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--shadow-modal",
+      "value": "0 20px 70px rgba(0, 0, 0, .55), 0 2px 10px rgba(0, 0, 0, .3)",
+      "kind": "shadow",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--focus-ring",
+      "value": "rgba(162, 189, 243, .25)",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--overlay",
+      "value": "rgba(0, 0, 0, .58)",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal",
+      "value": "#121917",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal-text",
+      "value": "#d8e3dc",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--terminal-muted",
+      "value": "#93a69a",
+      "kind": "color",
+      "definedIn": "tokens/colors.css"
+    },
+    {
+      "name": "--font-ui",
+      "value": "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Noto Sans SC\", sans-serif",
+      "kind": "font",
+      "definedIn": "tokens/typography.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--font-mono",
+      "value": "\"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace",
+      "kind": "font",
+      "definedIn": "tokens/typography.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--text-page",
+      "value": "22px",
+      "kind": "spacing",
+      "definedIn": "tokens/typography.css"
+    },
+    {
+      "name": "--text-section",
+      "value": "15px",
+      "kind": "spacing",
+      "definedIn": "tokens/typography.css"
+    },
+    {
+      "name": "--text-body",
+      "value": "13px",
+      "kind": "spacing",
+      "definedIn": "tokens/typography.css"
+    },
+    {
+      "name": "--text-note",
+      "value": "12px",
+      "kind": "spacing",
+      "definedIn": "tokens/typography.css"
+    },
+    {
+      "name": "--text-caption",
+      "value": "11px",
+      "kind": "spacing",
+      "definedIn": "tokens/typography.css"
+    },
+    {
+      "name": "--leading-body",
+      "value": "1.6",
+      "kind": "other",
+      "definedIn": "tokens/typography.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--leading-reading",
+      "value": "1.75",
+      "kind": "other",
+      "definedIn": "tokens/typography.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--weight-regular",
+      "value": "400",
+      "kind": "other",
+      "definedIn": "tokens/typography.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--weight-medium",
+      "value": "500",
+      "kind": "other",
+      "definedIn": "tokens/typography.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--weight-semibold",
+      "value": "600",
+      "kind": "other",
+      "definedIn": "tokens/typography.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--space-1",
+      "value": "4px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-2",
+      "value": "8px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-3",
+      "value": "12px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-4",
+      "value": "16px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-5",
+      "value": "20px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-6",
+      "value": "24px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--space-8",
+      "value": "32px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--sidebar-width",
+      "value": "208px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--page-gutter",
+      "value": "28px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--content-max",
+      "value": "1440px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-height",
+      "value": "32px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--control-height-large",
+      "value": "36px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--row-height",
+      "value": "64px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--radius-control",
+      "value": "7px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--radius-panel",
+      "value": "10px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--radius-modal",
+      "value": "12px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--radius-chip",
+      "value": "5px",
+      "kind": "spacing",
+      "definedIn": "tokens/geometry.css"
+    },
+    {
+      "name": "--duration-fast",
+      "value": "120ms",
+      "kind": "other",
+      "definedIn": "tokens/geometry.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--duration-panel",
+      "value": "180ms",
+      "kind": "other",
+      "definedIn": "tokens/geometry.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--ease-standard",
+      "value": "cubic-bezier(.2, 0, 0, 1)",
+      "kind": "other",
+      "definedIn": "tokens/geometry.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--icon-filter",
+      "value": "invert(.88) sepia(.08) saturate(350%)",
+      "kind": "other",
+      "definedIn": "tokens/components.css",
+      "annotation": "other"
+    }
+  ],
+  "themes": [],
+  "fonts": [],
+  "brandFonts": [],
+  "source": "spa"
+}

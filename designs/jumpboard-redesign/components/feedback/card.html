@@ -1,0 +1,14 @@
+<!-- @dsCard group="Components" viewport="700x370" name="Notices & dialog" -->
+<link rel="stylesheet" href="../../styles.css" />
+<div id="root" style="padding:20px;background:var(--canvas);display:flex;flex-direction:column;gap:12px"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { Button, Notice, Dialog } = window.JumpboardRedesign_2bf643;
+function FeedbackSpecimen() {
+  const [opened, setOpened] = React.useState(false);
+  return <><Notice>有未生效的改动，应用配置后对外生效。</Notice><Notice tone="danger">端口被占用，请修改监听端口后重试。</Notice><Button onClick={() => setOpened(true)}>查看单层弹窗</Button>{opened && <Dialog title="新建映射" onClose={() => setOpened(false)} footer={<Button variant="primary" onClick={() => setOpened(false)}>保存</Button>}><p className="body-copy">一块表面，清晰的标题、内容与固定操作区。</p></Dialog>}</>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<FeedbackSpecimen />);
+</script>

@@ -1,0 +1,22 @@
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --sidebar-width: 208px;
+  --page-gutter: 28px;
+  --content-max: 1440px;
+  --control-height: 32px;
+  --control-height-large: 36px;
+  --row-height: 64px;
+  --radius-control: 7px;
+  --radius-panel: 10px;
+  --radius-modal: 12px;
+  --radius-chip: 5px;
+  --duration-fast: 120ms; /* @kind other */
+  --duration-panel: 180ms; /* @kind other */
+  --ease-standard: cubic-bezier(.2, 0, 0, 1); /* @kind other */
+}

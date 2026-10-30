@@ -1,0 +1,41 @@
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif; /* @kind font */
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace; /* @kind font */
+  --text-page: 22px;
+  --text-section: 15px;
+  --text-body: 13px;
+  --text-note: 12px;
+  --text-caption: 11px;
+  --leading-body: 1.6; /* @kind other */
+  --leading-reading: 1.75; /* @kind other */
+  --weight-regular: 400; /* @kind other */
+  --weight-medium: 500; /* @kind other */
+  --weight-semibold: 600; /* @kind other */
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--text-primary);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea { font: inherit; }
+
+button { color: inherit; }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-danger { color: var(--danger); }
+.text-success { color: var(--success); }
+.section-title { margin: 0; font-size: var(--text-section); line-height: 1.4; font-weight: var(--weight-semibold); }
+.page-title { margin: 0; font-size: var(--text-page); line-height: 1.35; letter-spacing: -.025em; font-weight: var(--weight-semibold); }
+.body-copy { margin: 0; line-height: var(--leading-reading); }
+.muted { color: var(--text-secondary); }
