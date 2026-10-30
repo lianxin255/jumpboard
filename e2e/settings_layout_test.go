@@ -32,7 +32,7 @@ func TestSettingsNavListsEveryGroup(t *testing.T) {
 	// reachable row, said once.
 	for _, group := range []string{
 		"AI 配置", "通用与外观", "访问控制", "备份与数据",
-		"场景", "快捷键", "更新", "危险操作",
+		"场景管理", "快捷键", "更新", "危险操作",
 	} {
 		if !tt.HasText("设置分组 " + group) {
 			t.Errorf("the nav should list %q: %v", group, tt.Texts())
@@ -58,7 +58,7 @@ func TestSettingsGroupsSwitchByClick(t *testing.T) {
 		{"通用与外观", "跟随系统"},
 		{"访问控制", "启用白名单"},
 		{"备份与数据", "导出备份"},
-		{"场景", "新建场景"},
+		{"场景管理", "新建场景"},
 		{"快捷键", "保存快捷键"},
 		{"更新", "开发构建不支持自动更新"},
 		{"危险操作", "清空所有数据"},

@@ -51,14 +51,14 @@ func main() {
 	a.Tpl = services.NewTemplates(builtin, p.DataDir+"/templates/custom")
 
 	rows := []model.Mapping{
-		{Name: "MySQL 内网", Protocol: model.TCP, Enabled: true, ListenPort: 9000,
+		{Name: "MySQL 内网", Protocol: model.TCP, Enabled: true, ListenPort: 9000, Group: "数据库",
 			UpstreamHost: "192.168.1.10", UpstreamPort: 3306, HealthCheckEnabled: true, HealthStatus: model.HealthHealthy},
-		{Name: "GitLab Web", Protocol: model.HTTP, Enabled: true, ListenPort: 8080,
+		{Name: "GitLab Web", Protocol: model.HTTP, Enabled: true, ListenPort: 8080, Group: "Web 服务",
 			ServerNames: "git.example.com", ListenPath: "/", UpstreamHost: "192.168.1.20", UpstreamPort: 80,
 			ProxyMode: model.ProxyStandard, HealthCheckEnabled: true, HealthStatus: model.HealthOff},
-		{Name: "Redis 缓存", Protocol: model.TCP, Enabled: false, ListenPort: 9100,
+		{Name: "Redis 缓存", Protocol: model.TCP, Enabled: false, ListenPort: 9100, Group: "数据库",
 			UpstreamHost: "192.168.1.30", UpstreamPort: 6379, HealthCheckEnabled: true, HealthStatus: model.HealthUnhealthy},
-		{Name: "MQTT Broker", Protocol: model.UDP, Enabled: true, ListenPort: 1883,
+		{Name: "MQTT Broker", Protocol: model.UDP, Enabled: true, ListenPort: 1883, Group: "物联网",
 			UpstreamHost: "192.168.1.40", UpstreamPort: 1883, HealthCheckEnabled: true, HealthStatus: model.HealthHealthy},
 	}
 	for _, m := range rows {

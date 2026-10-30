@@ -219,13 +219,23 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 	// once pushed the composer flush against the window's edge. The floor
 	// keeps the scroll itself usable in a window at its shortest.
 	panelShell(c, t).Grow(1).MinHeight(160).Children(func() {
-		ui.List(c, &v.chatListState, len(items), func(i int) {
-			v.chatRow(c, t, items[i], errText, note, drafts, busy, streaming, partial)
-		}).Grow(1).Padding(14, 16).Gap(12).Justify(ui.End).Children(func() {
-			if len(items) == 0 {
-				ui.Text(c, "说说你想转发的服务，比如：把内网 MySQL 和 Redis 分别暴露到 9000/9001").
-					FontSize(NoteSize).TextColor(t.Muted).Margin(ui.Auto)
-			}
+		ui.Column(c).Fill().Children(func() {
+			// The panel's own heading, the plan's: it says what the column
+			// is and what the assistant will not do — draft, never write.
+			ui.Column(c).Gap(2).Padding(12, 16).
+				BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
+				ui.Text(c, "对话").FontSize(BodySize).Bold().TextColor(t.FG)
+				ui.Text(c, "AI 只生成草稿，不会直接修改或应用配置").
+					FontSize(CaptionSize).TextColor(t.Muted)
+			})
+			ui.List(c, &v.chatListState, len(items), func(i int) {
+				v.chatRow(c, t, items[i], errText, note, drafts, busy, streaming, partial)
+			}).Grow(1).Padding(14, 16).Gap(12).Justify(ui.End).Children(func() {
+				if len(items) == 0 {
+					ui.Text(c, "说说你想转发的服务，比如：把内网 MySQL 和 Redis 分别暴露到 9000/9001").
+						FontSize(NoteSize).TextColor(t.Muted).Margin(ui.Auto)
+				}
+			})
 		})
 	})
 }

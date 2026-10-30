@@ -28,8 +28,10 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 		// is the page's one conditional block.
 		v.pageNotices(c, t, busy)
 
-		// The page's one toolbar: the tab and level pickers, the search,
-		// and the row's own actions, wrapping on a narrow window.
+		// The page's first toolbar: the tab and level pickers, and the
+		// row's own actions, wrapping on a narrow window. The search gets
+		// its own row below, the plan's placement — a field that narrows
+		// the stream reads as its own control, not as another picker.
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
 			// No fixed width: the control sizes to its labels. Width(220)
 			// was tighter than the CJK labels and clipped them.
@@ -37,7 +39,6 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			if v.logTab == 0 {
 				ui.Segmented(c, &v.logLevel, "全部", "错误", "警告", "信息").Label("级别")
 			}
-			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(260)
 			ui.Spacer(c)
 			if v.logTab == 0 {
 				if ui.Button(c, "导出").Disabled(busy).
@@ -87,6 +88,11 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 					})
 				}
 			}
+		})
+
+		// The search: its own row, under the pickers it narrows.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
+			ui.SearchField(c, &v.logQuery).Label("搜索日志").Width(280)
 		})
 
 		if v.logTab == 1 {
@@ -250,6 +256,18 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 			return
 		}
 
+		// The page's quiet caption and its one export, above the frame:
+		// the plan's placement, so the frame itself stays the reading.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "每次成功应用自动保存，可回看差异或回滚").
+				FontSize(CaptionSize).TextColor(t.Muted)
+			ui.Spacer(c)
+			if ui.Button(c, "导出配置").FontSize(CaptionSize).
+				Tooltip("导出当前生效的 nginx.conf").Clicked() {
+				v.exportNginx()
+			}
+		})
+
 		// The chosen snapshot rides the view's state, like the settings
 		// group: the first snapshot is the opening choice, so the page
 		// lands reading instead of asking.
@@ -287,23 +305,27 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 					if on {
 						row.Background(t.AccentSoft)
 					}
-					row.Children(func() {
-						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-							// The row itself is the click: choosing here is
-							// reading, so the whole row answers.
-							ui.Textf(c, "%s · %d 行", formatTime(sn.CreatedAt), strings.Count(sn.Content, "\n")+1).
-								FontSize(BodySize).FontWeight(func() int {
-								if on {
-									return 500
-								}
-								return 400
-							}()).TextColor(t.FG).Grow(1)
+						row.Children(func() {
+							ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+								// The row itself is the click: choosing here is
+								// reading, so the whole row answers.
+								ui.Text(c, formatTime(sn.CreatedAt)).
+									FontSize(BodySize).FontWeight(func() int {
+									if on {
+										return 500
+									}
+									return 400
+								}()).TextColor(t.FG).Grow(1)
+							})
+							// The row's second line: why the snapshot was taken
+							// and how big it is — the plan's summary line, which
+							// says more than a bare reason.
+							ui.Textf(c, "%s · %d 行", sn.Reason, strings.Count(sn.Content, "\n")+1).
+								FontSize(CaptionSize).TextColor(t.Muted).SingleLine()
 							if on {
 								ui.Text(c, "当前查看").FontSize(CaptionSize).TextColor(t.Accent)
 							}
 						})
-						ui.Text(c, sn.Reason).FontSize(CaptionSize).TextColor(t.Muted).SingleLine()
-					})
 					if row.Clicked() {
 						v.historyChosenID = sn.ID
 						a.Change()
@@ -399,7 +421,7 @@ func settingsSections() []settingsSection {
 		{1, "通用与外观", icons.Settings},
 		{2, "访问控制", icons.Check},
 		{3, "备份与数据", icons.History},
-		{4, "场景", icons.Relay},
+		{4, "场景管理", icons.Relay},
 		{5, "快捷键", icons.Terminal},
 		{6, "更新", icons.Activity},
 		{7, "危险操作", icons.Alert},
@@ -420,7 +442,9 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 		v.settingsSection = 0
 	}
 
-	ui.Row(c).Fill().AlignItems(ui.Start).Gap(24).Children(func() {
+	// The page's own padding: the master-detail frame sits inside it, so
+	// the content column ends PagePadX short of the window's edge.
+	ui.Row(c).Fill().Padding(PagePadY, PagePadX).AlignItems(ui.Start).Gap(24).Children(func() {
 		// The nav: the page's own list, sticky in the frame's left. The
 		// chosen group carries the accent's wash; the rest stay quiet.
 		ui.Column(c).Width(168).Shrink(0).Gap(2).Children(func() {
@@ -442,11 +466,12 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 			}
 		})
 
-		// The content: the chosen group's cards in one scroll, each card
-		// full width of the column — the pairs the old layout split now
-		// read one after another.
+		// The content: the chosen group's title and one line of what it is
+		// for — the plan's master-detail head — then its cards in one
+		// scroll, each full width of the column.
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).FillWidth().Gap(16).Children(func() {
+				v.settingsGroupHeading(c, t)
 				switch v.settingsSection {
 				case 0:
 					v.aiCard(c, t)
@@ -468,6 +493,45 @@ func (v *View) settingsPage(c *ui.Context, t Tokens) {
 				}
 			})
 		})
+	})
+}
+
+// settingsGroupHeading is the content column's head: the chosen group's
+// name as a page-level title and one line saying what the group is for.
+// The cards under it carry their own section titles; this says which group
+// the reader is in, the one thing a master-detail page must never leave
+// implicit.
+func (v *View) settingsGroupHeading(c *ui.Context, t Tokens) {
+	var title, note string
+	switch v.settingsSection {
+	case 0:
+		title = "AI 配置"
+		note = "配置兼容 OpenAI 的模型服务。只有主动使用 AI 功能时才发送对应内容。"
+	case 1:
+		title = "通用与外观"
+		note = "应用名称、外观与显示偏好。"
+	case 2:
+		title = "访问控制"
+		note = "限制可访问所有代理的客户端 IP。"
+	case 3:
+		title = "备份与数据"
+		note = "备份、导入和查看实际生成的配置。"
+	case 4:
+		title = "场景管理"
+		note = "每个场景一套独立映射：公司、家里各存各的规则。"
+	case 5:
+		title = "快捷键"
+		note = "设置全局显示/隐藏窗口的快捷键。"
+	case 6:
+		title = "更新"
+		note = "检查新版本，更新前保留当前配置。"
+	case 7:
+		title = "危险操作"
+		note = "会删除现有数据的操作集中在这里。"
+	}
+	ui.Column(c).Gap(4).Children(func() {
+		ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+		ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 	})
 }
 

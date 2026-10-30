@@ -472,21 +472,18 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 	}
 	page.Children(func() {
 
-		// The page's two tool rows, one meaning each. The first row is the
-		// page's identity and its ways forward: which scene's rules, the
-		// search through them, and every door that creates — a blank form,
-		// a template, a paste, the AI's drafts — with 新建映射, the primary
-		// action, last. The second is only what narrows the table: the
-		// status segments, the group chips, the AI filter. Creation and
-		// filtering never share a row, so a tool sits where its meaning
-		// is. Both rows wrap, so a narrow window moves a row's own tools
-		// onto its next line before the table's addresses give way.
+		// The page's tool rows, one meaning each, following the plan: the
+		// first is where the rules live — which scene's rules, and every
+		// door that creates one (a blank form, a template, a paste), with
+		// 新建映射 last as the page's primary action. The second narrows
+		// what the table shows: the search through it, the status segments
+		// and the AI filter. The third is the group chips alone, so a rule
+		// book with many groups can never push the search or the doors off
+		// the page. Creation and filtering never share a row.
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
 			v.workspaceChips(c, t, busy)
+			ui.Spacer(c)
 			if len(mappings) > 0 {
-				v.searchBox(c, t)
-				// No fixed width: the control sizes to its labels. A width
-				// narrower than the CJK labels overlapped the button beside it.
 				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
@@ -495,9 +492,6 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 					a.RunBackground(a.StartPasteImport)
 				}
 			}
-			// The AI's door draws with an empty page too: a first run can
-			// ask for its first rules in one sentence.
-			v.aiEntry(c, t)
 			if len(mappings) > 0 {
 				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
 					Tooltip("新建一条映射（⌘N）").Clicked() {
@@ -507,11 +501,22 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
 			if len(mappings) > 0 {
+				v.searchBox(c, t)
 				ui.Segmented(c, &v.filter, "全部", "已启用", "已停用").Label("筛选")
-				v.groupChips(c, t, groups)
 			}
+			ui.Spacer(c)
+			// The AI's doors sit on the quiet right edge of the filter row:
+			// a first run can ask for its first rules in one sentence even
+			// with no rules yet.
+			v.aiEntry(c, t)
 			v.aiFilterBar(c, t)
 		})
+		// The group chips: one row of their own, under the filters they
+		// narrow — the plan's placement, and the one that keeps a long
+		// group list from crowding the row above.
+		if len(mappings) > 0 && len(groups) > 0 {
+			v.groupChips(c, t, groups)
+		}
 		// The line a filter ask leaves behind: its error, or its rationale
 		// and the button that puts the table back.
 		v.aiFilterResult(c, t)
@@ -612,7 +617,11 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 				{Title: "转发关系"},
 				{Title: "健康", Width: 116},
 				{Title: "启用", Width: 64},
-				{Title: "操作", Width: actionsCol},
+				// The actions column carries no title: the two glyphs say
+				// themselves, and the plan leaves the header blank so the
+				// eye stops at 启用 rather than at a word with nothing to
+				// group.
+				{Title: "", Width: actionsCol},
 			}
 			ui.Table(c, &v.table, cols, len(filtered), func(row, col int) {
 				m := filtered[row]
@@ -1274,10 +1283,10 @@ func (v *View) groupChips(c *ui.Context, t Tokens, groups []string) {
 		return
 	}
 	names := append([]string{"全部"}, groups...)
-	// The chips take their natural width beside the row's other tools and
-	// wrap past a bound, so a rule book with many groups cannot push the
-	// template, paste and AI doors off the page.
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().MaxWidth(360).Children(func() {
+	// The chips own their row now: a wider bound lets a long group list
+	// read across before it wraps, since it no longer shares space with
+	// the search and the creation doors.
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().MaxWidth(720).Children(func() {
 		for _, name := range names {
 			// 全部 selects the empty filter, the state with no group chosen.
 			target := name

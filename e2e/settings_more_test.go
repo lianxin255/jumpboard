@@ -54,6 +54,11 @@ func TestWhitelistEntryToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, tt, "the address disabled", func() bool { return !enabled() })
+	// waitFor watches the store, and its last frame can still show the old
+	// switch: a second click on that frame would send the old value again
+	// and flip nothing. Draw the settled state first, as a user would see
+	// it before clicking again.
+	tt.Frame()
 	if err := tt.Click("启用-10.1.2.3"); err != nil {
 		t.Fatal(err)
 	}
