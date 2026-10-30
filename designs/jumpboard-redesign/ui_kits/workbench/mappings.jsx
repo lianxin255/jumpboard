@@ -20,10 +20,14 @@ function MappingsPage({ mappings, setMappings, dirty, setDirty, onAction, onNewM
     <div className="toolbar">
       <div className="search"><img src={asset("search")} alt="" /><input className="jb-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、端口或上游地址" aria-label="搜索映射" /></div>
       <Segmented options={["全部", "已启用", "已停用"]} value={filter} onChange={setFilter} label="筛选映射" />
-      <select className="scene-select" value={group} onChange={(event) => setGroup(event.target.value)} aria-label="按分组筛选">{["全部分组", ...new Set(mappings.map((mapping) => mapping.group))].map((item) => <option key={item}>{item}</option>)}</select>
       <div className="toolbar__spacer"></div>
       <Button variant="quiet" icon={asset("chat")} onClick={onChat}>AI 建映射</Button>
       <Button variant="quiet" onClick={() => onAction("AI 筛选只发送映射摘要，不包含密钥")}>AI 筛选</Button>
+    </div>
+    <div className="toolbar toolbar--chips">
+      <div className="group-chips" role="group" aria-label="按分组筛选">
+        {["全部", ...new Set(mappings.map((mapping) => mapping.group))].map((item) => <button key={item} type="button" className="group-chip" aria-pressed={(item === "全部" && group === "全部分组") || item === group} onClick={() => setGroup(item === "全部" ? "全部分组" : item)}>{item}</button>)}
+      </div>
     </div>
     {dirty && <div className="pending-notice"><Notice><strong>有未生效的改动。</strong> 当前列表已保存，点击右上角「应用配置」后对外生效。</Notice></div>}
     <Panel className="mapping-panel">

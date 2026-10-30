@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/app.jsx":"e05824bc34b2","ui_kits/workbench/chrome.jsx":"77f76a782562","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"12e91df84363","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/settings.jsx":"2f0485402777","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/app.jsx":"16fed4e8becb","ui_kits/workbench/chrome.jsx":"77f76a782562","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"81e98a5c595a","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/settings.jsx":"2f0485402777","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -328,6 +328,9 @@ function App() {
     window.history.replaceState({}, "", url);
   };
   const [theme, setTheme] = React.useState("亮色");
+  React.useEffect(() => {
+    document.documentElement.dataset.theme = theme === "暗色" ? "dark" : "light";
+  }, [theme]);
   const [running, setRunning] = React.useState(true);
   const [dirty, setDirty] = React.useState(true);
   const [mappings, setMappings] = React.useState(initialMappings);
@@ -349,8 +352,7 @@ function App() {
     notify(apply ? "映射已保存，配置已应用" : "映射已保存，等待应用配置");
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "prototype-shell",
-    "data-theme": theme === "暗色" ? "dark" : "light"
+    className: "prototype-shell"
   }, /*#__PURE__*/React.createElement("div", {
     className: "prototype-meta"
   }, /*#__PURE__*/React.createElement("strong", null, "JumpBoard / \u754C\u9762\u91CD\u8BBE\u8BA1"), /*#__PURE__*/React.createElement("span", {
@@ -814,14 +816,7 @@ function MappingsPage({
     value: filter,
     onChange: setFilter,
     label: "\u7B5B\u9009\u6620\u5C04"
-  }), /*#__PURE__*/React.createElement("select", {
-    className: "scene-select",
-    value: group,
-    onChange: event => setGroup(event.target.value),
-    "aria-label": "\u6309\u5206\u7EC4\u7B5B\u9009"
-  }, ["全部分组", ...new Set(mappings.map(mapping => mapping.group))].map(item => /*#__PURE__*/React.createElement("option", {
-    key: item
-  }, item))), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "toolbar__spacer"
   }), /*#__PURE__*/React.createElement(Button, {
     variant: "quiet",
@@ -830,7 +825,19 @@ function MappingsPage({
   }, "AI \u5EFA\u6620\u5C04"), /*#__PURE__*/React.createElement(Button, {
     variant: "quiet",
     onClick: () => onAction("AI 筛选只发送映射摘要，不包含密钥")
-  }, "AI \u7B5B\u9009")), dirty && /*#__PURE__*/React.createElement("div", {
+  }, "AI \u7B5B\u9009")), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar toolbar--chips"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "group-chips",
+    role: "group",
+    "aria-label": "\u6309\u5206\u7EC4\u7B5B\u9009"
+  }, ["全部", ...new Set(mappings.map(mapping => mapping.group))].map(item => /*#__PURE__*/React.createElement("button", {
+    key: item,
+    type: "button",
+    className: "group-chip",
+    "aria-pressed": item === "全部" && group === "全部分组" || item === group,
+    onClick: () => setGroup(item === "全部" ? "全部分组" : item)
+  }, item)))), dirty && /*#__PURE__*/React.createElement("div", {
     className: "pending-notice"
   }, /*#__PURE__*/React.createElement(Notice, null, /*#__PURE__*/React.createElement("strong", null, "\u6709\u672A\u751F\u6548\u7684\u6539\u52A8\u3002"), " \u5F53\u524D\u5217\u8868\u5DF2\u4FDD\u5B58\uFF0C\u70B9\u51FB\u53F3\u4E0A\u89D2\u300C\u5E94\u7528\u914D\u7F6E\u300D\u540E\u5BF9\u5916\u751F\u6548\u3002")), /*#__PURE__*/React.createElement(Panel, {
     className: "mapping-panel"

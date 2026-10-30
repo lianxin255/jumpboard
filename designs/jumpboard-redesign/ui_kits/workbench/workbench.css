@@ -41,6 +41,11 @@ body { min-width: 760px; }
 .search img { position: absolute; width: 15px; height: 15px; top: 10px; left: 10px; opacity: .55; filter: var(--icon-filter, none); pointer-events: none; }
 .search .jb-input { padding-left: 32px; min-height: 34px; }
 .scene-select { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text-primary); }
+.toolbar--chips { margin-top: -4px; }
+.group-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: 720px; }
+.group-chip { padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--radius-chip); background: var(--surface-subtle); color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.group-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.group-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 500; }
 .toolbar-caption { font-size: 12px; color: var(--text-secondary); }
 .mapping-panel { overflow: hidden; }
 .mapping-panel .jb-table th:first-child, .mapping-panel .jb-table td:first-child { padding-left: 16px; }
@@ -150,10 +155,18 @@ body { min-width: 760px; }
 .dialog-route-preview { padding: 12px; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 7px; font-size: 12px; color: var(--text-secondary); }
 .dialog-form-footer-note { margin-right: auto; font-size: 11px; color: var(--text-secondary); }
 @keyframes enter { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+/* The AI page's split point: at 1120 and wider the conversation and the
+   draft column read side by side; below it the draft column would be too
+   narrow to read a forwarding address on, so the page falls back to one
+   scroll — the conversation, with the drafts riding at its end. */
+@media (max-width: 1119px) {
+  .chat-layout { display: flex; flex-direction: column; height: auto; }
+  .chat-panel { min-height: 420px; height: min(560px, 62dvh); }
+  .draft-panel { max-height: 520px; }
+}
 @media (max-width: 1180px) {
   :root { --page-gutter: 20px; }
   .optional-column { display: none; }
-  .chat-layout { grid-template-columns: minmax(0, 1fr) 320px; }
   .history-layout { grid-template-columns: 240px minmax(0, 1fr); }
   .forward-relation__row { flex-direction: column; align-items: flex-start; gap: 2px; }
   .forward-relation__row > span { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
@@ -175,8 +188,5 @@ body { min-width: 760px; }
   .service-control__top { flex-direction: column; }
   .service-control__title { font-size: 0; }
   .settings-layout { grid-template-columns: 150px minmax(0, 1fr); gap: 20px; }
-  .chat-layout { grid-template-columns: 1fr; height: auto; }
-  .chat-panel { min-height: 420px; height: min(520px, 60dvh); }
-  .draft-panel { max-height: 480px; }
   .history-layout { grid-template-columns: 210px minmax(0, 1fr); }
 }
