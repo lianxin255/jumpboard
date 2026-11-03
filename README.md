@@ -48,7 +48,7 @@ go tool mygo build -platform darwin/universal   # 或 windows/amd64
 
 | 平台 | 文件 |
 |---|---|
-| macOS | `JumpBoard.app`、`JumpBoard 1.2.0.dmg` |
+| macOS | `JumpBoard.app`、`jumpboard-1.2.0.dmg`、`install.sh` |
 | Windows | `JumpBoard.exe`、`icon.png`、`icon.svg` |
 
 ## 分发（未签名版）

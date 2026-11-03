@@ -171,6 +171,9 @@ type App struct {
 	ruleStatus []engine.RuleStatus
 	// copied is the last text CopyAddress put on the clipboard.
 	copied string
+	// chatLastRequest is the exact last question used for a retry. It is
+	// not a new user turn, so retrying never duplicates the conversation.
+	chatLastRequest string
 	// bg tracks RunBackground's goroutines, so Close can wait them out.
 	bg sync.WaitGroup
 	// closers hold the cleanups OnClose registered — the UI's terminal
@@ -229,6 +232,10 @@ type App struct {
 	chatNote string
 	// chatDrafts are sanitized AIDrafts, never raw model output.
 	chatDrafts []AIDraft
+	// chatScene binds the conversation to the scene whose rules it knows.
+	// Replies and pending edits cannot be applied to another scene after a
+	// switch or an application restart.
+	chatScene string
 
 	// The update the last check found, if any, and how far its download
 	// got: negative means unknown or not downloading. updateBusy covers a

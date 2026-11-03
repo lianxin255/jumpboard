@@ -86,6 +86,33 @@ func (s *Store) migrate() error {
 		return fmt.Errorf("indexing mappings.workspace_id: %w", err)
 	}
 	// app_settings gained no schema of its own; the rows are defaults.
+	// Conversation history and pending drafts belong to their scenes: they
+	// are deleted with the scene, not with a change of selected scene.
+	for _, ddl := range []string{
+		`CREATE TABLE IF NOT EXISTS ai_chat_turns (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+			role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+			content TEXT NOT NULL,
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_chat_turns_workspace ON ai_chat_turns(workspace_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS ai_chat_drafts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			operation TEXT NOT NULL DEFAULT 'create' CHECK(operation IN ('create','update')),
+			target_id TEXT,
+			original TEXT,
+			proposed TEXT NOT NULL,
+			explanation TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_chat_drafts_workspace ON ai_chat_drafts(workspace_id, sort_order, id)`,
+	} {
+		if _, err := s.db.Exec(ddl); err != nil {
+			return fmt.Errorf("creating AI chat schema: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -198,6 +225,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
 // ErrNotFound is returned when a row does not exist.
 var ErrNotFound = errors.New("not found")
+
+// ErrConflict is returned when an edit no longer matches the version it
+// was proposed against; the new write must not hide a user's newer change.
+var ErrConflict = errors.New("conflict")
 
 // nowMillis is the timestamp the app stores everywhere. Tests replace it to
 // force several rows into the same millisecond.

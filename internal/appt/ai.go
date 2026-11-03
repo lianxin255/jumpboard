@@ -58,6 +58,37 @@ func (a *App) SetAIDiagModel(m string) error {
 	return nil
 }
 
+// AIChatTurns returns how many turns the request may carry. Local history
+// stays at 50 regardless of this setting: "all" sends that whole window.
+func (a *App) AIChatTurns() int {
+	switch a.Store.Setting(store.SettingAIChatTurns, "12") {
+	case "4":
+		return 4
+	case "8":
+		return 8
+	case "20":
+		return 20
+	case "all":
+		return 50
+	default:
+		return 12
+	}
+}
+
+// SetAIChatTurns stores the model context window, not the local retention.
+func (a *App) SetAIChatTurns(turns string) error {
+	switch turns {
+	case "4", "8", "12", "20", "all":
+	default:
+		return fmt.Errorf("对话轮数需为 4、8、12、20 或全部")
+	}
+	if err := a.Store.SetSetting(store.SettingAIChatTurns, turns); err != nil {
+		return err
+	}
+	a.notify()
+	return nil
+}
+
 // AIReady reports whether the AI panel should show at all: without an
 // endpoint and a model the feature stays hidden rather than offering a
 // button that fails.
@@ -161,9 +192,15 @@ func (a *App) diagClient() *ai.Client {
 }
 
 // AIDraft is one proposed mapping and what the model said about it.
+// For an edit, Original is the version the proposal was made against;
+// Conflict is set when that version no longer matches the scene's mapping.
 type AIDraft struct {
 	Mapping     model.Mapping
 	Explanation string
+	Operation   string
+	TargetID    string
+	Original    *model.Mapping
+	Conflict    string
 }
 
 // ProbeAI checks the endpoint with one small request.

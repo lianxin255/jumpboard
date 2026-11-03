@@ -23,6 +23,9 @@ const (
 	// interpretations use; "" means the main model. Mapping drafts always
 	// use the main model.
 	SettingAIDiagModel = "ai_diag_model"
+	// SettingAIChatTurns caps turns sent to the model, not local history:
+	// "4" | "8" | "12" | "20" | "all" (the persisted last 50 turns).
+	SettingAIChatTurns = "ai_chat_turns"
 	// SettingHotkey is the global show/hide accelerator; "" means the
 	// default binding.
 	SettingHotkey = "hotkey"

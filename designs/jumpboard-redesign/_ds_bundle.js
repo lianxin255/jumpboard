@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/app.jsx":"568312dc5cd0","ui_kits/workbench/chrome.jsx":"776b3f963589","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"be9b77450d8c","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/scene.jsx":"25abc784f552","ui_kits/workbench/settings.jsx":"05700dcea691","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":3,"namespace":"JumpboardRedesign_2bf643","components":[{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"IconButton","sourcePath":"components/core/IconButton.jsx"},{"name":"Panel","sourcePath":"components/core/Panel.jsx"},{"name":"Status","sourcePath":"components/core/Status.jsx"},{"name":"DataTable","sourcePath":"components/data/DataTable.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Notice","sourcePath":"components/feedback/Notice.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Segmented","sourcePath":"components/forms/Segmented.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"}],"sourceHashes":{"components/core/Badge.jsx":"a78cfbbff654","components/core/Button.jsx":"f5e996a8ff14","components/core/IconButton.jsx":"38396f636bb0","components/core/Panel.jsx":"71581cb70457","components/core/Status.jsx":"fded9035c7c1","components/data/DataTable.jsx":"a059f638d9ec","components/feedback/Dialog.jsx":"1ac9d3f06dc6","components/feedback/Notice.jsx":"4ba1fdca8308","components/forms/Input.jsx":"ee333f071401","components/forms/Segmented.jsx":"c2ff6447b35a","components/forms/Switch.jsx":"8c363d51542e","components/navigation/NavItem.jsx":"18f8256c1f4a","ui_kits/workbench/ai.jsx":"2155f7f099b7","ui_kits/workbench/app.jsx":"06dc9cd82330","ui_kits/workbench/chrome.jsx":"8795e222ca3b","ui_kits/workbench/data.jsx":"cedc5073ec58","ui_kits/workbench/mappings.jsx":"be9b77450d8c","ui_kits/workbench/observability.jsx":"9fb679d31124","ui_kits/workbench/scene.jsx":"25abc784f552","ui_kits/workbench/settings.jsx":"fe217e14446e","ui_kits/workbench/tools.jsx":"a71b60e776c5"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -310,6 +310,274 @@ function NavItem({
 Object.assign(__ds_scope, { NavItem });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "components/navigation/NavItem.jsx", error: String((e && e.message) || e) }); }
 
+// ui_kits/workbench/ai.jsx
+try { (() => {
+const {
+  Button,
+  IconButton,
+  Panel,
+  Badge,
+  Notice,
+  Dialog
+} = DS;
+function ChatPage({
+  onAction,
+  onImport,
+  onClear,
+  onApplyDraft,
+  scene
+}) {
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [clearOpen, setClearOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState("");
+  const [retrying, setRetrying] = React.useState(false);
+  const [demoState, setDemoState] = React.useState("正常流程");
+  const [drafts, setDrafts] = React.useState([{
+    id: "modify-mysql",
+    kind: "修改",
+    name: "MySQL 内网",
+    protocol: "TCP",
+    explanation: "保留原上游，仅调整本地监听端口，避免与现有服务冲突。",
+    changes: [{
+      field: "监听端口",
+      before: "127.0.0.1:9000",
+      after: "127.0.0.1:9002"
+    }]
+  }, {
+    id: "new-redis",
+    kind: "新增",
+    name: "内网 Redis",
+    protocol: "TCP",
+    local: "127.0.0.1:9001",
+    upstream: "192.168.1.11:6379",
+    explanation: "把内网 Redis 暴露到本机 9001 端口。"
+  }, {
+    id: "conflict-git",
+    kind: "修改",
+    name: "GitLab Web",
+    protocol: "HTTP",
+    conflict: "原规则已在对话后被修改，请重新生成草稿，避免覆盖你的改动。",
+    changes: [{
+      field: "上游地址",
+      before: "192.168.1.20:80",
+      after: "192.168.1.30:80"
+    }]
+  }].filter(item => demoState === "规则冲突" ? item.id === "conflict-git" : item.id !== "conflict-git"));
+  const send = () => {
+    if (!input.trim() || busy) return;
+    setBusy(true);
+    setInput("");
+    setTimeout(() => {
+      setBusy(false);
+      onAction("已生成修改建议；原型不会向外部服务发送内容");
+    }, 850);
+  };
+  const retry = () => {
+    if (retrying) return;
+    setRetrying(true);
+    setTimeout(() => {
+      setRetrying(false);
+      onAction("已基于原问题重新生成，没有重复添加用户消息");
+    }, 900);
+  };
+  const copy = id => {
+    setCopied(id);
+    onAction("已复制可读回复，不包含草稿 JSON");
+    setTimeout(() => setCopied(""), 1800);
+  };
+  const discard = id => setDrafts(drafts.filter(item => item.id !== id));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "page__inner chat-layout",
+    "data-screen-label": "AI \u5BF9\u8BDD\u4E0E\u8349\u7A3F\u5BA1\u9605"
+  }, /*#__PURE__*/React.createElement(Panel, {
+    className: "chat-panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-panel__heading"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    className: "section-title"
+  }, "\u5BF9\u8BDD"), /*#__PURE__*/React.createElement("p", null, "\u5F53\u524D\u573A\u666F\u300C", scene, "\u300D \xB7 \u672C\u5730\u4FDD\u5B58\u6700\u8FD1 50 \u8F6E \xB7 \u53D1\u9001\u6700\u8FD1 12 \u8F6E")), /*#__PURE__*/React.createElement("div", {
+    className: "chat-panel__actions"
+  }, /*#__PURE__*/React.createElement("select", {
+    className: "demo-select",
+    value: demoState,
+    onChange: event => {
+      setDemoState(event.target.value);
+      setDrafts(event.target.value === "规则冲突" ? [{
+        id: "conflict-git",
+        kind: "修改",
+        name: "GitLab Web",
+        protocol: "HTTP",
+        conflict: "原规则已在对话后被修改，请重新生成草稿，避免覆盖你的改动。",
+        changes: [{
+          field: "上游地址",
+          before: "192.168.1.20:80",
+          after: "192.168.1.30:80"
+        }]
+      }] : [{
+        id: "modify-mysql",
+        kind: "修改",
+        name: "MySQL 内网",
+        protocol: "TCP",
+        explanation: "保留原上游，仅调整本地监听端口，避免与现有服务冲突。",
+        changes: [{
+          field: "监听端口",
+          before: "127.0.0.1:9000",
+          after: "127.0.0.1:9002"
+        }]
+      }, {
+        id: "new-redis",
+        kind: "新增",
+        name: "内网 Redis",
+        protocol: "TCP",
+        local: "127.0.0.1:9001",
+        upstream: "192.168.1.11:6379",
+        explanation: "把内网 Redis 暴露到本机 9001 端口。"
+      }]);
+    },
+    "aria-label": "\u6F14\u793A\u72B6\u6001"
+  }, /*#__PURE__*/React.createElement("option", null, "\u6B63\u5E38\u6D41\u7A0B"), /*#__PURE__*/React.createElement("option", null, "\u8BF7\u6C42\u5931\u8D25"), /*#__PURE__*/React.createElement("option", null, "\u89C4\u5219\u51B2\u7A81")), /*#__PURE__*/React.createElement(Button, {
+    disabled: busy,
+    onClick: () => setClearOpen(true)
+  }, "\u6E05\u7A7A\u5BF9\u8BDD"))), /*#__PURE__*/React.createElement("div", {
+    className: "conversation"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-message chat-message--user"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-message__body"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "chat-message__role"
+  }, "\u4F60"), /*#__PURE__*/React.createElement("p", null, "\u628A MySQL \u7684\u76D1\u542C\u7AEF\u53E3\u6539\u6210 9002\uFF0C\u5176\u4ED6\u914D\u7F6E\u4E0D\u52A8\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "chat-message__tools"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onAction("已复制原问题")
+  }, "\u590D\u5236")))), /*#__PURE__*/React.createElement("div", {
+    className: "chat-message"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-message__avatar"
+  }, /*#__PURE__*/React.createElement("img", {
+    src: asset("chat"),
+    alt: ""
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "chat-message__body"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "chat-message__role"
+  }, "JumpBoard AI"), /*#__PURE__*/React.createElement("p", null, "\u5DF2\u627E\u5230\u300CMySQL \u5185\u7F51\u300D\uFF0C\u53EA\u4FEE\u6539\u76D1\u542C\u7AEF\u53E3\uFF0C\u5176\u4ED6\u5B57\u6BB5\u4FDD\u6301\u4E0D\u53D8\u3002\u8BF7\u5728\u53F3\u4FA7\u786E\u8BA4\u5DEE\u5F02\u3002"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      marginTop: 8
+    }
+  }, "\u5199\u5165\u8349\u7A3F\u540E\u8FD8\u9700\u8981\u70B9\u51FB\u300C\u5E94\u7528\u914D\u7F6E\u300D\u624D\u4F1A\u751F\u6548\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "chat-message__tools"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => copy("reply")
+  }, copied === "reply" ? "已复制" : "复制"), /*#__PURE__*/React.createElement("button", {
+    disabled: retrying,
+    onClick: retry
+  }, retrying ? "正在重试…" : "重试")))), demoState === "请求失败" && /*#__PURE__*/React.createElement("div", {
+    className: "chat-error"
+  }, /*#__PURE__*/React.createElement("span", null, "\u4E0A\u6B21\u8BF7\u6C42\u8D85\u65F6\uFF0C\u5DF2\u4FDD\u7559\u539F\u95EE\u9898\u3002"), /*#__PURE__*/React.createElement(Button, {
+    disabled: retrying,
+    onClick: retry
+  }, retrying ? "正在重试…" : "重试"))), /*#__PURE__*/React.createElement("div", {
+    className: "chat-composer"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-composer__row"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    className: "jb-input",
+    "aria-label": "\u6D88\u606F",
+    placeholder: "\u7EE7\u7EED\u4FEE\u6539\u89C4\u5219\uFF0C\u6216\u63CF\u8FF0\u65B0\u7684\u8F6C\u53D1\u9700\u6C42",
+    value: input,
+    onChange: event => setInput(event.target.value)
+  }), /*#__PURE__*/React.createElement(Button, {
+    variant: "primary",
+    disabled: !input.trim() || busy,
+    onClick: send
+  }, busy ? "回复中…" : "发送")), /*#__PURE__*/React.createElement("p", {
+    className: "chat-composer__hint"
+  }, "\u4EC5\u53D1\u9001\u5F53\u524D\u573A\u666F\u89C4\u5219\u6458\u8981\u548C\u6240\u9009\u8F6E\u6570\uFF0C\u4E0D\u5305\u542B API Key"))), /*#__PURE__*/React.createElement(Panel, {
+    className: "draft-panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "draft-panel__heading"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "section-title"
+  }, "\u5F85\u5BA1\u8349\u7A3F ", /*#__PURE__*/React.createElement("span", {
+    className: "text-tertiary"
+  }, drafts.length)), /*#__PURE__*/React.createElement("p", null, "\u9010\u6761\u5BA1\u9605\uFF0C\u5199\u5165\u540E\u4ECD\u9700\u5E94\u7528\u914D\u7F6E")), /*#__PURE__*/React.createElement("div", {
+    className: "draft-list"
+  }, drafts.map(draft => /*#__PURE__*/React.createElement("div", {
+    className: `draft-item ${draft.conflict ? "is-conflict" : ""}`,
+    key: draft.id
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "draft-item__top"
+  }, /*#__PURE__*/React.createElement("strong", null, draft.name), /*#__PURE__*/React.createElement("span", {
+    className: `draft-kind draft-kind--${draft.kind === "修改" ? "edit" : "new"}`
+  }, draft.kind), /*#__PURE__*/React.createElement(Badge, {
+    protocol: draft.protocol
+  }, draft.protocol), /*#__PURE__*/React.createElement("div", {
+    className: "draft-item__actions"
+  }, /*#__PURE__*/React.createElement(IconButton, {
+    icon: asset("edit"),
+    label: `填入表单-${draft.name}`,
+    disabled: !!draft.conflict,
+    onClick: () => onAction("已填入普通映射表单，保存前可修改")
+  }), /*#__PURE__*/React.createElement(IconButton, {
+    icon: asset("delete"),
+    label: `丢弃-${draft.name}`,
+    onClick: () => discard(draft.id)
+  }))), draft.kind === "新增" ? /*#__PURE__*/React.createElement("div", {
+    className: "draft-route mono"
+  }, /*#__PURE__*/React.createElement("span", null, "\u76D1\u542C ", draft.local), /*#__PURE__*/React.createElement("span", null, "\u4E0A\u6E38 ", draft.upstream)) : /*#__PURE__*/React.createElement("div", {
+    className: "draft-changes"
+  }, draft.changes.map(change => /*#__PURE__*/React.createElement("div", {
+    className: "draft-change",
+    key: change.field
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "draft-change__field"
+  }, change.field), /*#__PURE__*/React.createElement("div", {
+    className: "draft-change__values mono"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "draft-before"
+  }, change.before), /*#__PURE__*/React.createElement("span", {
+    className: "draft-change__arrow"
+  }, "\u2192"), /*#__PURE__*/React.createElement("span", {
+    className: "draft-after"
+  }, change.after))))), /*#__PURE__*/React.createElement("p", null, draft.explanation), draft.conflict && /*#__PURE__*/React.createElement(Notice, {
+    tone: "danger"
+  }, draft.conflict))), drafts.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mapping-empty"
+  }, "\u6682\u65E0\u5F85\u5BA1\u8349\u7A3F\u3002\u7EE7\u7EED\u5BF9\u8BDD\u53EF\u4EE5\u751F\u6210\u65B0\u7684\u6620\u5C04\u6216\u4FEE\u6539\u5EFA\u8BAE\u3002")), /*#__PURE__*/React.createElement("div", {
+    className: "draft-panel__footer"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "toolbar-caption"
+  }, "\u5199\u5165\u5F53\u524D\u573A\u666F\u300C", scene, "\u300D \xB7 \u4E0D\u4F1A\u81EA\u52A8\u751F\u6548"), /*#__PURE__*/React.createElement(Button, {
+    variant: "primary",
+    disabled: drafts.length === 0 || drafts.some(item => item.conflict),
+    onClick: () => {
+      onApplyDraft(drafts);
+      setDrafts([]);
+    }
+  }, "\u5BA1\u9605\u5E76\u5199\u5165 ", drafts.length > 0 ? `${drafts.length} 条` : "", "\u8349\u7A3F"))), clearOpen && /*#__PURE__*/React.createElement(Dialog, {
+    title: "\u6E05\u7A7A\u5F53\u524D\u573A\u666F\u5BF9\u8BDD",
+    onClose: () => setClearOpen(false),
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Button, {
+      onClick: () => setClearOpen(false)
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
+      variant: "primary",
+      onClick: () => {
+        setClearOpen(false);
+        setDrafts([]);
+        onClear();
+      }
+    }, "\u6E05\u7A7A\u5BF9\u8BDD"))
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "body-copy"
+  }, "\u4EC5\u6E05\u9664\u300C", scene, "\u300D\u7684\u5BF9\u8BDD\u548C\u5F85\u5BA1\u8349\u7A3F\uFF0C\u5DF2\u4FDD\u5B58\u7684\u6620\u5C04\u3001\u5176\u4ED6\u573A\u666F\u548C\u914D\u7F6E\u5386\u53F2\u4E0D\u53D7\u5F71\u54CD\u3002")));
+}
+Object.assign(window, {
+  ChatPage
+});
+})(); } catch (e) { __ds_ns.__errors.push({ path: "ui_kits/workbench/ai.jsx", error: String((e && e.message) || e) }); }
+
 // ui_kits/workbench/app.jsx
 try { (() => {
 const {
@@ -465,8 +733,7 @@ function App() {
     actionState: actionState,
     onNewMapping: () => setMappingDialog({
       mapping: null
-    }),
-    onClearChat: () => notify("清空前需要确认，避免误删当前对话")
+    })
   }), /*#__PURE__*/React.createElement("div", {
     className: "page"
   }, page === "mappings" && /*#__PURE__*/React.createElement(MappingsPage, {
@@ -495,9 +762,10 @@ function App() {
   }), page === "terminal" && /*#__PURE__*/React.createElement(TerminalPage, {
     onAction: notify
   }), page === "chat" && /*#__PURE__*/React.createElement(ChatPage, {
+    scene: scene,
     onAction: notify,
-    onClear: () => notify("清空前需要确认"),
-    onImport: setConfirmImport
+    onClear: () => notify(`已清空「${scene}」的对话与待审草稿`),
+    onApplyDraft: setConfirmImport
   }), page === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
     theme: theme,
     setTheme: setTheme,
@@ -671,7 +939,6 @@ function WindowBar({
   page,
   onAction,
   onNewMapping,
-  onClearChat,
   actionState
 }) {
   const [title, subtitle] = pageMeta[page];
@@ -703,10 +970,7 @@ function WindowBar({
     variant: "secondary",
     disabled: busy,
     onClick: onNewMapping
-  }, "\u65B0\u5EFA\u6620\u5C04"), page === "chat" && /*#__PURE__*/React.createElement(Button, {
-    variant: "quiet",
-    onClick: onClearChat
-  }, "\u6E05\u7A7A\u5BF9\u8BDD")));
+  }, "\u65B0\u5EFA\u6620\u5C04")));
 }
 Object.assign(window, {
   AppSidebar,
@@ -1472,6 +1736,7 @@ function SettingsPage({
   const [whitelist, setWhitelist] = React.useState(false);
   const [logRead, setLogRead] = React.useState(true);
   const [connection, setConnection] = React.useState("idle");
+  const [historyTurns, setHistoryTurns] = React.useState("12 轮");
   const testConnection = () => {
     setConnection("busy");
     setTimeout(() => {
@@ -1582,6 +1847,19 @@ function SettingsPage({
     placeholder: "sk-\u2026",
     hint: "\u5B58\u50A8\u5728\u7CFB\u7EDF\u51ED\u636E\u5E93\uFF0C\u4E0D\u5199\u8FDB\u6570\u636E\u5E93\u6216\u5BFC\u51FA\u6587\u4EF6"
   }))), /*#__PURE__*/React.createElement("section", {
+    className: "jb-section"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "section-title"
+  }, "\u5BF9\u8BDD\u4E0E\u5386\u53F2"), /*#__PURE__*/React.createElement("div", {
+    className: "jb-setting-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "jb-setting-copy"
+  }, /*#__PURE__*/React.createElement("span", null, "\u53D1\u9001\u7ED9\u6A21\u578B\u7684\u5BF9\u8BDD\u8F6E\u6570"), /*#__PURE__*/React.createElement("small", null, "\u4EC5\u63A7\u5236\u4E0A\u4E0B\u6587\u8303\u56F4\uFF1B\u672C\u5730\u6309\u573A\u666F\u4FDD\u5B58\u6700\u8FD1 50 \u8F6E\uFF0C\u91CD\u542F\u540E\u4ECD\u4FDD\u7559")), /*#__PURE__*/React.createElement("select", {
+    className: "history-select",
+    "aria-label": "\u5BF9\u8BDD\u5386\u53F2\u8F6E\u6570",
+    value: historyTurns,
+    onChange: event => setHistoryTurns(event.target.value)
+  }, /*#__PURE__*/React.createElement("option", null, "4 \u8F6E"), /*#__PURE__*/React.createElement("option", null, "8 \u8F6E"), /*#__PURE__*/React.createElement("option", null, "12 \u8F6E"), /*#__PURE__*/React.createElement("option", null, "20 \u8F6E"), /*#__PURE__*/React.createElement("option", null, "\u5168\u90E8")))), /*#__PURE__*/React.createElement("section", {
     className: "jb-section"
   }, /*#__PURE__*/React.createElement("h3", {
     className: "section-title"

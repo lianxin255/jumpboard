@@ -90,6 +90,13 @@ Reply with the JSON object only.`
 // the whole draft. Only a reply that is not a JSON object at all is
 // refused, which keeps the "model returned something else" signal.
 type Draft struct {
+	Operation string
+	TargetID  string
+	Enabled   *bool
+	// Present records the fields the model actually supplied. Updates
+	// start from the original mapping and only replace present fields;
+	// an omitted group or path must never become an accidental clear.
+	Present         map[string]bool
 	Name            string
 	Protocol        string
 	ListenPort      int
@@ -150,6 +157,17 @@ func (d Draft) Mapping() (model.Mapping, string, error) {
 	return m, explanation, nil
 }
 
+// Has reports whether the model explicitly supplied a field or one of its
+// aliases. It distinguishes "leave unchanged" from an intentional clear.
+func (d Draft) Has(name string) bool {
+	for _, alias := range fieldAliases[name] {
+		if d.Present[alias] {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeDirectives keeps extra directives to plain `name value;` lines.
 //
 // The field accepts raw nginx by design, but never from a model: a line
@@ -177,6 +195,9 @@ func sanitizeDirectives(s string) string {
 // small model answers upstreamHost as "upstreamIp". The first alias that
 // arrives non-empty wins.
 var fieldAliases = map[string][]string{
+	"operation":       {"operation", "action", "op"},
+	"targetId":        {"targetId", "mappingId", "id", "ruleId"},
+	"enabled":         {"enabled", "enable"},
 	"name":            {"name"},
 	"protocol":        {"protocol"},
 	"listenPort":      {"listenPort", "listen_port", "listen", "port"},
@@ -204,6 +225,10 @@ func (d *Draft) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
+	d.Present = make(map[string]bool, len(fields))
+	for name := range fields {
+		d.Present[name] = true
+	}
 	str := func(aliases ...string) string {
 		for _, a := range aliases {
 			if raw, ok := fields[a]; ok {
@@ -223,6 +248,14 @@ func (d *Draft) UnmarshalJSON(data []byte) error {
 			}
 		}
 		return 0
+	}
+	d.Operation = str(fieldAliases["operation"]...)
+	d.TargetID = str(fieldAliases["targetId"]...)
+	if raw, ok := fields["enabled"]; ok {
+		var enabled bool
+		if json.Unmarshal(raw, &enabled) == nil {
+			d.Enabled = &enabled
+		}
 	}
 	d.Name = str(fieldAliases["name"]...)
 	d.Protocol = str(fieldAliases["protocol"]...)
@@ -624,7 +657,7 @@ func decodeDraft(raw []byte) *Draft {
 	if json.Unmarshal(raw, &d) != nil {
 		return nil
 	}
-	if d == (Draft{}) {
+	if d.Operation == "" && d.TargetID == "" && d.Name == "" && d.Protocol == "" && d.ListenPort == 0 && d.UpstreamHost == "" && d.UpstreamPort == 0 {
 		return nil
 	}
 	return &d
