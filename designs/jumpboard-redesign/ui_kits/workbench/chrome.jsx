@@ -16,7 +16,7 @@ function AppSidebar({ page, onPage, running, onRunning, serviceBusy }) {
     </div>
   </aside>;
 }
-function WindowBar({ page, onAction, onNewMapping, onClearChat, actionState }) {
+function WindowBar({ page, onAction, onNewMapping, actionState }) {
   const [title, subtitle] = pageMeta[page];
   const busy = actionState === "checking" || actionState === "applying";
   return <header className="window-bar">
@@ -27,7 +27,6 @@ function WindowBar({ page, onAction, onNewMapping, onClearChat, actionState }) {
       {actionState === "checked" && <span className="action-status action-status--success">预检通过</span>}
       {page === "mappings" && <><Button disabled={busy} onClick={() => onAction("pre-check")}>预检</Button><Button variant="primary" disabled={busy} onClick={() => onAction("apply")}>{actionState === "applying" ? "应用中…" : "应用配置"}</Button></>}
       {page === "mappings" && <Button variant="secondary" disabled={busy} onClick={onNewMapping}>新建映射</Button>}
-      {page === "chat" && <Button variant="quiet" onClick={onClearChat}>清空对话</Button>}
     </div>
   </header>;
 }

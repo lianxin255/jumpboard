@@ -6,6 +6,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/lianxin255/jumpboard/internal/ai"
 	"github.com/lianxin255/jumpboard/internal/appt"
+	"github.com/lianxin255/jumpboard/internal/model"
 	"github.com/lianxin255/jumpboard/internal/ui/icons"
 )
 
@@ -39,6 +41,22 @@ type chatItem struct {
 func (v *View) aiChatPage(c *ui.Context, t Tokens) {
 	a := v.App
 	turns, partial, streaming, busy, errText, note, drafts := a.AIChatState()
+	// A pending edit is valid only for the scene and mapping version it
+	// was proposed against. Compute that before drawing the cards so a
+	// changed or deleted target is visibly blocked, never a silent write.
+	for i := range drafts {
+		if drafts[i].Operation != "update" || drafts[i].Original == nil {
+			continue
+		}
+		current, err := a.Store.GetMapping(drafts[i].TargetID)
+		if err != nil {
+			drafts[i].Conflict = "原规则已不存在，请重新生成草稿，避免覆盖你的改动。"
+			continue
+		}
+		if current.UpdatedAt != drafts[i].Original.UpdatedAt {
+			drafts[i].Conflict = "原规则已在对话后被修改，请重新生成草稿，避免覆盖你的改动。"
+		}
+	}
 
 	// Grow, not Fill: the page shares a column with the window bar above
 	// it, and a Fill page claims the column's whole height — which puts
@@ -97,6 +115,13 @@ const chatTwoColumnW = float32(1120)
 // It scrolls on its own, so a five-card reply never pushes the import out
 // of reach — the fix the in-list preview needed and never had.
 func (v *View) chatDraftColumn(c *ui.Context, t Tokens, drafts []appt.AIDraft, note string, busy bool) {
+	blocked := false
+	for _, draft := range drafts {
+		if draft.Conflict != "" {
+			blocked = true
+			break
+		}
+	}
 	ui.Column(c).Width(360).Shrink(0).Gap(10).Children(func() {
 		panelShell(c, t).Grow(1).MinHeight(200).Children(func() {
 			ui.Column(c).Fill().Children(func() {
@@ -126,7 +151,7 @@ func (v *View) chatDraftColumn(c *ui.Context, t Tokens, drafts []appt.AIDraft, n
 					}
 					ui.Textf(c, "导入到当前场景「%s」", v.App.ActiveWorkspaceName()).
 						FontSize(CaptionSize).TextColor(t.Muted)
-					if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).FillWidth().
+					if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy || blocked).FillWidth().
 						Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
 						n := len(drafts)
 						v.App.Ask(&appt.Confirm{
@@ -224,8 +249,25 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 			// is and what the assistant will not do — draft, never write.
 			ui.Column(c).Gap(2).Padding(12, 16).
 				BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
-				ui.Text(c, "对话").FontSize(BodySize).Bold().TextColor(t.FG)
-				ui.Text(c, "AI 只生成草稿，不会直接修改或应用配置").
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "对话").FontSize(BodySize).Bold().TextColor(t.FG)
+					ui.Spacer(c)
+					if len(turns) > 0 {
+						if ui.Button(c, "清空对话").Disabled(busy).Height(ControlHeight).
+							Tooltip("只清当前场景对话和待审草稿，已保存映射不受影响").Clicked() {
+							v.App.Ask(&appt.Confirm{
+								Title: "清空当前场景对话",
+								Body:  "仅清除「" + v.App.ActiveWorkspaceName() + "」的对话和待审草稿，已保存的映射、其他场景和配置历史不受影响。",
+								Label: "清空对话",
+								Run: func() error {
+									v.App.ClearChat()
+									return nil
+								},
+							})
+						}
+					}
+				})
+				ui.Textf(c, "当前场景「%s」 · 本地保存最近 50 轮 · 发送最近 %d 轮", v.App.ActiveWorkspaceName(), v.App.AIChatTurns()).
 					FontSize(CaptionSize).TextColor(t.Muted)
 			})
 			ui.List(c, &v.chatListState, len(items), func(i int) {
@@ -249,8 +291,14 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 		if it.turn.Role == ai.RoleUser {
 			ui.Row(c).Children(func() {
 				ui.Spacer(c)
-				ui.Text(c, it.turn.Content).Selectable().Padding(8, 12).Radius(RadiusChip).
-					Background(t.Accent.Alpha(0.10)).TextColor(t.FG).MaxWidth(520)
+				ui.Column(c).Gap(4).AlignItems(ui.End).Children(func() {
+					ui.Text(c, it.turn.Content).Selectable().Padding(8, 12).Radius(RadiusChip).
+						Background(t.Accent.Alpha(0.10)).TextColor(t.FG).MaxWidth(520)
+					if ui.Text(c, "复制").FontSize(CaptionSize).TextColor(t.Muted).
+						Label("复制问题").Tooltip("复制这条原问题").Clicked() {
+						_ = v.App.CopyText(it.turn.Content)
+					}
+				})
 			})
 			return
 		}
@@ -269,6 +317,12 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 				// the global waiting list, which may belong to a later reply.
 				ui.Text(c, "（这条回复只有配置草稿）").FontSize(CaptionSize).TextColor(t.Muted)
 			}
+			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				if ui.Text(c, "复制").FontSize(CaptionSize).TextColor(t.Muted).
+					Label("复制回复").Tooltip("只复制可读正文，不包含草稿 JSON").Clicked() {
+					_ = v.App.CopyText(ai.WithoutDraftBlocks(it.turn.Content))
+				}
+			})
 		})
 	case 1:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -276,7 +330,13 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 			ui.Text(c, "正在回复…").FontSize(NoteSize).TextColor(t.Muted)
 		})
 	case 2:
-		ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap()
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap().Grow(1)
+			if ui.Button(c, "重试").Disabled(busy).Height(ControlHeight).
+				Tooltip("用原问题重试，不重复添加用户消息").Clicked() {
+				v.App.RetryChat()
+			}
+		})
 	case 3:
 		// The preview's head carries the workbench's own mark, so what
 		// follows reads as rules waiting for a decision rather than as
@@ -326,39 +386,53 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 		// The rule's head: its name, the protocol's classification patch
 		// — the same badge the table's proto column draws — and the two
 		// decisions a draft waits for, on the right.
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG).SingleLine()
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, m.Name).FontSize(BodySize).Bold().TextColor(t.FG).SingleLine().Shrink(1)
+			if d.Operation == "update" {
+				ui.Text(c, "修改").FontSize(CaptionSize).TextColor(t.Accent).Shrink(0).
+					Padding(2, 5).Radius(RadiusChip).Background(t.AccentSoft)
+			} else {
+				ui.Text(c, "新增").FontSize(CaptionSize).TextColor(t.Success).Shrink(0).
+					Padding(2, 5).Radius(RadiusChip).Background(t.SuccessSoft)
+			}
 			v.protoCell(c, t, m)
 			ui.Spacer(c)
 			if DangerQuietButton(c, t, "丢弃").FontSize(CaptionSize).
 				Label("丢弃草稿 " + m.Name).Clicked() {
 				a.DropChatDraft(i)
 			}
-			if ui.Button(c, "填入表单").FontSize(CaptionSize).
+			if ui.Button(c, "填入表单").FontSize(CaptionSize).Disabled(d.Conflict != "").
 				Label("填入表单 " + m.Name).
-				Tooltip("把这条草稿填进新建映射表单，逐项修改后保存").Clicked() {
+				Tooltip("把这条草稿填进映射表单，逐项修改后保存").Clicked() {
 				a.DropChatDraft(i)
 				a.OpenNewFormFrom(m)
 				a.Info("草稿已填入表单，确认后保存")
 			}
 		})
+		if d.Conflict != "" {
+			ui.Text(c, d.Conflict).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
+		}
 		// The forwarding relation: 监听 :端口 on the left, the upstream on
 		// the right, the connector mark and its arrow between — the row
 		// this draft would join, drawn before it exists.
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, listen).Font(FontMono).FontSize(NoteSize).
-				TextColor(t.FG).Padding(2, 8).Radius(RadiusChip).
-				Background(t.Chip).Border(1, t.Border).Tooltip("生效后在本机监听的地址")
-			if defaultPort {
-				ui.Text(c, "（默认）").FontSize(CaptionSize).TextColor(t.Meta).NoWrap().
-					Tooltip("监听端口留空时，Web 规则用默认端口：HTTP 80，HTTPS 443")
-			}
-			ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Meta).
-				Label("转发-" + m.Name).Tooltip("本地端口转发到上游")
-			ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
-			ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font(FontMono).
-				FontSize(NoteSize).TextColor(t.FG2).SingleLine().Tooltip("上游目标")
-		})
+		if d.Operation == "update" && d.Original != nil {
+			v.chatDraftDiff(c, t, d)
+		} else {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, listen).Font(FontMono).FontSize(NoteSize).
+					TextColor(t.FG).Padding(2, 8).Radius(RadiusChip).
+					Background(t.Chip).Border(1, t.Border).Tooltip("生效后在本机监听的地址")
+				if defaultPort {
+					ui.Text(c, "（默认）").FontSize(CaptionSize).TextColor(t.Meta).NoWrap().
+						Tooltip("监听端口留空时，Web 规则用默认端口：HTTP 80，HTTPS 443")
+				}
+				ui.Icon(c, icons.Connector).Size(20, 12).TextColor(t.Meta).
+					Label("转发-" + m.Name).Tooltip("本地端口转发到上游")
+				ui.Text(c, "→").FontSize(NoteSize).TextColor(t.Meta)
+				ui.Textf(c, "%s:%d", m.UpstreamHost, m.UpstreamPort).Font(FontMono).
+					FontSize(NoteSize).TextColor(t.FG2).SingleLine().Tooltip("上游目标")
+			})
+		}
 		if d.Explanation != "" {
 			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
@@ -366,6 +440,66 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
 		}
 	})
+}
+
+// hasDraftConflicts reports whether the batch contains a stale edit.
+func hasDraftConflicts(drafts []appt.AIDraft) bool {
+	for _, draft := range drafts {
+		if draft.Conflict != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// chatDraftDiff shows only fields that actually change. Unchanged fields
+// stay out of the card, so an edit cannot masquerade as a new mapping or
+// hide a port change in a full configuration dump.
+func (v *View) chatDraftDiff(c *ui.Context, t Tokens, d appt.AIDraft) {
+	before, after := *d.Original, d.Mapping
+	fields := []struct {
+		name string
+		old  string
+		new  string
+	}{
+		{"名称", before.Name, after.Name},
+		{"分组", before.Group, after.Group},
+		{"启用状态", enabledLabel(before.Enabled), enabledLabel(after.Enabled)},
+		{"协议", before.Protocol.Label(), after.Protocol.Label()},
+		{"监听端口", listenAddress(before), listenAddress(after)},
+		{"域名", before.ServerNames, after.ServerNames},
+		{"路径", before.ListenPath, after.ListenPath},
+		{"上游地址", upstreamAddress(before), upstreamAddress(after)},
+	}
+	for _, field := range fields {
+		if field.old == field.new {
+			continue
+		}
+		ui.Column(c).Gap(2).Children(func() {
+			ui.Text(c, field.name).FontSize(CaptionSize).TextColor(t.Muted)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, field.old).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
+				ui.Text(c, "→").FontSize(CaptionSize).TextColor(t.Meta)
+				ui.Text(c, field.new).Font(FontMono).FontSize(CaptionSize).TextColor(t.Accent)
+			})
+		})
+	}
+}
+
+func enabledLabel(on bool) string {
+	if on {
+		return "已启用"
+	}
+	return "已停用"
+}
+
+func listenAddress(m model.Mapping) string {
+	listen, _ := localListenLabel(m)
+	return listen
+}
+
+func upstreamAddress(m model.Mapping) string {
+	return fmt.Sprintf("%s:%d", m.UpstreamHost, m.UpstreamPort)
 }
 
 // chatImportBar is the preview section's foot: the one button that
@@ -384,7 +518,7 @@ func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, not
 		}
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(CaptionSize).TextColor(t.Muted).Grow(1)
-			if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy).
+			if ui.PrimaryButton(c, "导入到当前场景").Disabled(busy || hasDraftConflicts(drafts)).
 				Tooltip("把上面的草稿写入当前场景，走与手动新建相同的校验；之后点「应用配置」生效").Clicked() {
 				n := len(drafts)
 				a.Ask(&appt.Confirm{

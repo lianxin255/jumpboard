@@ -226,6 +226,43 @@ func (s *Store) UpdateMapping(m model.Mapping) error {
 	return nil
 }
 
+// UpdateMappingIfUnchanged replaces a mapping only while its editable
+// fields still match original. It is the conflict guard for an AI edit:
+// a user change made after the proposal is never silently overwritten.
+func (s *Store) UpdateMappingIfUnchanged(m, original model.Mapping) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	m.UpdatedAt = nowMillis()
+	res, err := s.db.Exec(`UPDATE mappings SET
+		name=?, group_name=?, enabled=?, protocol=?, listen_port=?, server_names=?, listen_path=?,
+		upstream_host=?, upstream_port=?, tls_cert_path=?, tls_key_path=?, redirect_http=?,
+		extra_directives=?, proxy_mode=?, proxy_headers=?, proxy_pass_url=?,
+		health_check_enabled=?, health_check_interval_sec=?, health_check_target_path=?,
+		health_check_expected_status=?, updated_at=?
+		WHERE id=? AND name=? AND group_name=? AND enabled=? AND protocol=? AND listen_port=?
+		AND server_names=? AND listen_path=? AND upstream_host=? AND upstream_port=?
+		AND tls_cert_path=? AND tls_key_path=? AND redirect_http=? AND extra_directives=?
+		AND proxy_mode=? AND proxy_headers=? AND proxy_pass_url=? AND health_check_enabled=?
+		AND health_check_interval_sec=? AND health_check_target_path=? AND health_check_expected_status=?`,
+		m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
+		m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP),
+		m.ExtraDirectives, string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,
+		boolInt(m.HealthCheckEnabled), m.HealthCheckIntervalSec, m.HealthCheckTargetPath,
+		m.HealthCheckExpectedCode, m.UpdatedAt, m.ID,
+		original.Name, original.Group, boolInt(original.Enabled), string(original.Protocol), original.ListenPort,
+		original.ServerNames, original.ListenPath, original.UpstreamHost, original.UpstreamPort,
+		original.TLSCertPath, original.TLSKeyPath, boolInt(original.RedirectHTTP), original.ExtraDirectives,
+		string(original.ProxyMode), original.ProxyHeaders, original.ProxyPassURL, boolInt(original.HealthCheckEnabled),
+		original.HealthCheckIntervalSec, original.HealthCheckTargetPath, original.HealthCheckExpectedCode)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
 // SetMappingEnabled turns a mapping on or off.
 func (s *Store) SetMappingEnabled(id string, enabled bool) error {
 	s.writeMu.Lock()

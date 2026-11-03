@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JumpBoard · 界面重设计提案</title>
+<meta name="description" content="JumpBoard 界面重设计：克制、清晰的专业网络工作台。六页重排、设计令牌与可点击交互原型。" />
+<link rel="icon" href="./assets/icons/relay.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="./css/tokens.css" />
+<link rel="stylesheet" href="./css/site.css" />
+</head>
+<body>
+<div class="site">
+
+  <header class="topbar">
+    <div class="topbar__brand">
+      <div class="brand-mark"><img src="./assets/icons/relay.svg" alt="" /></div>
+      <div>
+        <div class="brand-name">JumpBoard</div>
+        <div class="brand-sub">界面重设计提案</div>
+      </div>
+    </div>
+    <div class="topbar__nav">
+      <a href="#pages">六页重排</a>
+      <a href="#foundations">设计基础</a>
+      <a href="#scope">实施边界</a>
+      <a class="topbar__cta" href="./prototype/index.html">打开交互原型</a>
+      <button class="theme-toggle" type="button" id="themeToggle" aria-label="切换外观">暗色</button>
+    </div>
+  </header>
+
+  <main>
+
+    <section class="hero">
+      <div class="hero__eyebrow">2026-10 · 高保真方案</div>
+      <h1>让规则状态、转发关系<br />与下一步操作始终明确</h1>
+      <p class="hero__lede">
+        克制、清晰的专业网络工作台。不是更花哨的控制台，而是重新分配已有功能，让“当前哪些映射生效、连接到哪里、下一步做什么”一眼可见。六个页面与全部业务能力保留，未添加新功能或开关。
+      </p>
+      <div class="hero__actions">
+        <a class="jb-button jb-button--primary" href="./prototype/index.html">体验六页交互原型</a>
+        <a class="jb-button jb-button--secondary" href="./system.html">设计系统总览</a>
+      </div>
+      <div class="hero__facts">
+        <span><strong>6</strong> 页面重排</span>
+        <span><strong>12</strong> 组件 · 17 示例卡</span>
+        <span><strong>121</strong> 设计令牌</span>
+        <span><strong>0</strong> 新增功能</span>
+      </div>
+    </section>
+
+    <section class="section" id="pages">
+      <div class="section__head">
+        <h2>六页重排</h2>
+        <p>每一页只解决一个问题。页面级动作在窗口栏，搜索与状态筛选在工具区，分组筛选独立成行，对象操作留在对象行。</p>
+      </div>
+
+      <div class="page-grid">
+        <article class="page-card page-card--wide">
+          <figure class="shot">
+            <img src="./assets/screens/mappings-light.png" alt="映射页：场景与创建一行，搜索与状态筛选一行，分组芯片独立一行，单表格工作面" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">01</span><h3>映射</h3></div>
+            <p>场景与创建一行，搜索与状态筛选拆分，分组芯片独立一行，单表格工作面。</p>
+            <p class="page-card__fix">解决：主次混乱、状态重复、上游地址重复。</p>
+          </div>
+        </article>
+
+        <article class="page-card">
+          <figure class="shot">
+            <img src="./assets/screens/logs-light.png" alt="日志页：类型与级别独立工具区，稳定日志流" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">02</span><h3>日志</h3></div>
+            <p>类型/级别/导出独立工具区，稳定日志流。</p>
+            <p class="page-card__fix">解决：工具混排、内容边界不清。</p>
+          </div>
+        </article>
+
+        <article class="page-card">
+          <figure class="shot">
+            <img src="./assets/screens/history-light.png" alt="配置历史页：左侧快照，右侧配置与差异" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">03</span><h3>配置历史</h3></div>
+            <p>左侧快照，右侧配置与差异，回滚靠近对象。</p>
+            <p class="page-card__fix">解决：只有列表没有工作上下文，空白浪费。</p>
+          </div>
+        </article>
+
+        <article class="page-card">
+          <figure class="shot">
+            <img src="./assets/screens/terminal-light.png" alt="终端页：会话类型与新建在上，会话标签与终端一体" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">04</span><h3>终端</h3></div>
+            <p>会话类型与新建在上，会话标签、终端和状态栏一体。</p>
+            <p class="page-card__fix">解决：空状态占据大卡片，会话缺少工作台骨架。</p>
+          </div>
+        </article>
+
+        <article class="page-card page-card--wide">
+          <figure class="shot">
+            <img src="./assets/screens/chat-light.png" alt="AI 对话页：1120px 以上对话与待审草稿双栏，输入固定底部" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">05</span><h3>AI 对话</h3></div>
+            <p>≥1120px 对话与待审草稿双栏，输入固定底部；&lt;1120px 回落单列，草稿随对话滚动。</p>
+            <p class="page-card__fix">解决：草稿夹在聊天里，审阅与导入路径不清。</p>
+          </div>
+        </article>
+
+        <article class="page-card page-card--wide">
+          <figure class="shot">
+            <img src="./assets/screens/settings-light.png" alt="设置页：左分组导航，右侧一次一组表单" loading="lazy" />
+          </figure>
+          <div class="page-card__body">
+            <div class="page-card__meta"><span class="page-card__index">06</span><h3>设置</h3></div>
+            <p>左分组导航，右侧一次一组表单。</p>
+            <p class="page-card__fix">解决：AI 占据首屏，多卡片堆叠、阅读顺序跳跃。</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="compare">
+      <div class="section__head">
+        <h2>现状与提案</h2>
+        <p>同一份数据、同一组能力。差别在信息层级与行为分区，而不在功能多少。</p>
+      </div>
+
+      <div class="compare">
+        <div class="compare__pair">
+          <div class="compare__item">
+            <div class="compare__label">现状 · 映射</div>
+            <figure class="shot"><img src="./assets/impl/impl-01.png" alt="现状映射页：工具分散、状态重复、每行三枚按钮" loading="lazy" /></figure>
+            <p>筛选与创建混排，行内三枚等权按钮，上游地址重复出现在名称下方与地址列。</p>
+          </div>
+          <div class="compare__item">
+            <div class="compare__label compare__label--after">提案 · 映射</div>
+            <figure class="shot"><img src="./assets/screens/mappings-light.png" alt="提案映射页：单一表格工作面，对象操作收进图标按钮" loading="lazy" /></figure>
+            <p>创建留在窗口栏，筛选收进工具区，行内只保留启用开关与两枚图标操作，转发关系一行读完。</p>
+          </div>
+        </div>
+
+        <div class="compare__pair">
+          <div class="compare__item">
+            <div class="compare__label">现状 · 日志</div>
+            <figure class="shot"><img src="./assets/impl/impl-03.png" alt="现状日志页：空状态占据整块面板" loading="lazy" /></figure>
+            <p>空状态占据整块面板，类型切换、开关与清空按钮分散在标题与工具区之间。</p>
+          </div>
+          <div class="compare__item">
+            <div class="compare__label compare__label--after">提案 · 日志</div>
+            <figure class="shot"><img src="./assets/screens/logs-light.png" alt="提案日志页：类型与级别独立成区，日志流有明确底边" loading="lazy" /></figure>
+            <p>类型与级别各自成区，日志流有明确边界与页脚说明，导出与清空分开呈现。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="foundations">
+      <div class="section__head">
+        <h2>设计基础</h2>
+        <p>一套令牌支撑亮暗两套主题。颜色只做语义，不做装饰。</p>
+      </div>
+
+      <div class="found-grid">
+        <div class="found-card">
+          <h3>颜色</h3>
+          <p>暖白与石墨中性色构成 90% 界面。蓝色只用于主操作、当前导航与焦点；暗色主题改用浅蓝以保持对比。</p>
+          <div class="swatches">
+            <div class="swatch" style="background:#315fbf"><span>#315fbf</span><em>主操作 · 亮色</em></div>
+            <div class="swatch" style="background:#a2bdf3;color:#172033"><span>#a2bdf3</span><em>主操作 · 暗色</em></div>
+            <div class="swatch" style="background:#26734a"><span>#26734a</span><em>健康</em></div>
+            <div class="swatch" style="background:#87520a"><span>#87520a</span><em>未应用</em></div>
+            <div class="swatch" style="background:#b33a36"><span>#b33a36</span><em>异常 / 危险</em></div>
+          </div>
+        </div>
+
+        <div class="found-card">
+          <h3>文字</h3>
+          <p>系统 Latin + PingFang SC，无外部字体依赖。CJK 阅读行高 1.75；地址、端口、命令与日志使用系统等宽字体与表格数字。</p>
+          <div class="type-scale">
+            <div><span class="page-title">映射</span><em>22 页面标题</em></div>
+            <div><span class="section-title">转发规则</span><em>15 分区</em></div>
+            <div><span class="body-copy">管理内网服务的端口映射。</span><em>13 正文</em></div>
+            <div><span class="mono">127.0.0.1:9000 → 192.168.1.10:3306</span><em>等宽 · 表格数字</em></div>
+          </div>
+        </div>
+
+        <div class="found-card">
+          <h3>间距与圆角</h3>
+          <p>4/8 网格，页面边距 28px，导航 208px，控件 32px，映射行 64px。一块边界清晰的工作面板胜过层层卡片。</p>
+          <div class="geometry">
+            <div class="geo-item"><span class="geo-bar" style="width:4px"></span><em>4</em></div>
+            <div class="geo-item"><span class="geo-bar" style="width:8px"></span><em>8</em></div>
+            <div class="geo-item"><span class="geo-bar" style="width:12px"></span><em>12</em></div>
+            <div class="geo-item"><span class="geo-bar" style="width:16px"></span><em>16</em></div>
+            <div class="geo-item"><span class="geo-bar" style="width:24px"></span><em>24</em></div>
+            <div class="geo-item"><span class="geo-bar" style="width:32px"></span><em>32</em></div>
+            <div class="geo-item geo-item--radii"><span class="jb-badge" style="height:30px">5</span><span class="jb-button jb-button--secondary" style="pointer-events:none">7</span><span class="jb-panel" style="padding:8px 12px">10</span></div>
+          </div>
+        </div>
+
+        <div class="found-card">
+          <h3>状态与行为</h3>
+          <p>同一套词表贯穿全局：运行中/已停止，健康/异常/未检查，已启用/已停用，未应用/已生效。危险操作说明后果，而不是问“确定吗”。</p>
+          <div class="states">
+            <span class="jb-status jb-status--success">健康</span>
+            <span class="jb-status jb-status--danger">异常</span>
+            <span class="jb-status">未检查</span>
+            <span class="jb-badge jb-badge--tcp">TCP</span>
+            <span class="jb-badge jb-badge--udp">UDP</span>
+            <span class="jb-badge jb-badge--http">HTTP</span>
+          </div>
+          <div class="states-note">
+            <span class="jb-button jb-button--primary" style="pointer-events:none">应用配置</span>
+            <span class="jb-button jb-button--secondary" style="pointer-events:none">预检</span>
+            <span class="jb-button jb-button--danger" style="pointer-events:none">停止服务</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="edge">
+        <div class="edge__item">
+          <div class="edge__label">暗色主题</div>
+          <figure class="shot"><img src="./assets/screens/mappings-dark.png" alt="暗色主题下的映射页" loading="lazy" /></figure>
+          <p>语义色换成深底浅色，面板与边界保持同一层级关系。</p>
+        </div>
+        <div class="edge__item">
+          <div class="edge__label">1000px 窄窗口</div>
+          <figure class="shot"><img src="./assets/screens/mappings-narrow.png" alt="窄窗口下的映射页：地址改为双行" loading="lazy" /></figure>
+          <p>低于 1180px 减少非核心列，转发关系改为完整双行；低于 960px 侧栏收窄为图标导航。</p>
+        </div>
+        <div class="edge__item">
+          <div class="edge__label">AI 页 1000px 回落单列</div>
+          <figure class="shot"><img src="./assets/screens/chat-narrow.png" alt="窄窗口下的 AI 对话页：草稿栏回落为单列" loading="lazy" /></figure>
+          <p>1120px 是 AI 页的分界：再窄时草稿栏读不全转发地址，因此回落单列，草稿随对话滚动。</p>
+        </div>
+      </div>
+
+      <div class="breakpoints">
+        <div class="breakpoints__head">
+          <h3>断点职责</h3>
+          <p>每个断点只做一件事，不靠缩小字号换空间。</p>
+        </div>
+        <ul class="breakpoints__list">
+          <li><span class="mono">1120px</span><span>AI 页分界：≥1120 双栏，&lt;1120 回落单列，草稿随对话滚动。</span></li>
+          <li><span class="mono">1180px</span><span>映射表把「本机 → 上游」从并排改为上下两行完整展示，不再截断端口。</span></li>
+          <li><span class="mono">960px</span><span>侧栏收窄为纯图标导航；设置导航与内容改为上下分组。</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="scope">
+      <div class="section__head">
+        <h2>实施边界</h2>
+        <p>这是 HTML 高保真方案，不进入生产构建。生产界面仍是 Go + mygo。</p>
+      </div>
+
+      <div class="rules">
+        <div class="rule">
+          <h3>不引入运行时</h3>
+          <p>不引入 Electron、Chromium 或 Node 运行时。组件、令牌与交互契约可逐页映射到现有 <span class="mono">internal/ui/</span>。</p>
+        </div>
+        <div class="rule">
+          <h3>一个全局状态</h3>
+          <p>服务状态唯一放在侧栏底部，启停仍保留确认。顶部只放页面身份与当前页面动作。</p>
+        </div>
+        <div class="rule">
+          <h3>一层工作面</h3>
+          <p>单面板工作面；弹窗单层表面；危险操作明确说明后果。</p>
+        </div>
+        <div class="rule">
+          <h3>约束不变</h3>
+          <p>现有所有 AI 隐私约束与导入校验不因视觉重排改变。</p>
+        </div>
+      </div>
+
+      <div class="verify">
+        <div class="verify__head">
+          <h3>验证</h3>
+          <p>设计系统编译与只读检查：12 组件、17 示例卡、121 令牌，无检查问题。</p>
+        </div>
+        <ul class="verify__list">
+          <li>浏览器检查：六页直达、亮色/暗色、1000px 窄窗口、1120px AI 分界、映射保存并应用、服务停止确认、设置分组。</li>
+          <li>交互原型 HTTP 预览无脚本错误；总览页无脚本或资源错误。</li>
+          <li>未运行 Go 生产界面测试：本次未修改生产 Go 代码。</li>
+        </ul>
+      </div>
+
+      <div class="order">
+        <div class="order__head">
+          <h3>建议评审顺序</h3>
+          <p>先看映射页的表格与工具区，再看 AI 双栏和设置分组；最后比较亮暗主题。</p>
+        </div>
+        <ol class="order__list">
+          <li><a href="./prototype/index.html?page=mappings">映射</a><span>表格与工具区的分区是否成立</span></li>
+          <li><a href="./prototype/index.html?page=chat">AI 对话</a><span>草稿审阅与导入路径是否清楚</span></li>
+          <li><a href="./prototype/index.html?page=settings">设置</a><span>一次只读一组的节奏是否合适</span></li>
+          <li><a href="./prototype/index.html?page=logs">日志 · 历史 · 终端</a><span>三页骨架是否稳定一致</span></li>
+        </ol>
+        <p class="order__tail">方向确认后按“全局框架 → 映射 → 设置 → AI → 其余页面”的顺序实施。</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div>
+      <strong>JumpBoard 界面重设计</strong>
+      <span>交互提案 · 非生产界面 · 不调用外部服务</span>
+    </div>
+    <div class="footer__links">
+      <a href="./prototype/index.html">交互原型</a>
+      <a href="./system.html">设计系统</a>
+      <a href="#pages">回到顶部</a>
+    </div>
+  </footer>
+
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var toggle = document.getElementById("themeToggle");
+  var stored = null;
+  try { stored = localStorage.getItem("jb-site-theme"); } catch (error) { stored = null; }
+  var theme = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  function apply(next) {
+    root.dataset.theme = next;
+    toggle.textContent = next === "dark" ? "亮色" : "暗色";
+    toggle.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+    try { localStorage.setItem("jb-site-theme", next); } catch (error) {}
+  }
+  apply(theme);
+  toggle.addEventListener("click", function () {
+    apply(root.dataset.theme === "dark" ? "light" : "dark");
+  });
+})();
+</script>
+</body>
+</html>

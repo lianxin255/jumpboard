@@ -187,22 +187,10 @@ func (v *View) draw(c *ui.Context) {
 }
 
 // headerTrailing is the page's own action in the window bar's trailing
-// slot, nil when the page has none. The chat page's 清空对话 is the one
-// today: a page action, but not a reason for a second title row.
+// slot, nil when the page has none. Clearing a conversation belongs to
+// the conversation panel, not to the window's global action row.
 func (v *View) headerTrailing() func(c *ui.Context, t Tokens) {
-	if v.App.Page() != appt.PageAIChat {
-		return nil
-	}
-	turns, _, _, busy, _, _, _ := v.App.AIChatState()
-	if len(turns) == 0 {
-		return nil
-	}
-	return func(c *ui.Context, t Tokens) {
-		if DangerQuietButton(c, t, "清空对话").Disabled(busy).
-			Tooltip("清掉这段对话和等待导入的草稿；已导入的映射不受影响").Clicked() {
-			v.App.ClearChat()
-		}
-	}
+	return nil
 }
 
 // shortcuts wires the keys a desktop app is expected to answer.

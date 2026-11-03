@@ -62,7 +62,13 @@ reply:
    missing or uncertain.
 2. A fenced ` + chatFence + ` block, the only machine-readable thing in the reply,
    exactly this shape:
-   {"drafts":[{"name":"内网 MySQL","protocol":"tcp","listenPort":9000,"serverNames":"","listenPath":"/","upstreamHost":"192.168.1.10","upstreamPort":3306,"proxyMode":"standard","extraDirectives":"","explanation":"把内网 MySQL 暴露到 9000"}]}
+   {"drafts":[{"operation":"create","name":"内网 MySQL","protocol":"tcp","listenPort":9000,"serverNames":"","listenPath":"/","upstreamHost":"192.168.1.10","upstreamPort":3306,"proxyMode":"standard","extraDirectives":"","explanation":"把内网 MySQL 暴露到 9000"}]}
+For a new rule, operation is "create" and targetId is empty. To change an
+existing rule, use operation "update", copy its exact targetId from the
+current mapping summary, and include every field of the proposed mapping.
+To enable or disable a rule, include enabled as a boolean. Never change
+fields the user did not ask to change. Do not guess an id: if no exact
+existing rule is meant, ask a question instead of returning an update.
 
 Draft field rules:
 - One draft per distinct service named. protocol "tcp" for databases,
@@ -79,7 +85,8 @@ Draft field rules:
 
 Drafts are proposals only. You cannot apply, start or change anything:
 the user reviews them and imports them by hand. Never claim a rule is
-running.`
+running. Updates replace a mapping only after review and a separate apply;
+they never modify an existing rule on their own.`
 
 // wireTurns builds the message list one request sends: the system prompt,
 // then the history — trimmed to the newest chatTurnsMax turns, each cut

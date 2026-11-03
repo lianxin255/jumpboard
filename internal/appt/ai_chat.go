@@ -7,11 +7,14 @@ package appt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/lianxin255/jumpboard/internal/ai"
+	"github.com/lianxin255/jumpboard/internal/model"
+	"github.com/lianxin255/jumpboard/internal/store"
 )
 
 // chatTimeout bounds one conversation round, the same room the one-shot
@@ -22,6 +25,7 @@ const chatTimeout = 60 * time.Second
 // walk it without holding the lock: the conversation so far, the reply
 // on its way, and the drafts waiting for a decision.
 func (a *App) AIChatState() (turns []ai.ChatTurn, partial string, streaming, busy bool, errText, note string, drafts []AIDraft) {
+	a.ensureChatScene()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return append([]ai.ChatTurn(nil), a.chatTurns...),
@@ -29,10 +33,46 @@ func (a *App) AIChatState() (turns []ai.ChatTurn, partial string, streaming, bus
 		append([]AIDraft(nil), a.chatDrafts...)
 }
 
-// SendChatMessage appends the user's message and asks for the reply off
-// the main thread. The conversation has its own busy flag rather than
-// the app-wide one: a reply on its way must not lock 应用配置, which
-// touches a different world than the chat does.
+// ensureChatScene loads the selected scene's saved history and drafts
+// before the page draws or a message is sent. It is intentionally outside
+// the mutex while reading SQLite, and reloads only on a scene change.
+func (a *App) ensureChatScene() {
+	a.mu.Lock()
+	scene := a.activeWS
+	needs := a.chatScene != scene
+	a.mu.Unlock()
+	if !needs {
+		return
+	}
+	savedTurns, _ := a.Store.ListAIChatTurns(scene, 50)
+	savedDrafts, _ := a.Store.ListAIChatDrafts(scene)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// A switch may have won the race while SQLite was read; never replace
+	// a scene that already started loading or sending.
+	if a.chatScene == scene {
+		return
+	}
+	a.chatScene = scene
+	a.chatTurns = nil
+	for _, turn := range savedTurns {
+		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: turn.Role, Content: turn.Content})
+	}
+	a.chatDrafts = nil
+	for _, savedDraft := range savedDrafts {
+		var proposed, original model.Mapping
+		if err := json.Unmarshal(savedDraft.Proposed, &proposed); err != nil {
+			continue
+		}
+		draft := AIDraft{Mapping: proposed, Explanation: savedDraft.Explanation, Operation: savedDraft.Operation, TargetID: savedDraft.TargetID}
+		if savedDraft.Original != nil {
+			if err := json.Unmarshal(*savedDraft.Original, &original); err == nil {
+				draft.Original = &original
+			}
+		}
+		a.chatDrafts = append(a.chatDrafts, draft)
+	}
+}
 func (a *App) SendChatMessage(text string) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -41,7 +81,24 @@ func (a *App) SendChatMessage(text string) {
 	a.bg.Add(1)
 	go func() {
 		defer a.bg.Done()
-		_ = a.sendChat(text)
+		_ = a.sendChat(text, false)
+	}()
+}
+
+// RetryChat asks again with the exact last question, without appending a
+// second user turn. A successful retry replaces the failed answer and its
+// drafts; an earlier good conversation stays intact if it fails again.
+func (a *App) RetryChat() {
+	a.mu.Lock()
+	text := a.chatLastRequest
+	a.mu.Unlock()
+	if text == "" {
+		return
+	}
+	a.bg.Add(1)
+	go func() {
+		defer a.bg.Done()
+		_ = a.sendChat(text, true)
 	}()
 }
 
@@ -49,17 +106,18 @@ func (a *App) SendChatMessage(text string) {
 // state lands before the call returns, so a test reads what the page
 // will draw without driving the goroutine.
 func (a *App) RunChatSync(text string) error {
-	return a.sendChat(strings.TrimSpace(text))
+	return a.sendChat(strings.TrimSpace(text), false)
 }
 
 // sendChat is the conversation's core: the ready check, the busy gate,
 // the request with its deadline, and the state the page reads. A reply
 // that fails mid-stream keeps what arrived as the assistant's turn, the
 // error beside it — the same contract the interpretation's card has.
-func (a *App) sendChat(text string) error {
+func (a *App) sendChat(text string, retry bool) error {
 	if err := a.errAINotReady(); err != nil {
 		return err
 	}
+	a.ensureChatScene()
 	// The busy check and the busy flip are one locked step, so two sends
 	// racing cannot start two requests.
 	a.mu.Lock()
@@ -67,9 +125,34 @@ func (a *App) sendChat(text string) error {
 		a.mu.Unlock()
 		return fmt.Errorf("上一条回复还在路上")
 	}
+	scene := a.activeWS
 	a.chatBusy, a.chatErr = true, ""
-	a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleUser, Content: text})
+	a.chatLastRequest = text
+	if !retry {
+		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleUser, Content: text})
+		if err := a.Store.AddAIChatTurn(scene, ai.RoleUser, text, time.Now().UnixMilli()); err != nil {
+			a.mu.Unlock()
+			return err
+		}
+	}
 	turns := append([]ai.ChatTurn(nil), a.chatTurns...)
+	if limit := a.AIChatTurns(); len(turns) > limit {
+		// Keep the newest whole user/assistant pair within the cap rather
+		// than dropping a turn just because the requested count is odd.
+		if limit%2 == 1 {
+			limit++
+		}
+		turns = turns[len(turns)-limit:]
+		for len(turns) > 0 && turns[0].Role != ai.RoleUser {
+			turns = turns[1:]
+		}
+	}
+	if len(a.mappings) > 0 {
+		summary, err := json.Marshal(a.mappings)
+		if err == nil {
+			turns = append([]ai.ChatTurn{{Role: ai.RoleUser, Content: "当前场景的映射摘要（仅用于识别可修改规则；字段与 id 以此为准，不要猜）：" + string(summary)}}, turns...)
+		}
+	}
 	a.mu.Unlock()
 	a.notify()
 
@@ -94,12 +177,16 @@ func (a *App) sendChat(text string) error {
 		// assistant's turn, shown beside the error rather than over it.
 		if strings.TrimSpace(reply) != "" {
 			a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleAssistant, Content: reply})
+			_ = a.Store.AddAIChatTurn(scene, ai.RoleAssistant, reply, time.Now().UnixMilli())
 		}
 	} else {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleAssistant, Content: reply})
-		a.chatDrafts, a.chatNote = chatDraftsOf(reply)
+		_ = a.Store.AddAIChatTurn(scene, ai.RoleAssistant, reply, time.Now().UnixMilli())
+		a.chatDrafts, a.chatNote = a.chatDraftsOf(reply)
+		_ = a.saveChatDrafts(scene, a.chatDrafts)
 		draftCount = len(a.chatDrafts)
 	}
+	_ = a.Store.TrimAIChatTurns(scene, 50)
 	a.mu.Unlock()
 	if err != nil {
 		a.Log.Warn("AI 对话失败: %v", err)
@@ -116,7 +203,7 @@ func (a *App) sendChat(text string) error {
 // card whose import could only fail. A reply that parsed to more drafts
 // than the preview keeps says the cut too — the tail the cap dropped is
 // as much the user's business as the draft a validator refused.
-func chatDraftsOf(reply string) (drafts []AIDraft, note string) {
+func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 	parsed, overCap, explicitlyEmpty := ai.ParseChatDrafts(reply)
 	var dropped []string
 	for _, d := range parsed {
@@ -125,7 +212,53 @@ func chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 			dropped = append(dropped, err.Error())
 			continue
 		}
-		drafts = append(drafts, AIDraft{Mapping: m, Explanation: explanation})
+		if d.Operation == "update" {
+			if d.TargetID == "" {
+				dropped = append(dropped, "修改草稿缺少目标规则 ID")
+				continue
+			}
+			original, err := a.Store.GetMapping(d.TargetID)
+			if err != nil {
+				dropped = append(dropped, "目标规则已不存在，不能应用旧修改草稿")
+				continue
+			}
+			if m.Name == "" {
+				m.Name = original.Name
+			}
+			// An update starts from the full original, not from zero values:
+			// omitted fields mean "unchanged", not "clear this setting".
+			if !d.Has("group") {
+				m.Group = original.Group
+			}
+			if !d.Has("serverNames") {
+				m.ServerNames = original.ServerNames
+			}
+			if !d.Has("listenPath") {
+				m.ListenPath = original.ListenPath
+			}
+			if !d.Has("proxyMode") {
+				m.ProxyMode = original.ProxyMode
+			}
+			if !d.Has("extraDirectives") {
+				m.ExtraDirectives = original.ExtraDirectives
+			}
+			m.TLSCertPath, m.TLSKeyPath = original.TLSCertPath, original.TLSKeyPath
+			m.ProxyHeaders, m.ProxyPassURL = original.ProxyHeaders, original.ProxyPassURL
+			m.RedirectHTTP = original.RedirectHTTP
+			m.HealthCheckEnabled, m.HealthCheckIntervalSec = original.HealthCheckEnabled, original.HealthCheckIntervalSec
+			m.HealthCheckTargetPath, m.HealthCheckExpectedCode = original.HealthCheckTargetPath, original.HealthCheckExpectedCode
+			m.HealthStatus, m.LastCheckedAt = original.HealthStatus, original.LastCheckedAt
+			if d.Enabled != nil {
+				m.Enabled = *d.Enabled
+			} else {
+				m.Enabled = original.Enabled
+			}
+			m.ID = original.ID
+			m.CreatedAt, m.UpdatedAt, m.SortOrder = original.CreatedAt, original.UpdatedAt, original.SortOrder
+			drafts = append(drafts, AIDraft{Mapping: m, Explanation: explanation, Operation: "update", TargetID: original.ID, Original: &original})
+			continue
+		}
+		drafts = append(drafts, AIDraft{Mapping: m, Explanation: explanation, Operation: "create"})
 	}
 	var notes []string
 	if len(dropped) > 0 {
@@ -143,6 +276,31 @@ func chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 	return drafts, note
 }
 
+// saveChatDrafts persists only sanitized proposals. A corrupt saved draft
+// is skipped on restore rather than allowed to change a rule.
+func (a *App) saveChatDrafts(scene string, drafts []AIDraft) error {
+	saved := make([]store.AIChatDraft, 0, len(drafts))
+	for _, draft := range drafts {
+		proposed, err := json.Marshal(draft.Mapping)
+		if err != nil {
+			continue
+		}
+		item := store.AIChatDraft{WorkspaceID: scene, Operation: draft.Operation, TargetID: draft.TargetID, Proposed: proposed, Explanation: draft.Explanation}
+		if item.Operation == "" {
+			item.Operation = "create"
+		}
+		if draft.Original != nil {
+			original, err := json.Marshal(draft.Original)
+			if err == nil {
+				raw := json.RawMessage(original)
+				item.Original = &raw
+			}
+		}
+		saved = append(saved, item)
+	}
+	return a.Store.SaveAIChatDrafts(scene, saved)
+}
+
 // DropChatDraft removes one draft from the waiting list; the rest keep
 // their places. The slice is rebuilt rather than shifted in place — the
 // frame holds a snapshot that shares the backing array, and a shift
@@ -154,39 +312,41 @@ func (a *App) DropChatDraft(i int) {
 		next = append(next, a.chatDrafts[:i]...)
 		next = append(next, a.chatDrafts[i+1:]...)
 		a.chatDrafts = next
+		_ = a.saveChatDrafts(a.chatScene, a.chatDrafts)
 	}
 	a.mu.Unlock()
 	a.notify()
 }
 
-// ClearChat empties the conversation and the drafts waiting in it. The
-// store is not touched: a conversation is talk, and what it produced
-// either was imported or was not.
+// ClearChat empties only the current scene's conversation and pending
+// drafts. Imported mappings and every other scene stay untouched.
 func (a *App) ClearChat() {
 	a.mu.Lock()
+	scene := a.activeWS
 	a.chatTurns = nil
 	a.chatPartial, a.chatStreaming, a.chatBusy = "", false, false
 	a.chatErr, a.chatNote, a.chatDrafts = "", "", nil
+	a.chatLastRequest = ""
 	a.mu.Unlock()
+	_ = a.Store.ClearAIChatTurns(scene)
+	_ = a.Store.ClearAIChatDrafts(scene)
 	a.notify()
 }
 
 // ImportChatDrafts writes the waiting drafts into the current scene as
-// new mappings — the same thing 保存 does for a hand-typed rule, and no
-// more: the engine is not applied, and nothing starts listening until
-// the user says 应用配置.
-//
-// The port check runs over every draft before anything is stored, and
-// one conflict refuses the whole batch: a half-imported set would leave
-// the user to work out which of the cards they clicked actually landed.
-// The reason names each refused draft, so the fix — a port to free or a
-// card to drop — is on the screen.
+// new mappings or reviewed updates — never as an engine apply. Every edit
+// is checked against its original version and the target scene; one
+// conflict refuses the whole batch rather than leaving a half-written set.
 func (a *App) ImportChatDrafts() error {
 	a.mu.Lock()
 	drafts := append([]AIDraft(nil), a.chatDrafts...)
+	scene := a.activeWS
 	a.mu.Unlock()
 	if len(drafts) == 0 {
 		return fmt.Errorf("没有可导入的草稿")
+	}
+	if scene == "" || a.chatScene != scene {
+		return fmt.Errorf("场景已切换，请在新场景重新生成草稿")
 	}
 
 	var conflicts []string
@@ -201,25 +361,52 @@ func (a *App) ImportChatDrafts() error {
 			continue
 		}
 		seen[m.ListenPort] = true
-		if why, _ := a.probeListenPort(m.ListenPort, m.Protocol, ""); why != "" {
+		exclude := ""
+		if d.Operation == "update" {
+			exclude = d.TargetID
+		}
+		if why, _ := a.probeListenPort(m.ListenPort, m.Protocol, exclude); why != "" {
 			conflicts = append(conflicts, fmt.Sprintf("「%s」（监听 %d）：%s", m.Name, m.ListenPort, why))
 		}
 	}
 	if len(conflicts) > 0 {
-		return fmt.Errorf("有 %d 条草稿的监听端口不可用，本次都不导入：%s", len(conflicts), strings.Join(conflicts, "；"))
+		return fmt.Errorf("有 %d 条草稿的监听端口不可用，本次都不写入：%s", len(conflicts), strings.Join(conflicts, "；"))
 	}
 
-	ws := a.ActiveWorkspace()
 	for _, d := range drafts {
-		if _, err := a.Store.CreateMapping(ws, d.Mapping); err != nil {
+		if d.Operation != "update" {
+			continue
+		}
+		if d.Original == nil || d.TargetID == "" {
+			return fmt.Errorf("「%s」缺少原规则版本，不能修改", d.Mapping.Name)
+		}
+		current, err := a.Store.GetMapping(d.TargetID)
+		if err != nil {
+			return fmt.Errorf("「%s」的原规则已不存在，请重新生成草稿", d.Mapping.Name)
+		}
+		if current.UpdatedAt != d.Original.UpdatedAt {
+			return fmt.Errorf("「%s」已在对话后被修改，请重新生成草稿，避免覆盖你的改动", d.Mapping.Name)
+		}
+	}
+
+	for _, d := range drafts {
+		if d.Operation == "update" {
+			if err := a.Store.UpdateMappingIfUnchanged(d.Mapping, *d.Original); err != nil {
+				return fmt.Errorf("「%s」写入冲突：%w", d.Mapping.Name, err)
+			}
+			a.Log.Info("AI 对话修改映射「%s」", d.Mapping.Name)
+			continue
+		}
+		if _, err := a.Store.CreateMapping(scene, d.Mapping); err != nil {
 			return err
 		}
 		a.Log.Info("AI 对话导入映射「%s」", d.Mapping.Name)
 	}
 	a.mu.Lock()
 	a.chatDrafts, a.chatNote = nil, ""
+	_ = a.saveChatDrafts(a.chatScene, nil)
 	a.mu.Unlock()
-	a.setStatus(fmt.Sprintf("已导入 %d 条映射，点“应用配置”后生效", len(drafts)), false)
+	a.setStatus(fmt.Sprintf("已写入 %d 条草稿，点“应用配置”后生效", len(drafts)), false)
 	a.markDirty()
 	a.notify()
 	return nil

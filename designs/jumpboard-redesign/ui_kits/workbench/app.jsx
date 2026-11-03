@@ -71,13 +71,13 @@ function App() {
     <div className="desktop-window">
       <AppSidebar page={page} onPage={setPage} running={running} onRunning={switchService} serviceBusy={serviceBusy} />
       <main className="main">
-        <WindowBar page={page} onAction={runAction} actionState={actionState} onNewMapping={() => setMappingDialog({ mapping: null })} onClearChat={() => notify("清空前需要确认，避免误删当前对话")} />
+        <WindowBar page={page} onAction={runAction} actionState={actionState} onNewMapping={() => setMappingDialog({ mapping: null })} />
         <div className="page">
           {page === "mappings" && <MappingsPage mappings={mappings} setMappings={setMappings} dirty={dirty} setDirty={setDirty} scene={scene} scenes={scenes} onSceneSelect={chooseScene} onAction={runAction} actionState={actionState} onNewMapping={() => setMappingDialog({ mapping: null })} onEditMapping={(mapping) => setMappingDialog({ mapping })} onDeleteMapping={setDeleteCandidate} onChat={() => setPage("chat")} onSettings={() => setPage("settings")} />}
           {page === "logs" && <LogsPage onAction={notify} />}
           {page === "history" && <HistoryPage onAction={notify} />}
           {page === "terminal" && <TerminalPage onAction={notify} />}
-          {page === "chat" && <ChatPage onAction={notify} onClear={() => notify("清空前需要确认")} onImport={setConfirmImport} />}
+          {page === "chat" && <ChatPage scene={scene} onAction={notify} onClear={() => notify(`已清空「${scene}」的对话与待审草稿`)} onApplyDraft={setConfirmImport} />}
           {page === "settings" && <SettingsPage theme={theme} setTheme={setTheme} onAction={notify} />}
         </div>
       </main>

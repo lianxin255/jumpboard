@@ -201,4 +201,23 @@ func main() {
 	}
 	shoot("chat-ready-dark", appt.PageAIChat, appt.ThemeDark, true, nil)
 	shoot("chat-ready-light", appt.PageAIChat, appt.ThemeLight, false, nil)
+
+	// An update draft shows the field-level old/new values, not another
+	// create card: this is the screenshot that catches a crowded head row
+	// or an invisible conflict warning in the narrow draft column.
+	mysql, err := a.Store.ListMappings(a.ActiveWorkspace())
+	if err != nil || len(mysql) == 0 {
+		panic("the update shot needs the seeded MySQL mapping")
+	}
+	target := mysql[0]
+	updateReply := "只改监听端口。\n```json\n{\"drafts\":[{\"operation\":\"update\",\"targetId\":\"" + target.ID + "\",\"name\":\"MySQL 内网\",\"protocol\":\"tcp\",\"listenPort\":9002,\"upstreamHost\":\"192.168.1.10\",\"upstreamPort\":3306,\"explanation\":\"其他配置不动\"}]}\n```"
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": updateReply}}}})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
+	})
+	if err := a.RunChatSync("把 MySQL 改成 9002，其他不动"); err != nil {
+		panic(err)
+	}
+	shoot("chat-update-light", appt.PageAIChat, appt.ThemeLight, false, nil)
 }

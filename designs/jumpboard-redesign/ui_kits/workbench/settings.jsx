@@ -7,6 +7,7 @@ function SettingsPage({ theme, setTheme, onAction }) {
   const [whitelist, setWhitelist] = React.useState(false);
   const [logRead, setLogRead] = React.useState(true);
   const [connection, setConnection] = React.useState("idle");
+  const [historyTurns, setHistoryTurns] = React.useState("12 轮");
   const testConnection = () => { setConnection("busy"); setTimeout(() => { setConnection("success"); onAction("连接成功：模型服务可用，AI 入口已启用"); }, 900); };
   const title = settingSections.find((item) => item[0] === section)?.[1];
   return <div className="page__inner settings-layout" data-screen-label="设置">
@@ -19,6 +20,7 @@ function SettingsPage({ theme, setTheme, onAction }) {
       </>}
       {section === "ai" && <>
         <section className="jb-section"><h3 className="section-title">服务连接</h3><div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}><Input id="ai-endpoint" label="接口地址" placeholder="https://api.openai.com 或本地网关" /><div className="jb-field-row"><Input id="ai-model" label="模型" placeholder="gpt-4o-mini / deepseek-chat" /><Input id="ai-diagnosis" label="诊断/解读模型" placeholder="留空 = 与主模型相同" /></div><Input id="ai-key" label="API Key" type="password" placeholder="sk-…" hint="存储在系统凭据库，不写进数据库或导出文件" /></div></section>
+        <section className="jb-section"><h3 className="section-title">对话与历史</h3><div className="jb-setting-row"><div className="jb-setting-copy"><span>发送给模型的对话轮数</span><small>仅控制上下文范围；本地按场景保存最近 50 轮，重启后仍保留</small></div><select className="history-select" aria-label="对话历史轮数" value={historyTurns} onChange={(event) => setHistoryTurns(event.target.value)}><option>4 轮</option><option>8 轮</option><option>12 轮</option><option>20 轮</option><option>全部</option></select></div></section>
         <section className="jb-section"><h3 className="section-title">数据与隐私</h3><ul className="privacy-list"><li>生成草稿只发送当前对话，一次最多生成 5 条。</li><li>失败诊断发送错误、至多两条映射摘要和日志尾部。</li><li>文件解读发送所选文件；超过 256 KB 会被拒绝。</li><li>自然语言筛选会发送全部映射摘要，不含密钥。</li></ul></section>
         <div className="settings-actions"><Button disabled={connection === "busy"} onClick={() => onAction("正在从配置的网关拉取可用模型")}>拉取模型</Button><Button disabled={connection === "busy"} onClick={testConnection}>{connection === "busy" ? "正在连接…" : "测试连接"}</Button><Button variant="primary" disabled={connection === "busy"} onClick={() => onAction("AI 配置已保存")}>保存配置</Button>{connection === "busy" && <span className="connection-status connection-status--busy">正在验证接口与模型</span>}{connection === "success" && <span className="connection-status connection-status--success">✓ 连接成功，AI 入口已启用</span>}</div>
       </>}
