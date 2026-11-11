@@ -133,7 +133,7 @@ func (a *App) interpret(kind, name, content, source string) error {
 		return fmt.Errorf("解读还在进行中")
 	}
 	a.interpretBusy, a.interpretErr, a.interpretation = true, "", nil
-	a.interpretStreaming = false
+	a.interpretStreaming, a.interpretSpinner = false, true
 	a.interpretTarget, a.interpretSource = name, source
 	a.mu.Unlock()
 
@@ -156,15 +156,19 @@ func (a *App) interpret(kind, name, content, source string) error {
 		} else {
 			a.interpretation.Text += frag
 		}
-		// Fragments are the card's content already: the busy state ends
-		// with the first one, so the card reads text, not a spinner.
-		a.interpretBusy = false
+		// Fragments are the card's content already: the spinner ends with
+		// the first one, so the card reads text rather than waiting on a
+		// blank. busy stays up as the request gate — clearing it here would
+		// let a second interpretation start while this one is still
+		// streaming — and InterpretStreaming reads the streaming flag
+		// instead, which is what tells the card to render progressively.
+		a.interpretSpinner = false
 		a.mu.Unlock()
 		a.notify()
 	})
 
 	a.mu.Lock()
-	a.interpretBusy, a.interpretStreaming = false, false
+	a.interpretBusy, a.interpretStreaming, a.interpretSpinner = false, false, false
 	a.interpretTarget, a.interpretSource = name, source
 	if err != nil {
 		a.interpretErr = err.Error()
@@ -271,8 +275,22 @@ func (a *App) setConfImport(imp ConfImport) {
 // InterpretStreaming reports whether fragments of the current
 // interpretation are arriving right now: the card streams its render while
 // they are, and lays the finished document out once they stop.
+//
+// It reads the streaming flag alone. Gating it on interpretBusy made it
+// permanently false, because busy is the request gate and outlives the
+// fragments — the card never got the progressive render it was written
+// for.
 func (a *App) InterpretStreaming() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.interpretStreaming && a.interpretBusy
+	return a.interpretStreaming
+}
+
+// InterpretSpinner reports whether the interpretation has not produced
+// any text yet. The spinner ends with the first fragment, which is earlier
+// than the request itself ends.
+func (a *App) InterpretSpinner() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.interpretSpinner
 }

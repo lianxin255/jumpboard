@@ -196,7 +196,7 @@ func (a *App) sendChat(text string, retry bool) error {
 	} else {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleAssistant, Content: reply})
 		_ = a.Store.AddAIChatTurn(scene, ai.RoleAssistant, reply, time.Now().UnixMilli())
-		a.chatDrafts, a.chatNote = a.chatDraftsOf(reply)
+		a.chatDrafts, a.chatNote = a.chatDraftsOf(scene, reply)
 		_ = a.saveChatDrafts(scene, a.chatDrafts)
 		draftCount = len(a.chatDrafts)
 	}
@@ -217,7 +217,12 @@ func (a *App) sendChat(text string, retry bool) error {
 // card whose import could only fail. A reply that parsed to more drafts
 // than the preview keeps says the cut too — the tail the cap dropped is
 // as much the user's business as the draft a validator refused.
-func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
+//
+// The scene is a parameter, not a.chatScene: the caller already holds it,
+// and chatScene is only set once the page has loaded that scene's history —
+// reading it here would scope the lookup to "" on a fresh app and reject
+// every update draft as "target rule gone".
+func (a *App) chatDraftsOf(scene, reply string) (drafts []AIDraft, note string) {
 	parsed, overCap, explicitlyEmpty := ai.ParseChatDrafts(reply)
 	var dropped []string
 	for _, d := range parsed {
@@ -231,18 +236,29 @@ func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 				dropped = append(dropped, "修改草稿缺少目标规则 ID")
 				continue
 			}
-			// The scene the conversation belongs to, not the selected one:
-			// a draft may only update a rule of its own scene.
-			original, err := a.Store.GetMappingIn(a.chatScene, d.TargetID)
+			// Scoped to the scene the conversation belongs to: a draft may
+			// only update a rule of its own scene, never one whose id it
+			// guessed from another.
+			original, err := a.Store.GetMappingIn(scene, d.TargetID)
 			if err != nil {
 				dropped = append(dropped, "目标规则已不存在，不能应用旧修改草稿")
 				continue
 			}
-			if m.Name == "" {
-				m.Name = original.Name
-			}
 			// An update starts from the full original, not from zero values:
 			// omitted fields mean "unchanged", not "clear this setting".
+			//
+			// Name is checked with Has, not against "": Mapping() already
+			// substitutes "AI 映射" for a missing name, so an empty string
+			// here never means "the model said nothing" — it would rename
+			// the rule to that placeholder.
+			if !d.Has("name") {
+				m.Name = original.Name
+			}
+			// ListenPort has the same shape: 0 means the model left it out,
+			// and writing it back would move the rule off its port.
+			if !d.Has("listenPort") {
+				m.ListenPort = original.ListenPort
+			}
 			if !d.Has("group") {
 				m.Group = original.Group
 			}

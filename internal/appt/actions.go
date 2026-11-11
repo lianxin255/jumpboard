@@ -58,6 +58,27 @@ func (a *App) OpenNewFormFrom(m model.Mapping) {
 	a.formOpen = true
 }
 
+// OpenDraftForm opens the form for a draft, as an edit when the draft
+// changes an existing rule.
+//
+// A create draft has no row behind it and opens as a new mapping. An
+// update draft does: opening it as a new one would save a second copy of
+// the rule instead of changing the rule the user is looking at.
+func (a *App) OpenDraftForm(d AIDraft) {
+	if d.Operation != "update" || d.Original == nil {
+		a.OpenNewFormFrom(d.Mapping)
+		return
+	}
+	original := *d.Original
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.formEdit = &original
+	a.form = FormFromMapping(d.Mapping)
+	a.formErrs = nil
+	a.formPortFix = 0
+	a.formOpen = true
+}
+
 // OpenFormFromTemplate opens the form prefilled by a template.
 func (a *App) OpenFormFromTemplate(t model.Template) {
 	a.mu.Lock()

@@ -13,6 +13,16 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
+// maxPlainBody bounds the one non-SSE JSON body a gateway may answer a
+// stream request with, and maxStreamText bounds the text a stream may
+// accumulate. Both exist because the far end is a gateway the user
+// configured, not a trusted peer: without a cap, a broken or hostile one
+// can grow the process's memory until it dies.
+const (
+	maxPlainBody  = 8 << 20  // 8 MiB
+	maxStreamText = 16 << 20 // 16 MiB of reply text
+)
+
 // plainCompletionCapture holds the one successful JSON body a gateway sent
 // to a stream request. go-openai's stream reader owns SSE, but exposes no way
 // to recover a non-SSE body after it reads that body as an empty stream.
@@ -44,7 +54,7 @@ func (t plainCompletionTransport) RoundTrip(req *http.Request) (*http.Response, 
 		!strings.HasPrefix(strings.ToLower(mediaType), "application/json") {
 		return resp, nil
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPlainBody))
 	_ = resp.Body.Close()
 	if err != nil {
 		return nil, err
@@ -118,6 +128,12 @@ func (c *Client) postChatStreamMsgs(ctx context.Context, msgs []openai.ChatCompl
 		frag := resp.Choices[0].Delta.Content
 		if frag == "" {
 			continue
+		}
+		// A stream that never ends would otherwise grow the reply until
+		// the process runs out of memory. The cap is generous — far past
+		// any real answer — so hitting it means the far end is broken.
+		if text.Len()+len(frag) > maxStreamText {
+			return text.String(), fmt.Errorf("AI 回复过长（超过 %d MB），已停止接收", maxStreamText>>20)
 		}
 		text.WriteString(frag)
 		if onDelta != nil {

@@ -485,7 +485,10 @@ func mapOpenAIError(err error) error {
 	}
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		return fmt.Errorf("连接 AI 服务失败：%w", err)
+		// url.Error's own message embeds the full URL, and a gateway
+		// address may carry userinfo or a token in its query. The cause
+		// is what the user needs; the address they already know.
+		return fmt.Errorf("连接 AI 服务失败：%w", urlErr.Err)
 	}
 	return fmt.Errorf("无法解析 AI 服务的响应：%w", err)
 }

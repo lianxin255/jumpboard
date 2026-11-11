@@ -196,8 +196,15 @@ type App struct {
 	// interpretTarget names the file, interpretSource says which entry
 	// asked ("import" or "logs"), so the card draws where the
 	// question came from.
+	//
+	// interpretStreaming says fragments are still arriving, and
+	// interpretSpinner says nothing has arrived yet. They are separate
+	// from interpretBusy on purpose: busy is the request gate and stays
+	// up until the reply finishes, while the spinner ends with the first
+	// fragment — so the card stops spinning without the gate opening.
 	interpretBusy      bool
 	interpretStreaming bool
+	interpretSpinner   bool
 	interpretErr       string
 	interpretation     *ai.Interpretation
 	interpretTarget    string

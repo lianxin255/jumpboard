@@ -3,6 +3,7 @@ package appt
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -30,8 +31,19 @@ func (a *App) AIModel() string {
 }
 
 // SetAI stores the endpoint and model. The key is separate, see SetAIKey.
+//
+// The endpoint must be http or https: the key travels in an Authorization
+// header, and a bare host or another scheme would make the library send it
+// somewhere unintended — a plain http address is allowed because a local
+// gateway is the common case, but anything else is refused with a reason
+// rather than stored and failing later.
 func (a *App) SetAI(baseURL, model string) error {
 	baseURL, model = strings.TrimSpace(baseURL), strings.TrimSpace(model)
+	if baseURL != "" {
+		if err := validAIEndpoint(baseURL); err != nil {
+			return err
+		}
+	}
 	if err := a.Store.SetSetting(store.SettingAIBaseURL, baseURL); err != nil {
 		return err
 	}
@@ -39,6 +51,23 @@ func (a *App) SetAI(baseURL, model string) error {
 		return err
 	}
 	a.notify()
+	return nil
+}
+
+// validAIEndpoint accepts an http or https address with a host.
+func validAIEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("AI 服务地址无法解析：%w", err)
+	}
+	switch u.Scheme {
+	case "http", "https":
+	default:
+		return fmt.Errorf("AI 服务地址需以 http:// 或 https:// 开头")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("AI 服务地址缺少主机名")
+	}
 	return nil
 }
 

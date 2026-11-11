@@ -405,7 +405,7 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 				Label("填入表单 " + m.Name).
 				Tooltip("把这条草稿填进映射表单，逐项修改后保存").Clicked() {
 				a.DropChatDraft(i)
-				a.OpenNewFormFrom(m)
+				a.OpenDraftForm(d)
 				a.Info("草稿已填入表单，确认后保存")
 			}
 		})
@@ -470,6 +470,12 @@ func (v *View) chatDraftDiff(c *ui.Context, t Tokens, d appt.AIDraft) {
 		{"域名", before.ServerNames, after.ServerNames},
 		{"路径", before.ListenPath, after.ListenPath},
 		{"上游地址", upstreamAddress(before), upstreamAddress(after)},
+		// The proxy mode decides whether the custom headers are sent at
+		// all, and the extra directives carry the timeouts: a draft that
+		// changes either would otherwise look unchanged on the card and
+		// silently drop the rule's authentication on import.
+		{"代理模式", before.ProxyMode.Label(), after.ProxyMode.Label()},
+		{"附加指令", before.ExtraDirectives, after.ExtraDirectives},
 	}
 	for _, field := range fields {
 		if field.old == field.new {
@@ -478,12 +484,21 @@ func (v *View) chatDraftDiff(c *ui.Context, t Tokens, d appt.AIDraft) {
 		ui.Column(c).Gap(2).Children(func() {
 			ui.Text(c, field.name).FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, field.old).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
+				ui.Text(c, diffValue(field.old)).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
 				ui.Text(c, "→").FontSize(CaptionSize).TextColor(t.Meta)
-				ui.Text(c, field.new).Font(FontMono).FontSize(CaptionSize).TextColor(t.Accent)
+				ui.Text(c, diffValue(field.new)).Font(FontMono).FontSize(CaptionSize).TextColor(t.Accent)
 			})
 		})
 	}
+}
+
+// diffValue shows an empty side of a change as (空) so the arrow still
+// reads as "this became that" rather than pointing at nothing.
+func diffValue(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "(空)"
+	}
+	return s
 }
 
 func enabledLabel(on bool) string {
