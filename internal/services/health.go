@@ -4,9 +4,10 @@ package services
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,10 +50,25 @@ func CheckHTTP(host string, port int, path string, expected int, useTLS bool) mo
 			return http.ErrUseLastResponse
 		},
 	}
-	url := fmt.Sprintf("http://%s%s", net.JoinHostPort(host, itoa(port)), path)
+	// The URL is assembled from parts, never concatenated: a path that
+	// starts with "@" would otherwise turn the host into userinfo —
+	// "http://10.0.0.5:80@evil.example/" — and the probe would reach the
+	// attacker's host instead of the upstream. A path is a path, so it is
+	// forced to start with "/", and a query in it stays a query.
+	scheme := "http"
 	if useTLS {
-		url = fmt.Sprintf("https://%s%s", net.JoinHostPort(host, itoa(port)), path)
+		scheme = "https"
 	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	pathPart, query, _ := strings.Cut(path, "?")
+	url := (&url.URL{
+		Scheme:   scheme,
+		Host:     net.JoinHostPort(host, itoa(port)),
+		Path:     pathPart,
+		RawQuery: query,
+	}).String()
 	resp, err := client.Get(url)
 	if err != nil {
 		return model.HealthUnhealthy

@@ -103,6 +103,51 @@ func (a *App) involvedRule(port int) string {
 	return strings.Join(rules, "\n")
 }
 
+// chatMappingSummary is one rule as the conversation's summary carries it.
+//
+// It is a deliberate allow-list, not the mapping minus a few fields: the
+// conversation needs the id it may copy back and the fields a draft can
+// name, and nothing else. ProxyHeaders, ProxyPassURL, TLSCertPath,
+// TLSKeyPath and ExtraDirectives stay here — a proxy_set_header may hold
+// a bearer token, and the settings page promises the summary never
+// contains a key. Adding a field to model.Mapping must not add it to what
+// leaves this machine; it has to be added below on purpose.
+type chatMappingSummary struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Group        string `json:"group,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	Protocol     string `json:"protocol"`
+	ListenPort   int    `json:"listenPort"`
+	ServerNames  string `json:"serverNames,omitempty"`
+	ListenPath   string `json:"listenPath,omitempty"`
+	UpstreamHost string `json:"upstreamHost"`
+	UpstreamPort int    `json:"upstreamPort"`
+	ProxyMode    string `json:"proxyMode,omitempty"`
+}
+
+// mappingSummaries projects the scene's rules onto what the model may
+// see. The order is the table's, so a reply's ids line up with the rows.
+func mappingSummaries(ms []model.Mapping) []chatMappingSummary {
+	out := make([]chatMappingSummary, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, chatMappingSummary{
+			ID:           m.ID,
+			Name:         m.Name,
+			Group:        m.Group,
+			Enabled:      m.Enabled,
+			Protocol:     string(m.Protocol),
+			ListenPort:   m.ListenPort,
+			ServerNames:  m.ServerNames,
+			ListenPath:   m.ListenPath,
+			UpstreamHost: m.UpstreamHost,
+			UpstreamPort: m.UpstreamPort,
+			ProxyMode:    string(m.ProxyMode),
+		})
+	}
+	return out
+}
+
 // mappingSummary is one mapping as a person reads it, only the fields
 // that are set. It is all the model ever learns about the mapping table:
 // one summary of one rule, never the list.
@@ -126,9 +171,9 @@ func mappingSummary(m model.Mapping) string {
 		parts = append(parts, "路径："+m.ListenPath)
 	}
 	parts = append(parts, fmt.Sprintf("上游：%s:%d", m.UpstreamHost, m.UpstreamPort))
-	if m.ExtraDirectives != "" {
-		parts = append(parts, "附加指令："+m.ExtraDirectives)
-	}
+	// ExtraDirectives are deliberately absent: they are the one field a
+	// user writes raw nginx in, so a proxy_set_header there may carry a
+	// credential. The diagnosis needs the rule's shape, not its secrets.
 	return strings.Join(parts, "；")
 }
 

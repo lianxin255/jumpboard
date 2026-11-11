@@ -131,6 +131,10 @@ func (a *App) sendChat(text string, retry bool) error {
 	if !retry {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleUser, Content: text})
 		if err := a.Store.AddAIChatTurn(scene, ai.RoleUser, text, time.Now().UnixMilli()); err != nil {
+			// The busy flag was already set for a request that never
+			// starts: leaving it up would answer every later message with
+			// "上一条回复还在路上" until the app restarts.
+			a.chatBusy = false
 			a.mu.Unlock()
 			return err
 		}
@@ -148,7 +152,12 @@ func (a *App) sendChat(text string, retry bool) error {
 		}
 	}
 	if len(a.mappings) > 0 {
-		summary, err := json.Marshal(a.mappings)
+		// The summary is a redacted projection, never the mappings
+		// themselves: the full struct carries ProxyHeaders, ProxyPassURL
+		// and the TLS paths, and a rule's proxy_set_header may hold a
+		// bearer token. The settings page promises the summary never
+		// contains a key, so only the fields a draft has to name go out.
+		summary, err := json.Marshal(mappingSummaries(a.mappings))
 		if err == nil {
 			turns = append([]ai.ChatTurn{{Role: ai.RoleUser, Content: "当前场景的映射摘要（仅用于识别可修改规则；字段与 id 以此为准，不要猜）：" + string(summary)}}, turns...)
 		}
@@ -217,7 +226,9 @@ func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 				dropped = append(dropped, "修改草稿缺少目标规则 ID")
 				continue
 			}
-			original, err := a.Store.GetMapping(d.TargetID)
+			// The scene the conversation belongs to, not the selected one:
+			// a draft may only update a rule of its own scene.
+			original, err := a.Store.GetMappingIn(a.chatScene, d.TargetID)
 			if err != nil {
 				dropped = append(dropped, "目标规则已不存在，不能应用旧修改草稿")
 				continue
@@ -380,7 +391,9 @@ func (a *App) ImportChatDrafts() error {
 		if d.Original == nil || d.TargetID == "" {
 			return fmt.Errorf("「%s」缺少原规则版本，不能修改", d.Mapping.Name)
 		}
-		current, err := a.Store.GetMapping(d.TargetID)
+		// Scoped to the scene: an id from another scene is not a rule this
+		// conversation may rewrite, even though the id exists.
+		current, err := a.Store.GetMappingIn(scene, d.TargetID)
 		if err != nil {
 			return fmt.Errorf("「%s」的原规则已不存在，请重新生成草稿", d.Mapping.Name)
 		}
