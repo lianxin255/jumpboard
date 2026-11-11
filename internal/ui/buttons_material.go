@@ -16,9 +16,15 @@ import (
 // handling and the existing tests intact.
 
 // PrimaryAction is the solid accent button: the one main action of a page.
-func PrimaryAction(c *ui.Context, t Tokens, label string) ui.Element {
+//
+// disabled is a parameter rather than a check on the element because the
+// caller sets it *after* this returns — `PrimaryAction(...).Disabled(busy)` —
+// so IsDisabled() inside would always be false and the disabled face would
+// never draw. The element is still marked disabled for input and
+// accessibility; this only decides which face to paint.
+func PrimaryAction(c *ui.Context, t Tokens, label string, disabled bool) ui.Element {
 	b := ui.PrimaryButton(c, label).TextColor(t.AccentText)
-	if b.IsDisabled() {
+	if disabled {
 		// A disabled face keeps the shape but loses the light: no gradient,
 		// no highlight, and only the contact shadow, so it reads as flat
 		// rather than as a button nobody can press.
@@ -41,10 +47,11 @@ func PrimaryAction(c *ui.Context, t Tokens, label string) ui.Element {
 }
 
 // SecondaryAction is the raised plain button: 预检, 取消, 从模板新建 — a real
-// affordance one step below the accent.
-func SecondaryAction(c *ui.Context, t Tokens, label string) ui.Element {
+// affordance one step below the accent. disabled is a parameter for the same
+// reason as PrimaryAction's.
+func SecondaryAction(c *ui.Context, t Tokens, label string, disabled bool) ui.Element {
 	b := ui.Button(c, label)
-	if b.IsDisabled() {
+	if disabled {
 		return b.Background(t.Surface3).Border(1, t.Border).
 			TextColor(t.Meta).
 			Shadow(0, 1, 1, 0, t.Shadow.Alpha(0.20))
@@ -65,10 +72,10 @@ func SecondaryAction(c *ui.Context, t Tokens, label string) ui.Element {
 // drop shadow, just the fill and the hairline. A page of rows must not turn
 // into a page of raised keys — the emphasis belongs to the one action that
 // matters, and everything else answers on hover.
-func QuietAction(c *ui.Context, t Tokens, label string) ui.Element {
+func QuietAction(c *ui.Context, t Tokens, label string, disabled bool) ui.Element {
 	b := ui.Button(c, label)
 	switch {
-	case b.IsDisabled():
+	case disabled:
 		return b.Background(ui.Transparent).TextColor(t.Meta)
 	case b.Pressed():
 		return b.Background(t.Surface2).Border(1, t.Border)
@@ -80,10 +87,10 @@ func QuietAction(c *ui.Context, t Tokens, label string) ui.Element {
 
 // GhostAction is QuietAction with no border at all, for the tightest spots:
 // a row's icon-sized text action, a card's 收起.
-func GhostAction(c *ui.Context, t Tokens, label string) ui.Element {
+func GhostAction(c *ui.Context, t Tokens, label string, disabled bool) ui.Element {
 	b := ui.Button(c, label)
 	switch {
-	case b.IsDisabled():
+	case disabled:
 		return b.Background(ui.Transparent).TextColor(t.Meta)
 	case b.Pressed(), b.Hovered():
 		return b.Background(t.Surface2)

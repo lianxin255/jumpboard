@@ -22,9 +22,10 @@ import (
 //     loading indicator, which is a different promise.
 //   - It is short. Past ~450ms the user is waiting for it, which is the
 //     opposite of polish.
-//   - It never covers text. The band is drawn behind the content and only its
-//     tint and a hairline of light reach the surface, so nothing is obscured
-//     and no layout moves.
+//   - It never obscures text. The band is drawn over the page, but at 4.5%
+//     accent it is a tint rather than a veil, and it takes no input, so
+//     nothing is hidden and no click is swallowed. Drawing it under the page
+//     instead would make it invisible: the page paints an opaque canvas.
 //   - It is skipped entirely when the desktop asks for less motion. This is
 //     motion, not a fade, so it does not get the NonMotion exemption.
 
@@ -63,12 +64,26 @@ func (h *haloState) haloStart(p appt.Page) bool {
 // haloSweep is the arrival sweep's animation state. It uses the toolkit's
 // own AnimateTo, so the frame clock is the toolkit's business: the sweep
 // advances while it is live and the window goes idle once it is done.
+//
+// The handle is what makes that work. AnimateTo keeps its channel on the
+// element's own state, and a box built fresh each frame is a different
+// element each frame — the channel is created anew every pass, which makes
+// AnimateTo return its target immediately and the sweep jump straight to the
+// end. Binding the box to a Handle gives it one identity across builds, so
+// the channel survives from frame to frame and the value actually travels.
 type haloSweep struct {
 	// progress is 0 before the first frame of a sweep and 1 when it is
 	// over; AnimateTo moves it between them.
 	progress float32
 	// live is true from the frame a sweep starts until it reaches 1.
 	live bool
+	// handle is the sweep box's identity across frames.
+	handle ui.Handle
+	// started says the channel has been seeded at 0. It is set on the
+	// first frame of a sweep and cleared when one begins, so Jump runs
+	// once rather than every frame — a Jump per frame would hold the value
+	// at 0 forever.
+	started bool
 }
 
 // Live reports whether a sweep is still running.
@@ -77,15 +92,20 @@ func (s *haloSweep) Live() bool { return s.live }
 // draw advances and paints the sweep. arrived starts a new one.
 func (s *haloSweep) draw(c *ui.Context, t Tokens, arrived bool, width, height float32) {
 	if arrived {
-		s.progress, s.live = 0, true
+		s.progress, s.live, s.started = 0, true, false
 	}
 	if !s.live {
 		return
 	}
-	box := ui.Box(c).Absolute().Left(0).Top(0).Width(width).Height(height)
-	// AnimateTo returns the current value and keeps the toolkit redrawing
-	// until it reaches the target; the element it is called on anchors the
-	// animation's identity.
+	box := ui.Box(c).Absolute().Left(0).Top(0).Width(width).Height(height).Bind(&s.handle)
+	// Jump first: a channel created by AnimateTo starts at its target and
+	// returns it at once, so a sweep that only ever called AnimateTo would
+	// begin already finished. Jump puts the value at 0, and the animation
+	// then has somewhere to travel from.
+	if !s.started {
+		box.Jump("halo", 0)
+		s.started = true
+	}
 	s.progress = box.AnimateTo("halo", 1, ui.Animation{
 		Duration: haloDuration,
 		Ease:     ui.EaseOut,
@@ -121,5 +141,5 @@ func haloBand(c *ui.Context, t Tokens, progress float32, width, height float32) 
 		// It lies over the page, so it must not take the pointer: a sweep
 		// that swallowed clicks for 400ms would make the page feel broken
 		// exactly when the user is trying to use it.
-		PassThrough()
+		PassThrough().IgnoreInput(true)
 }

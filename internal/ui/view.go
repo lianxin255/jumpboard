@@ -49,6 +49,10 @@ type View struct {
 	// halo drives the arrival sweep that plays when the page changes.
 	halo      haloState
 	haloSweep haloSweep
+	// pendingDot is the amber strip's dot, bound so its pulse has an
+	// identity across frames; pendingDotStarted seeds it at rest once.
+	pendingDot        ui.Handle
+	pendingDotStarted bool
 
 	// The forms' own state, which the app's state does not need to know
 	// about until it is saved.
@@ -194,8 +198,11 @@ func (v *View) draw(c *ui.Context) {
 			v.body(c, t)
 			if arrived || v.haloSweep.Live() {
 				w, h := c.Size()
+				// IgnoreInput as well as PassThrough: the sweep sits over
+				// the page, and a layer that answered the pointer would eat
+				// the click that opened the page in the first place.
 				ui.Box(c).Absolute().Left(0).Top(0).Width(w - SidebarW).Height(h).
-					ClipX().PassThrough().Children(func() {
+					ClipX().PassThrough().IgnoreInput(true).Children(func() {
 					v.haloSweep.draw(c, t, arrived, w-SidebarW, h)
 				})
 			}
@@ -505,16 +512,16 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			v.workspaceChips(c, t, busy)
 			ui.Spacer(c)
 			if len(mappings) > 0 {
-				if SecondaryAction(c, t, "从模板新建").Disabled(busy).Clicked() {
+				if SecondaryAction(c, t, "从模板新建", busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
-				if SecondaryAction(c, t, "粘贴导入").Disabled(busy).Label("粘贴导入").
+				if SecondaryAction(c, t, "粘贴导入", busy).Label("粘贴导入").
 					Tooltip("把剪贴板里的 JumpBoard 备份（JSON）或 nginx 配置导入进来").Clicked() {
 					a.RunBackground(a.StartPasteImport)
 				}
 			}
 			if len(mappings) > 0 {
-				if PrimaryAction(c, t, "新建映射").Disabled(busy).
+				if PrimaryAction(c, t, "新建映射", busy).
 					Tooltip("新建一条映射（⌘N）").Clicked() {
 					a.OpenForm(nil)
 				}
@@ -1311,7 +1318,7 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 		v.workspaceChoice = active
 		a.RequestSwitchWorkspace(selected)
 	}
-	if SecondaryAction(c, t, "管理场景").Disabled(busy).Height(ControlHeight).
+	if SecondaryAction(c, t, "管理场景", busy).Height(ControlHeight).
 		Tooltip("在设置里新建、改名、删除场景").Clicked() {
 		a.SetPage(appt.PageSettings)
 	}
@@ -1383,11 +1390,11 @@ func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 			"还没有转发规则",
 			"把内网 MySQL、SSH、Web 等服务转到这台机器的端口上；建好后点「应用配置」或 ⌘R，立刻对外生效。",
 			4, func() {
-				if PrimaryAction(c, t, "新建映射").Disabled(busy).
+				if PrimaryAction(c, t, "新建映射", busy).
 					Tooltip("新建一条映射（⌘N）").Clicked() {
 					a.OpenForm(nil)
 				}
-				if SecondaryAction(c, t, "从模板新建").Disabled(busy).Clicked() {
+				if SecondaryAction(c, t, "从模板新建", busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
 			})
@@ -1428,11 +1435,11 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 			ui.Textf(c, "已选 %d 条 · 启用 %d · 停用 %d", len(chosen), len(onIDs), len(offIDs)).
 				FontSize(CaptionSize).Bold().TextColor(t.FG)
 			ui.Spacer(c)
-			if QuietAction(c, t, "批量启用").FontSize(CaptionSize).Disabled(busy || len(offIDs) == 0).
+			if QuietAction(c, t, "批量启用", false).FontSize(CaptionSize).Disabled(busy || len(offIDs) == 0).
 				Tooltip("启用选中的停用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(offIDs, true) })
 			}
-			if QuietAction(c, t, "批量停用").FontSize(CaptionSize).Disabled(busy || len(onIDs) == 0).
+			if QuietAction(c, t, "批量停用", false).FontSize(CaptionSize).Disabled(busy || len(onIDs) == 0).
 				Tooltip("停用选中的启用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(onIDs, false) })
 			}
@@ -1449,7 +1456,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 					Run: func() error { return a.DeleteMappings(ids) },
 				})
 			}
-			if QuietAction(c, t, "取消选择").FontSize(CaptionSize).Disabled(busy).
+			if QuietAction(c, t, "取消选择", false).FontSize(CaptionSize).Disabled(busy).
 				Tooltip("清空当前选择").Clicked() {
 				v.chosen.Clear()
 			}
@@ -1479,14 +1486,14 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 		// every use for a mistake that costs one click to undo, and the
 		// rules only take effect on the next 应用配置 anyway.
 		if len(offIDs) > 0 {
-			if QuietAction(c, t, "全部启用").FontSize(CaptionSize).Disabled(busy).
+			if QuietAction(c, t, "全部启用", false).FontSize(CaptionSize).Disabled(busy).
 				Tooltip("启用当前列表中停用的规则，改完后需应用配置；可撤销").Clicked() {
 				ids := append([]string(nil), offIDs...)
 				a.RunBackground(func() error { return a.SetMappingsEnabled(ids, true) })
 			}
 		}
 		if len(onIDs) > 0 {
-			if QuietAction(c, t, "全部停用").FontSize(CaptionSize).Disabled(busy).
+			if QuietAction(c, t, "全部停用", false).FontSize(CaptionSize).Disabled(busy).
 				Tooltip("停用当前列表中启用的规则，改完后需应用配置；可撤销").Clicked() {
 				ids := append([]string(nil), onIDs...)
 				a.RunBackground(func() error { return a.SetMappingsEnabled(ids, false) })
@@ -1520,7 +1527,7 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 				}
 				ui.Text(c, hint).FontSize(BodySize).TextColor(t.Muted)
 				ui.Row(c).Gap(8).Children(func() {
-					if QuietAction(c, t, "清除筛选").Clicked() {
+					if QuietAction(c, t, "清除筛选", false).Clicked() {
 						v.query = ""
 						v.filter = 0
 						v.groupFilter = ""
@@ -1529,7 +1536,7 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 						v.App.ClearAIFilter()
 					}
 					if v.filter != 0 {
-						if QuietAction(c, t, "显示全部").Clicked() {
+						if QuietAction(c, t, "显示全部", false).Clicked() {
 							v.filter = 0
 						}
 					}

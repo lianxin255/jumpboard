@@ -303,10 +303,10 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Spacer(c)
-			if SecondaryAction(c, t, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消", false).Clicked() {
 				a.CloseForm()
 			}
-			if PrimaryAction(c, t, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
+			if PrimaryAction(c, t, "保存", false).Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
 				f := f
 				a.SetForm(f)
 				a.RunBackground(a.SaveForm)
@@ -452,7 +452,7 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 			})
 		}).Height(380)
 		ui.Row(c).Justify(ui.End).Children(func() {
-			if SecondaryAction(c, t, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭", false).Clicked() {
 				a.SetTemplatePicker(false)
 			}
 		})
@@ -469,7 +469,7 @@ func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 		ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG).Balance()
 		ui.Text(c, q.Body).FontSize(NoteSize).TextColor(t.FG2)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if SecondaryAction(c, t, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消", false).Clicked() {
 				v.App.ResolveConfirm(false)
 			}
 			// The label names the confirmation apart from the button
@@ -526,7 +526,7 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 			editor.DiffView(c, diff)
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if SecondaryAction(c, t, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭", false).Clicked() {
 				a.SetSnapshotView(nil)
 			}
 			// The button used to roll back the moment it was clicked, with
@@ -693,7 +693,7 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 			editor.View(c, v.confEditor).Grow(1).FillWidth()
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if SecondaryAction(c, t, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭", false).Clicked() {
 				a.SetConfViewOpen(false)
 			}
 		})
@@ -732,7 +732,7 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if SecondaryAction(c, t, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消", false).Clicked() {
 				a.CancelPasteImport()
 			}
 			// Replacing everything is the destructive path, so its

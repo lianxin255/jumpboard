@@ -23,10 +23,12 @@ import (
 //  5. two drop shadows — a 1px contact shadow and a wider diffuse one
 //
 // The pressed face keeps the same number of inset layers as the resting one,
-// with the highlight swapped for a shadow rather than removed. Dropping a
-// layer changes the element's painted extent, which makes the whole row
-// twitch on press; keeping the count constant is what makes the press feel
-// solid instead of jumpy.
+// with the highlight swapped for a shadow rather than removed. Shadows here
+// are painted, not laid out — they add nothing to an element's measured size
+// — so this is not about avoiding a layout twitch. It is about the face
+// reading as the same object: a layer that vanishes on press makes the
+// surface look thinner than a moment ago, and the eye catches that as a
+// flicker even when nothing moved.
 
 // buttonMaterial is the resolved set of colors one button face needs. It is
 // computed from the tokens rather than stored, so both appearances and both
@@ -126,13 +128,15 @@ func applyButtonMaterial(e ui.Element, m buttonMaterial, pressed bool) ui.Elemen
 }
 
 // PressOffset is how far a pressed control moves down, in points, for a
-// control of the given font size. Everything about a button scales with its
-// type size: a 22px button that moves 1px looks stuck, an 11px one that moves
-// 2px looks broken.
+// control of the given font size.
+//
+// It is always 1. That is the point: the travel of a press is a physical
+// constant, not something that scales with type. A 22px button that moves 2px
+// reads as sinking into the page, and an 11px chip that moves 2px reads as
+// falling over — both worse than the same 1px everywhere. The parameter stays
+// so a caller that ever needs a different figure has somewhere to say so,
+// and so the reason is written down rather than guessed at.
 func PressOffset(fontSize float32) float32 {
-	u := fontSize / BodySize
-	if u < 0.7 {
-		u = 0.7
-	}
-	return float32(int(u*1 + 0.5))
+	_ = fontSize
+	return 1
 }

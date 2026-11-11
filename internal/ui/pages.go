@@ -41,7 +41,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 			}
 			ui.Spacer(c)
 			if v.logTab == 0 {
-				if SecondaryAction(c, t, "导出").Disabled(busy).
+				if SecondaryAction(c, t, "导出", busy).
 					Tooltip("把操作日志全量导出为文本文件").Clicked() {
 					v.exportAppLogs()
 				}
@@ -60,7 +60,7 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 				// read: a button that would answer "nothing to interpret"
 				// is worse than none.
 				if a.AIReady() && a.NginxLogRead() {
-					if SecondaryAction(c, t, "解读访问日志").Disabled(busy).
+					if SecondaryAction(c, t, "解读访问日志", busy).
 						Tooltip("把当前 access.log 的尾部交给模型总结").Clicked() {
 						a.RunBackground(a.InterpretAccessLog)
 					}
@@ -71,12 +71,12 @@ func (v *View) logsPage(c *ui.Context, t Tokens) {
 				// own interpretation. It asks only for AI: the file it reads
 				// is not the engine's log, so the read switch is not its gate.
 				if a.AIReady() {
-					if SecondaryAction(c, t, "解读文件…").Disabled(busy).
+					if SecondaryAction(c, t, "解读文件…", busy).
 						Tooltip("选一份 .conf / .log / .txt 交给模型解读，比如外部 nginx 的 error.log").Clicked() {
 						v.interpretFilePicker()
 					}
 				}
-				if SecondaryAction(c, t, "导出").Disabled(busy).
+				if SecondaryAction(c, t, "导出", busy).
 					Tooltip("把 access.log 全量导出").Clicked() {
 					v.exportAccessLog()
 				}
@@ -262,7 +262,7 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 			ui.Text(c, "每次成功应用自动保存，可回看差异或回滚").
 				FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Spacer(c)
-			if QuietAction(c, t, "导出配置").FontSize(CaptionSize).
+			if QuietAction(c, t, "导出配置", false).FontSize(CaptionSize).
 				Tooltip("导出当前生效的 nginx.conf").Clicked() {
 				v.exportNginx()
 			}
@@ -344,7 +344,7 @@ func (v *View) historyPage(c *ui.Context, t Tokens) {
 						ui.Spacer(c)
 						// The 查看 dialog's deep compare stays one click
 						// away; the label keeps the words the tests know.
-						if QuietAction(c, t, "查看差异").FontSize(CaptionSize).Clicked() {
+						if QuietAction(c, t, "查看差异", false).FontSize(CaptionSize).Clicked() {
 							s := chosen
 							a.SetSnapshotView(&s)
 						}
@@ -675,7 +675,7 @@ func (v *View) accessCard(c *ui.Context, t Tokens, wl []model.WhitelistEntry, bu
 		ui.Row(c).Gap(6).Children(func() {
 			ui.TextInput(c, &v.whitelistIP).Placeholder("192.168.1.0/24").Grow(1).Label("白名单地址")
 			ui.TextInput(c, &v.whitelistNote).Placeholder("备注").Width(90)
-			if SecondaryAction(c, t, "添加").Disabled(busy).Clicked() {
+			if SecondaryAction(c, t, "添加", busy).Clicked() {
 				ip, note := v.whitelistIP, v.whitelistNote
 				v.whitelistIP, v.whitelistNote = "", ""
 				a.RunBackground(func() error { return a.AddWhitelist(ip, note) })
@@ -696,13 +696,13 @@ func (v *View) backupCard(c *ui.Context, t Tokens) {
 		ui.Text(c, "备份整份配置，或回到「历史」查看每次应用留下的快照。").
 			FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		ui.Row(c).Gap(8).Wrap().Children(func() {
-			if SecondaryAction(c, t, "导出备份").Clicked() {
+			if SecondaryAction(c, t, "导出备份", false).Clicked() {
 				v.exportBackup()
 			}
-			if SecondaryAction(c, t, "导入备份").Clicked() {
+			if SecondaryAction(c, t, "导入备份", false).Clicked() {
 				v.importBackup()
 			}
-			if SecondaryAction(c, t, "导入为新场景").
+			if SecondaryAction(c, t, "导入为新场景", false).
 				Tooltip("把备份里的映射放进一个新建的场景，不动当前场景").Clicked() {
 				v.importBackupAsWorkspace()
 			}
@@ -850,12 +850,12 @@ func (v *View) workspaceCard(c *ui.Context, t Tokens, busy bool) {
 					// The rename is the row itself turned into a field,
 					// prefilled with the name it would change.
 					ui.TextInput(c, &v.wsRenameName).Grow(1).Label("重命名 " + w.Name)
-					if QuietAction(c, t, "保存").FontSize(CaptionSize).Disabled(busy).Clicked() {
+					if QuietAction(c, t, "保存", false).FontSize(CaptionSize).Disabled(busy).Clicked() {
 						id, name := w.ID, v.wsRenameName
 						v.wsRenameID = ""
 						a.RunBackground(func() error { return a.RenameWorkspaceAction(id, name) })
 					}
-					if QuietAction(c, t, "取消").FontSize(CaptionSize).Clicked() {
+					if QuietAction(c, t, "取消", false).FontSize(CaptionSize).Clicked() {
 						v.wsRenameID = ""
 					}
 					return
