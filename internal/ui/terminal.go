@@ -251,10 +251,19 @@ func (v *View) closeAllTabs() {
 
 // hangUp closes the tab's session, if any. terminal.Close is idempotent,
 // so a session already exited is freed again without complaint.
+//
+// It deliberately leaves s.starting alone. startShell marks a launch as
+// in-flight and then calls this to clear the previous session; clearing the
+// flag here too would undo that mark in the same breath, and the frame that
+// draws the tab would see "nothing is starting, there is no terminal" and
+// launch again — once per frame, forever, each launch leaking a shell that
+// nothing owns. That is exactly what happened: a Windows run reached the
+// runtime's 10000-thread limit with 9720 goroutines, all from startShell.
+// Only the goroutine that finishes a launch may clear the flag.
 func (v *View) hangUp(s *tabSession) {
 	v.termMu.Lock()
 	term := s.term
-	s.term, s.starting = nil, false
+	s.term = nil
 	v.termMu.Unlock()
 	if term != nil {
 		_ = term.Close()
@@ -314,6 +323,17 @@ func (v *View) startShell(s *tabSession) {
 	v.termMu.Unlock()
 	v.hangUp(s)
 	go func() {
+		// starting is cleared here and only here, on the way out, whatever
+		// the outcome. With the flag left set, a launch that panicked under
+		// the emulator library would leave the tab spinning forever and
+		// never retry; clearing it in a defer means the worst case is one
+		// more attempt, not a dead tab.
+		defer func() {
+			v.termMu.Lock()
+			s.starting = false
+			v.termMu.Unlock()
+			a.Change()
+		}()
 		term, err := terminal.New(terminal.Options{
 			OnExit: func(int) {
 				v.termMu.Lock()
@@ -323,14 +343,12 @@ func (v *View) startShell(s *tabSession) {
 			},
 		})
 		v.termMu.Lock()
-		s.starting = false
 		if err != nil {
 			s.err = err.Error()
 		} else {
 			s.term = term
 		}
 		v.termMu.Unlock()
-		a.Change()
 	}()
 }
 
