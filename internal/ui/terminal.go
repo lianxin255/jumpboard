@@ -558,7 +558,7 @@ func (v *View) serialPane(c *ui.Context, t Tokens, s *tabSession) {
 		s.serialRatePick = ratePick
 	}
 	if err != "" && term == nil {
-		ui.Text(c, err).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
+		ui.Text(c, err).FontSize(CaptionSize).TextColor(t.Danger).Wrap().Pretty()
 	}
 	if term == nil {
 		if !starting {
@@ -658,8 +658,8 @@ func (v *View) termMessageCard(c *ui.Context, t Tokens, title, why, hint string)
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Text(c, title).FontSize(BodySize).Bold().TextColor(t.FG)
-			ui.Text(c, why).FontSize(NoteSize).TextColor(t.FG2).Wrap()
-			ui.Text(c, hint).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+			ui.Text(c, why).FontSize(NoteSize).TextColor(t.FG2).Wrap().Pretty()
+			ui.Text(c, hint).FontSize(CaptionSize).TextColor(t.Muted).Wrap().Pretty()
 		})
 	})
 }

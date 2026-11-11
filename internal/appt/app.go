@@ -49,6 +49,24 @@ type Status struct {
 	IsErr bool
 	// At is when it was set, so the view can drop it after a while.
 	At time.Time
+	// Undo, when set, is the action that puts back what the toast just
+	// reported. It is how a reversible change avoids a confirmation dialog:
+	// the change happens at once and the way back is offered beside it, so
+	// the common case costs one click instead of two.
+	//
+	// It is nil for anything that cannot be undone, and for a plain report
+	// like "已应用 3 条映射" — a toast with no undo is not a failure, it is
+	// just news.
+	Undo *UndoAction
+}
+
+// UndoAction is one way back from a change that already happened.
+type UndoAction struct {
+	// Label is the verb on the button — 撤销, 恢复.
+	Label string
+	// Run puts the change back. It runs on the background runner, so it may
+	// touch the store and the engine.
+	Run func() error
 }
 
 // ThemeChoice is the appearance the user picked.
@@ -517,6 +535,31 @@ func (a *App) setStatus(text string, isErr bool) {
 	a.mu.Lock()
 	a.status = Status{Text: text, IsErr: isErr, At: time.Now()}
 	a.mu.Unlock()
+}
+
+// setStatusUndoable shows a toast that carries the way back.
+//
+// This is the alternative to asking first. A change the user can put back
+// does not need a dialog in front of it: the dialog costs every use, the
+// undo costs only the ones that were wrong. Reserve Ask for what cannot be
+// undone, and for what reaches beyond this machine.
+func (a *App) setStatusUndoable(text string, undo *UndoAction) {
+	a.mu.Lock()
+	a.status = Status{Text: text, At: time.Now(), Undo: undo}
+	a.mu.Unlock()
+}
+
+// UndoStatus runs the undo the current toast offers, if any, and clears it so
+// the same change cannot be put back twice.
+func (a *App) UndoStatus() {
+	a.mu.Lock()
+	undo := a.status.Undo
+	a.status.Undo = nil
+	a.mu.Unlock()
+	if undo == nil || undo.Run == nil {
+		return
+	}
+	a.RunBackground(undo.Run)
 }
 
 // Info shows a success toast.

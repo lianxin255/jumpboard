@@ -607,11 +607,19 @@ func (a *App) SetMappingsEnabled(ids []string, on bool) error {
 		}
 		n++
 	}
-	if on {
-		a.setStatus(fmt.Sprintf("已启用 %d 条规则", n), false)
-	} else {
-		a.setStatus(fmt.Sprintf("已停用 %d 条规则", n), false)
+	// Enabling or disabling a rule is fully reversible, so it is offered as
+	// an undo instead of a confirmation: the change lands immediately and
+	// the toast carries the way back. Asking first would charge every use a
+	// dialog for a mistake that costs one click to fix.
+	verb := "已启用"
+	if !on {
+		verb = "已停用"
 	}
+	ids = append([]string(nil), ids...)
+	a.setStatusUndoable(fmt.Sprintf("%s %d 条规则", verb, n), &UndoAction{
+		Label: "撤销",
+		Run:   func() error { return a.SetMappingsEnabled(ids, !on) },
+	})
 	return nil
 }
 

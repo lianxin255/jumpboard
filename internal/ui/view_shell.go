@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"math"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -97,7 +99,17 @@ func (v *View) pendingBar(c *ui.Context, t Tokens) {
 		ui.Row(c).Grow(1).MaxWidth(840).Gap(12).AlignItems(ui.Center).
 			Padding(8, 10, 8, 16).Radius(RadiusFloat).
 			Background(t.AmberSoft).Border(1, t.AmberLine).Children(func() {
-			ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
+			// The dot pulses twice when the strip appears, then rests.
+			//
+			// It is a bounded animation on purpose. An endless breathing
+			// loop keeps the frame clock awake forever, which costs battery
+			// and — more importantly — means the window never goes idle, so
+			// anything waiting for a settled frame waits for good. Two beats
+			// say "this is new" and then stop saying anything.
+			dot := ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
+			beat := dot.AnimateTo("pending-beat", 1, MotionEnter)
+			scale := 1 + 0.30*beat*float32(math.Sin(float64(beat)*2*math.Pi))
+			dot.Scale(scale, scale)
 			ui.Text(c, "有未生效的改动").FontSize(NoteSize).Bold().TextColor(t.AmberText)
 			ui.Text(c, "未应用 · 应用配置后对外生效").FontSize(CaptionSize).TextColor(t.AmberText)
 		})

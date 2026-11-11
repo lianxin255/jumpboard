@@ -95,7 +95,7 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 
 	dialog(c, t, &open, 640, 16, func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+			ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG).Balance()
 			if isWeb(f.Protocol) {
 				ui.Text(c, "反代").FontSize(CaptionSize).Bold().TextColor(t.HTTP).
 					Padding(2, 8).Radius(RadiusBadge).Background(protoTint(t.HTTP))
@@ -303,10 +303,10 @@ func (v *View) formDialog(c *ui.Context, t Tokens, editing *model.Mapping, f app
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "「保存」只入库；「应用配置」保存并生效").FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Spacer(c)
-			if ui.Button(c, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消").Clicked() {
 				a.CloseForm()
 			}
-			if ui.Button(c, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
+			if PrimaryAction(c, t, "保存").Clicked() || c.Shortcut(ui.Cmd, ui.KeyS) {
 				f := f
 				a.SetForm(f)
 				a.RunBackground(a.SaveForm)
@@ -452,7 +452,7 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 			})
 		}).Height(380)
 		ui.Row(c).Justify(ui.End).Children(func() {
-			if ui.Button(c, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭").Clicked() {
 				a.SetTemplatePicker(false)
 			}
 		})
@@ -466,10 +466,10 @@ func (v *View) templateDialog(c *ui.Context, t Tokens) {
 func (v *View) confirmDialog(c *ui.Context, q *appt.Confirm, t Tokens) {
 	open := true
 	dialog(c, t, &open, 420, 12, func() {
-		ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG)
+		ui.Text(c, q.Title).FontSize(HeadSize).Bold().TextColor(t.FG).Balance()
 		ui.Text(c, q.Body).FontSize(NoteSize).TextColor(t.FG2)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消").Clicked() {
 				v.App.ResolveConfirm(false)
 			}
 			// The label names the confirmation apart from the button
@@ -526,7 +526,7 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 			editor.DiffView(c, diff)
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭").Clicked() {
 				a.SetSnapshotView(nil)
 			}
 			// The button used to roll back the moment it was clicked, with
@@ -591,6 +591,16 @@ func (v *View) toast(c *ui.Context, t Tokens) {
 		return
 	}
 	v.shownStatusAt, v.shownStatusText = st.At, st.Text
+	// A toast that carries an undo is the app's answer to "should I ask
+	// first": the change already happened, and the way back sits beside the
+	// news of it. It holds longer than a plain report, because reading it
+	// and deciding is the point.
+	if st.Undo != nil && st.Undo.Label != "" {
+		c.ToastAction(st.Text, st.Undo.Label, v.App.UndoStatus)
+		c.After(8 * time.Second)
+		v.App.ClearStatusSoon(st.At)
+		return
+	}
 	c.Toast(st.Text)
 	// The status is dropped after its time, so that the next frame does
 	// not add it again.
@@ -683,7 +693,7 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 			editor.View(c, v.confEditor).Grow(1).FillWidth()
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "关闭").Clicked() {
+			if SecondaryAction(c, t, "关闭").Clicked() {
 				a.SetConfViewOpen(false)
 			}
 		})
@@ -704,7 +714,7 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 	open := true
 	title := "粘贴导入"
 	dialog(c, t, &open, 520, 12, func() {
-		ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+		ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG).Balance()
 		kind := "nginx 配置"
 		if pv.Replace {
 			kind = "JumpBoard 备份"
@@ -712,7 +722,7 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 		ui.Text(c, "剪贴板内容是 "+kind).FontSize(NoteSize).TextColor(t.FG2)
 		ui.Box(c).FillWidth().Padding(10, 12).Radius(RadiusChip).
 			Background(t.Surface2).Border(1, t.Border).Children(func() {
-			ui.Text(c, pv.Detail).FontSize(NoteSize).TextColor(t.FG).Wrap()
+			ui.Text(c, pv.Detail).FontSize(NoteSize).TextColor(t.FG).Wrap().Pretty()
 		})
 		if pv.Replace {
 			ui.Text(c, "现有映射会被备份中的替换，不可撤销（备份前可先导出当前配置）。").
@@ -722,7 +732,7 @@ func (v *View) pasteDialog(c *ui.Context, t Tokens, pv *appt.PastePreview) {
 				FontSize(CaptionSize).TextColor(t.Muted).Wrap()
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if SecondaryAction(c, t, "取消").Clicked() {
 				a.CancelPasteImport()
 			}
 			// Replacing everything is the destructive path, so its

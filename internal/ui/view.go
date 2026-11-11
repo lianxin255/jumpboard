@@ -46,6 +46,9 @@ type View struct {
 	// detailID is the mapping whose detail popover is open, "" for none.
 	// One popover at a time: opening another row's 详情 closes the first.
 	detailID string
+	// halo drives the arrival sweep that plays when the page changes.
+	halo      haloState
+	haloSweep haloSweep
 
 	// The forms' own state, which the app's state does not need to know
 	// about until it is saved.
@@ -178,7 +181,24 @@ func (v *View) draw(c *ui.Context) {
 			// page's mark and name, so the page itself starts with its
 			// tools instead of a title of its own.
 			v.windowHeader(c, t, v.headerTrailing())
+			// The arrival halo sweeps the content once when the page
+			// changes. It is clipped to this column, so it never reaches
+			// the rail, and it passes the pointer through, so it never
+			// swallows a click.
+			//
+			// The sweep is animated by the toolkit's own clock: a
+			// self-scheduled c.After loop would keep the window awake for
+			// its whole duration, which stalls anything waiting for a
+			// settled frame.
+			arrived := v.halo.haloStart(v.App.Page())
 			v.body(c, t)
+			if arrived || v.haloSweep.Live() {
+				w, h := c.Size()
+				ui.Box(c).Absolute().Left(0).Top(0).Width(w - SidebarW).Height(h).
+					ClipX().PassThrough().Children(func() {
+					v.haloSweep.draw(c, t, arrived, w-SidebarW, h)
+				})
+			}
 		})
 	})
 	v.dialogs(c, t)
@@ -485,16 +505,16 @@ func (v *View) mappingsPage(c *ui.Context, t Tokens) {
 			v.workspaceChips(c, t, busy)
 			ui.Spacer(c)
 			if len(mappings) > 0 {
-				if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
+				if SecondaryAction(c, t, "从模板新建").Disabled(busy).Clicked() {
 					a.SetTemplatePicker(true)
 				}
-				if ui.Button(c, "粘贴导入").Disabled(busy).Label("粘贴导入").
+				if SecondaryAction(c, t, "粘贴导入").Disabled(busy).Label("粘贴导入").
 					Tooltip("把剪贴板里的 JumpBoard 备份（JSON）或 nginx 配置导入进来").Clicked() {
 					a.RunBackground(a.StartPasteImport)
 				}
 			}
 			if len(mappings) > 0 {
-				if ui.PrimaryButton(c, "新建映射").Disabled(busy).
+				if PrimaryAction(c, t, "新建映射").Disabled(busy).
 					Tooltip("新建一条映射（⌘N）").Clicked() {
 					a.OpenForm(nil)
 				}
@@ -1291,7 +1311,7 @@ func (v *View) workspaceChips(c *ui.Context, t Tokens, busy bool) {
 		v.workspaceChoice = active
 		a.RequestSwitchWorkspace(selected)
 	}
-	if ui.Button(c, "管理场景").Disabled(busy).Height(ControlHeight).
+	if SecondaryAction(c, t, "管理场景").Disabled(busy).Height(ControlHeight).
 		Tooltip("在设置里新建、改名、删除场景").Clicked() {
 		a.SetPage(appt.PageSettings)
 	}
@@ -1359,25 +1379,19 @@ func distinctGroups(mappings []model.Mapping) []string {
 func (v *View) mappingsEmpty(c *ui.Context, t Tokens, busy bool) {
 	a := v.App
 	ui.Column(c).Fill().Center().Gap(14).Children(func() {
-		emptyCard(c, t, 460).Children(func() {
-			ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
-				emptyGlyphIcon(c, t, icons.Relay)
-				ui.Text(c, "还没有转发规则").FontSize(HeadSize).Bold().TextColor(t.FG)
-				ui.Text(c, "把内网 MySQL、SSH、Web 等服务转到这台机器的端口上。").
-					FontSize(BodySize).TextColor(t.Muted)
-				ui.Text(c, "建好后点「应用配置」或 ⌘R，立刻对外生效。").FontSize(BodySize).TextColor(t.Muted)
-				ui.Row(c).Gap(10).Children(func() {
-					if ui.PrimaryButton(c, "新建映射").Disabled(busy).
-						Tooltip("新建一条映射（⌘N）").Clicked() {
-						a.OpenForm(nil)
-					}
-					if ui.Button(c, "从模板新建").Disabled(busy).Clicked() {
-						a.SetTemplatePicker(true)
-					}
-				})
-				ui.Text(c, "常用模板：SSH · RDP · MySQL · Redis · Web").FontSize(CaptionSize).TextColor(t.Muted)
+		emptyStateCard(c, t, 460,
+			"还没有转发规则",
+			"把内网 MySQL、SSH、Web 等服务转到这台机器的端口上；建好后点「应用配置」或 ⌘R，立刻对外生效。",
+			4, func() {
+				if PrimaryAction(c, t, "新建映射").Disabled(busy).
+					Tooltip("新建一条映射（⌘N）").Clicked() {
+					a.OpenForm(nil)
+				}
+				if SecondaryAction(c, t, "从模板新建").Disabled(busy).Clicked() {
+					a.SetTemplatePicker(true)
+				}
 			})
-		})
+		ui.Text(c, "常用模板：SSH · RDP · MySQL · Redis · Web").FontSize(CaptionSize).TextColor(t.Muted)
 	})
 }
 
@@ -1386,7 +1400,7 @@ func (v *View) emptyState(c *ui.Context, t Tokens, title, hint string) {
 	ui.Column(c).Fill().Center().Gap(10).Children(func() {
 		emptyCard(c, t, 360).Children(func() {
 			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG)
+				ui.Text(c, title).FontSize(HeadSize).Bold().TextColor(t.FG).Balance()
 				ui.Text(c, hint).FontSize(NoteSize).TextColor(t.Muted)
 			})
 		})
@@ -1414,11 +1428,11 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 			ui.Textf(c, "已选 %d 条 · 启用 %d · 停用 %d", len(chosen), len(onIDs), len(offIDs)).
 				FontSize(CaptionSize).Bold().TextColor(t.FG)
 			ui.Spacer(c)
-			if ui.Button(c, "批量启用").FontSize(CaptionSize).Disabled(busy || len(offIDs) == 0).
+			if QuietAction(c, t, "批量启用").FontSize(CaptionSize).Disabled(busy || len(offIDs) == 0).
 				Tooltip("启用选中的停用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(offIDs, true) })
 			}
-			if ui.Button(c, "批量停用").FontSize(CaptionSize).Disabled(busy || len(onIDs) == 0).
+			if QuietAction(c, t, "批量停用").FontSize(CaptionSize).Disabled(busy || len(onIDs) == 0).
 				Tooltip("停用选中的启用规则").Clicked() {
 				a.RunBackground(func() error { return a.SetMappingsEnabled(onIDs, false) })
 			}
@@ -1435,7 +1449,7 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 					Run: func() error { return a.DeleteMappings(ids) },
 				})
 			}
-			if ui.Button(c, "取消选择").FontSize(CaptionSize).Disabled(busy).
+			if QuietAction(c, t, "取消选择").FontSize(CaptionSize).Disabled(busy).
 				Tooltip("清空当前选择").Clicked() {
 				v.chosen.Clear()
 			}
@@ -1460,28 +1474,22 @@ func (v *View) batchBar(c *ui.Context, t Tokens, filtered []model.Mapping, busy 
 		ui.Textf(c, "%s %d 条 · 启用 %d · 停用 %d", scope, len(filtered), len(onIDs), len(offIDs)).
 			FontSize(CaptionSize).TextColor(t.Muted)
 		ui.Spacer(c)
+		// Enabling and disabling are reversible, so neither asks first: the
+		// change lands and the toast offers 撤销. A dialog here would charge
+		// every use for a mistake that costs one click to undo, and the
+		// rules only take effect on the next 应用配置 anyway.
 		if len(offIDs) > 0 {
-			if ui.Button(c, "全部启用").FontSize(CaptionSize).Disabled(busy).
-				Tooltip("启用当前列表中停用的规则，改完后需应用配置").Clicked() {
+			if QuietAction(c, t, "全部启用").FontSize(CaptionSize).Disabled(busy).
+				Tooltip("启用当前列表中停用的规则，改完后需应用配置；可撤销").Clicked() {
 				ids := append([]string(nil), offIDs...)
-				a.Ask(&appt.Confirm{
-					Title: "全部启用",
-					Body:  fmt.Sprintf("将启用 %s 中目前停用的 %d 条规则。", scope, len(ids)),
-					Label: "确认启用",
-					Run:   func() error { return a.SetMappingsEnabled(ids, true) },
-				})
+				a.RunBackground(func() error { return a.SetMappingsEnabled(ids, true) })
 			}
 		}
 		if len(onIDs) > 0 {
-			if ui.Button(c, "全部停用").FontSize(CaptionSize).Disabled(busy).
-				Tooltip("停用当前列表中启用的规则，改完后需应用配置").Clicked() {
+			if QuietAction(c, t, "全部停用").FontSize(CaptionSize).Disabled(busy).
+				Tooltip("停用当前列表中启用的规则，改完后需应用配置；可撤销").Clicked() {
 				ids := append([]string(nil), onIDs...)
-				a.Ask(&appt.Confirm{
-					Title: "全部停用",
-					Body:  fmt.Sprintf("将停用 %s 中目前启用的 %d 条规则。对外转发会在应用后失效。", scope, len(ids)),
-					Label: "确认停用", Destructive: true,
-					Run: func() error { return a.SetMappingsEnabled(ids, false) },
-				})
+				a.RunBackground(func() error { return a.SetMappingsEnabled(ids, false) })
 			}
 		}
 	})
@@ -1512,7 +1520,7 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 				}
 				ui.Text(c, hint).FontSize(BodySize).TextColor(t.Muted)
 				ui.Row(c).Gap(8).Children(func() {
-					if ui.Button(c, "清除筛选").Clicked() {
+					if QuietAction(c, t, "清除筛选").Clicked() {
 						v.query = ""
 						v.filter = 0
 						v.groupFilter = ""
@@ -1521,7 +1529,7 @@ func (v *View) filterEmpty(c *ui.Context, t Tokens) {
 						v.App.ClearAIFilter()
 					}
 					if v.filter != 0 {
-						if ui.Button(c, "显示全部").Clicked() {
+						if QuietAction(c, t, "显示全部").Clicked() {
 							v.filter = 0
 						}
 					}

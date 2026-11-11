@@ -64,10 +64,6 @@ func TestAIFilterNarrowsTable(t *testing.T) {
 	if err := tt.Click("全部启用"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
-	if err := tt.Click("确认启用"); err != nil {
-		t.Fatal(err)
-	}
 	waitFor(t, tt, "the one row enabled", func() bool {
 		list, _ := a.Store.ListMappings(a.ActiveWorkspace())
 		for _, m := range list {
