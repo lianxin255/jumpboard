@@ -151,6 +151,34 @@ func main() {
 	})
 	shoot("mappings-dark", appt.PageMappings, appt.ThemeDark, true, nil)
 	shoot("mappings-light", appt.PageMappings, appt.ThemeLight, false, nil)
+	// The first-run card, both themes: the wireframe empty state is the one
+	// screen a new user sees before anything exists, so it is worth a shot
+	// rather than only a test assertion.
+	{
+		current, _, _, _, _, _, _, _ := a.Snapshot()
+		ids := make([]string, 0, len(current))
+		for _, r := range current {
+			ids = append(ids, r.ID)
+		}
+		if err := a.DeleteMappings(ids); err != nil {
+			panic(err)
+		}
+		// The app keeps the rules in memory; the shot reads that, not the
+		// database, so the deletion has to be reloaded into it.
+		if err := a.Reload(); err != nil {
+			panic(err)
+		}
+		shoot("empty-light", appt.PageMappings, appt.ThemeLight, false, nil)
+		shoot("empty-dark", appt.PageMappings, appt.ThemeDark, true, nil)
+		for _, r := range rows {
+			if _, err := a.Store.CreateMapping(a.ActiveWorkspace(), r); err != nil {
+				panic(err)
+			}
+		}
+		if err := a.Reload(); err != nil {
+			panic(err)
+		}
+	}
 	shoot("scene-picker-dark", appt.PageMappings, appt.ThemeDark, true, func(tt *ui.Tester) {
 		if err := ttClickForShots(tt, "当前场景"); err != nil {
 			panic(err)

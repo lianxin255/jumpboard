@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"math"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -97,7 +99,28 @@ func (v *View) pendingBar(c *ui.Context, t Tokens) {
 		ui.Row(c).Grow(1).MaxWidth(840).Gap(12).AlignItems(ui.Center).
 			Padding(8, 10, 8, 16).Radius(RadiusFloat).
 			Background(t.AmberSoft).Border(1, t.AmberLine).Children(func() {
-			ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning)
+			// The dot pulses once when the strip appears, then rests.
+			//
+			// It is a bounded animation on purpose. An endless breathing
+			// loop keeps the frame clock awake forever, which costs battery
+			// and — more importantly — means the window never goes idle, so
+			// anything waiting for a settled frame waits for good.
+			//
+			// The handle is what makes the pulse happen at all: a box built
+			// fresh each frame has no identity, so AnimateTo creates a new
+			// channel every pass and returns its target at once. And the
+			// value is Jumped to 0 on the first frame, because a new channel
+			// starts at its target — without the Jump the dot would begin
+			// already at rest and never move.
+			dot := ui.Box(c).Size(8, 8).Radius(4).Background(t.Warning).Bind(&v.pendingDot)
+			if !v.pendingDotStarted {
+				dot.Jump("pending-beat", 0)
+				v.pendingDotStarted = true
+			}
+			beat := dot.AnimateTo("pending-beat", 1, MotionEnter)
+			// One beat: swell and settle, never a repeating breath.
+			scale := 1 + 0.30*float32(math.Sin(float64(beat)*math.Pi))
+			dot.Scale(scale, scale)
 			ui.Text(c, "有未生效的改动").FontSize(NoteSize).Bold().TextColor(t.AmberText)
 			ui.Text(c, "未应用 · 应用配置后对外生效").FontSize(CaptionSize).TextColor(t.AmberText)
 		})

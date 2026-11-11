@@ -58,6 +58,27 @@ func (a *App) OpenNewFormFrom(m model.Mapping) {
 	a.formOpen = true
 }
 
+// OpenDraftForm opens the form for a draft, as an edit when the draft
+// changes an existing rule.
+//
+// A create draft has no row behind it and opens as a new mapping. An
+// update draft does: opening it as a new one would save a second copy of
+// the rule instead of changing the rule the user is looking at.
+func (a *App) OpenDraftForm(d AIDraft) {
+	if d.Operation != "update" || d.Original == nil {
+		a.OpenNewFormFrom(d.Mapping)
+		return
+	}
+	original := *d.Original
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.formEdit = &original
+	a.form = FormFromMapping(d.Mapping)
+	a.formErrs = nil
+	a.formPortFix = 0
+	a.formOpen = true
+}
+
 // OpenFormFromTemplate opens the form prefilled by a template.
 func (a *App) OpenFormFromTemplate(t model.Template) {
 	a.mu.Lock()
@@ -586,11 +607,19 @@ func (a *App) SetMappingsEnabled(ids []string, on bool) error {
 		}
 		n++
 	}
-	if on {
-		a.setStatus(fmt.Sprintf("已启用 %d 条规则", n), false)
-	} else {
-		a.setStatus(fmt.Sprintf("已停用 %d 条规则", n), false)
+	// Enabling or disabling a rule is fully reversible, so it is offered as
+	// an undo instead of a confirmation: the change lands immediately and
+	// the toast carries the way back. Asking first would charge every use a
+	// dialog for a mistake that costs one click to fix.
+	verb := "已启用"
+	if !on {
+		verb = "已停用"
 	}
+	ids = append([]string(nil), ids...)
+	a.setStatusUndoable(fmt.Sprintf("%s %d 条规则", verb, n), &UndoAction{
+		Label: "撤销",
+		Run:   func() error { return a.SetMappingsEnabled(ids, !on) },
+	})
 	return nil
 }
 

@@ -66,12 +66,12 @@ func (v *View) diagSection(c *ui.Context, t Tokens, busy bool) {
 func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 	a := v.App
 	if adv.Summary != "" {
-		ui.Text(c, adv.Summary).FontSize(NoteSize).Bold().TextColor(t.FG).Wrap()
+		ui.Text(c, adv.Summary).FontSize(NoteSize).Bold().TextColor(t.FG).Wrap().Pretty()
 	}
 	if len(adv.Causes) > 0 {
 		ui.Text(c, "可能原因").FontSize(CaptionSize).Bold().TextColor(t.Muted)
 		for _, cause := range adv.Causes {
-			ui.Text(c, "• "+cause).FontSize(CaptionSize).TextColor(t.FG2).Wrap()
+			ui.Text(c, "• "+cause).FontSize(CaptionSize).TextColor(t.FG2).Wrap().Pretty()
 		}
 	}
 	if len(adv.Steps) > 0 {
@@ -79,10 +79,10 @@ func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 		for _, step := range adv.Steps {
 			ui.Column(c).Gap(3).Children(func() {
 				if step.Title != "" {
-					ui.Text(c, step.Title).FontSize(CaptionSize).Bold().TextColor(t.FG).Wrap()
+					ui.Text(c, step.Title).FontSize(CaptionSize).Bold().TextColor(t.FG).Wrap().Pretty()
 				}
 				if step.Detail != "" {
-					ui.Text(c, step.Detail).FontSize(CaptionSize).TextColor(t.FG2).Wrap()
+					ui.Text(c, step.Detail).FontSize(CaptionSize).TextColor(t.FG2).Wrap().Pretty()
 				}
 				if step.Command != "" {
 					cmd := step.Command
@@ -100,7 +100,7 @@ func (v *View) adviceBody(c *ui.Context, t Tokens, adv ai.Advice) {
 					})
 				}
 				if step.Risk != "" {
-					ui.Text(c, "风险："+step.Risk).FontSize(CaptionSize).TextColor(t.Warning).Wrap()
+					ui.Text(c, "风险："+step.Risk).FontSize(CaptionSize).TextColor(t.Warning).Wrap().Pretty()
 				}
 			})
 		}

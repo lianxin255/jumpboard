@@ -134,11 +134,11 @@ func (v *View) aiCard(c *ui.Context, t Tokens) {
 						if strings.HasPrefix(probeNote, "连接失败") {
 							color = t.Danger
 						}
-						ui.Text(c, probeNote).FontSize(CaptionSize).TextColor(color).Wrap()
+						ui.Text(c, probeNote).FontSize(CaptionSize).TextColor(color).Wrap().Pretty()
 					}
 				})
 				if listErr != "" {
-					ui.Text(c, listErr).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
+					ui.Text(c, listErr).FontSize(CaptionSize).TextColor(t.Danger).Wrap().Pretty()
 				} else if len(models) > 0 {
 					ui.Textf(c, "已拉取 %d 个模型，可从「模型」下拉里选。", len(models)).
 						FontSize(CaptionSize).TextColor(t.Muted).Wrap()

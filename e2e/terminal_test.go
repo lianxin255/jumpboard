@@ -66,7 +66,9 @@ func TestTerminalShellRuns(t *testing.T) {
 	}
 	tt.Type("echo jb-term-ok")
 	tt.Key(0, ui.KeyEnter)
-	deadline = time.Now().Add(10 * time.Second)
+	// Round-tripping a line through the shell; see waitTimeout for why
+	// this is generous on Windows.
+	deadline = time.Now().Add(waitTimeout)
 	for time.Now().Before(deadline) {
 		tt.Frame()
 		if strings.Contains(v.ShellTextForTest(), "jb-term-ok") {

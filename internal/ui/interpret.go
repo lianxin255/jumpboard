@@ -64,7 +64,7 @@ func (v *View) interpretSection(c *ui.Context, t Tokens, source string) {
 			// header stays outside so 收起 is always in reach.
 			ui.Scroll(c).MaxHeight(260).Children(func() {
 				ui.Column(c).Gap(6).Children(func() {
-					if busy {
+					if a.InterpretSpinner() {
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 							ui.Spinner(c).Label("解读中")
 							ui.Text(c, "正在分析文件…").FontSize(NoteSize).TextColor(t.Muted)

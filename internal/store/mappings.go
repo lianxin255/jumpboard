@@ -162,6 +162,21 @@ func (s *Store) GetMapping(id string) (model.Mapping, error) {
 	return m, err
 }
 
+// GetMappingIn returns a mapping only when it belongs to the scene.
+//
+// A mapping's id is unique across the database, so GetMapping alone would
+// hand back a rule from another scene — which is how an AI draft naming a
+// foreign id could rewrite a rule the user is not looking at. The scene
+// is part of the question wherever the answer is written back.
+func (s *Store) GetMappingIn(ws, id string) (model.Mapping, error) {
+	row := s.db.QueryRow(`SELECT `+mappingColumns+` FROM mappings WHERE id = ? AND workspace_id = ?`, id, ws)
+	m, err := scanMapping(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Mapping{}, ErrNotFound
+	}
+	return m, err
+}
+
 // CreateMapping inserts a mapping into a workspace and returns it with
 // its ID and timestamps filled in.
 func (s *Store) CreateMapping(ws string, m model.Mapping) (model.Mapping, error) {
@@ -239,11 +254,13 @@ func (s *Store) UpdateMappingIfUnchanged(m, original model.Mapping) error {
 		extra_directives=?, proxy_mode=?, proxy_headers=?, proxy_pass_url=?,
 		health_check_enabled=?, health_check_interval_sec=?, health_check_target_path=?,
 		health_check_expected_status=?, updated_at=?
-		WHERE id=? AND name=? AND group_name=? AND enabled=? AND protocol=? AND listen_port=?
-		AND server_names=? AND listen_path=? AND upstream_host=? AND upstream_port=?
-		AND tls_cert_path=? AND tls_key_path=? AND redirect_http=? AND extra_directives=?
-		AND proxy_mode=? AND proxy_headers=? AND proxy_pass_url=? AND health_check_enabled=?
-		AND health_check_interval_sec=? AND health_check_target_path=? AND health_check_expected_status=?`,
+		WHERE id=? AND name=? AND group_name=? AND enabled=? AND protocol=? AND COALESCE(listen_port,0)=?
+		AND COALESCE(server_names,'')=? AND COALESCE(listen_path,'')=? AND upstream_host=? AND upstream_port=?
+		AND COALESCE(tls_cert_path,'')=? AND COALESCE(tls_key_path,'')=? AND redirect_http=?
+		AND COALESCE(extra_directives,'')=?
+		AND proxy_mode=? AND COALESCE(proxy_headers,'')=? AND COALESCE(proxy_pass_url,'')=? AND health_check_enabled=?
+		AND health_check_interval_sec=? AND COALESCE(health_check_target_path,'')=?
+		AND COALESCE(health_check_expected_status,0)=?`,
 		m.Name, m.Group, boolInt(m.Enabled), string(m.Protocol), m.ListenPort, m.ServerNames, m.ListenPath,
 		m.UpstreamHost, m.UpstreamPort, m.TLSCertPath, m.TLSKeyPath, boolInt(m.RedirectHTTP),
 		m.ExtraDirectives, string(m.ProxyMode), m.ProxyHeaders, m.ProxyPassURL,

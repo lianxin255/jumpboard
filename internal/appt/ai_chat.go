@@ -131,6 +131,10 @@ func (a *App) sendChat(text string, retry bool) error {
 	if !retry {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleUser, Content: text})
 		if err := a.Store.AddAIChatTurn(scene, ai.RoleUser, text, time.Now().UnixMilli()); err != nil {
+			// The busy flag was already set for a request that never
+			// starts: leaving it up would answer every later message with
+			// "上一条回复还在路上" until the app restarts.
+			a.chatBusy = false
 			a.mu.Unlock()
 			return err
 		}
@@ -148,7 +152,12 @@ func (a *App) sendChat(text string, retry bool) error {
 		}
 	}
 	if len(a.mappings) > 0 {
-		summary, err := json.Marshal(a.mappings)
+		// The summary is a redacted projection, never the mappings
+		// themselves: the full struct carries ProxyHeaders, ProxyPassURL
+		// and the TLS paths, and a rule's proxy_set_header may hold a
+		// bearer token. The settings page promises the summary never
+		// contains a key, so only the fields a draft has to name go out.
+		summary, err := json.Marshal(mappingSummaries(a.mappings))
 		if err == nil {
 			turns = append([]ai.ChatTurn{{Role: ai.RoleUser, Content: "当前场景的映射摘要（仅用于识别可修改规则；字段与 id 以此为准，不要猜）：" + string(summary)}}, turns...)
 		}
@@ -158,9 +167,14 @@ func (a *App) sendChat(text string, retry bool) error {
 
 	// Each fragment extends the reply the page reads, under the same
 	// lock that guards the rest of the state.
+	//
+	// The client's own timeout is raised to the conversation's budget:
+	// http.Client.Timeout covers reading the whole streamed body, so the
+	// 30s one-shot default would cut a long answer short before the
+	// context deadline below could matter.
 	ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
 	defer cancel()
-	reply, err := a.aiClient().ChatStream(ctx, turns, func(frag string) {
+	reply, err := a.aiClient().WithTimeout(chatTimeout).ChatStream(ctx, turns, func(frag string) {
 		a.mu.Lock()
 		a.chatStreaming = true
 		a.chatPartial += frag
@@ -182,7 +196,7 @@ func (a *App) sendChat(text string, retry bool) error {
 	} else {
 		a.chatTurns = append(a.chatTurns, ai.ChatTurn{Role: ai.RoleAssistant, Content: reply})
 		_ = a.Store.AddAIChatTurn(scene, ai.RoleAssistant, reply, time.Now().UnixMilli())
-		a.chatDrafts, a.chatNote = a.chatDraftsOf(reply)
+		a.chatDrafts, a.chatNote = a.chatDraftsOf(scene, reply)
 		_ = a.saveChatDrafts(scene, a.chatDrafts)
 		draftCount = len(a.chatDrafts)
 	}
@@ -203,7 +217,12 @@ func (a *App) sendChat(text string, retry bool) error {
 // card whose import could only fail. A reply that parsed to more drafts
 // than the preview keeps says the cut too — the tail the cap dropped is
 // as much the user's business as the draft a validator refused.
-func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
+//
+// The scene is a parameter, not a.chatScene: the caller already holds it,
+// and chatScene is only set once the page has loaded that scene's history —
+// reading it here would scope the lookup to "" on a fresh app and reject
+// every update draft as "target rule gone".
+func (a *App) chatDraftsOf(scene, reply string) (drafts []AIDraft, note string) {
 	parsed, overCap, explicitlyEmpty := ai.ParseChatDrafts(reply)
 	var dropped []string
 	for _, d := range parsed {
@@ -217,16 +236,29 @@ func (a *App) chatDraftsOf(reply string) (drafts []AIDraft, note string) {
 				dropped = append(dropped, "修改草稿缺少目标规则 ID")
 				continue
 			}
-			original, err := a.Store.GetMapping(d.TargetID)
+			// Scoped to the scene the conversation belongs to: a draft may
+			// only update a rule of its own scene, never one whose id it
+			// guessed from another.
+			original, err := a.Store.GetMappingIn(scene, d.TargetID)
 			if err != nil {
 				dropped = append(dropped, "目标规则已不存在，不能应用旧修改草稿")
 				continue
 			}
-			if m.Name == "" {
-				m.Name = original.Name
-			}
 			// An update starts from the full original, not from zero values:
 			// omitted fields mean "unchanged", not "clear this setting".
+			//
+			// Name is checked with Has, not against "": Mapping() already
+			// substitutes "AI 映射" for a missing name, so an empty string
+			// here never means "the model said nothing" — it would rename
+			// the rule to that placeholder.
+			if !d.Has("name") {
+				m.Name = original.Name
+			}
+			// ListenPort has the same shape: 0 means the model left it out,
+			// and writing it back would move the rule off its port.
+			if !d.Has("listenPort") {
+				m.ListenPort = original.ListenPort
+			}
 			if !d.Has("group") {
 				m.Group = original.Group
 			}
@@ -380,7 +412,9 @@ func (a *App) ImportChatDrafts() error {
 		if d.Original == nil || d.TargetID == "" {
 			return fmt.Errorf("「%s」缺少原规则版本，不能修改", d.Mapping.Name)
 		}
-		current, err := a.Store.GetMapping(d.TargetID)
+		// Scoped to the scene: an id from another scene is not a rule this
+		// conversation may rewrite, even though the id exists.
+		current, err := a.Store.GetMappingIn(scene, d.TargetID)
 		if err != nil {
 			return fmt.Errorf("「%s」的原规则已不存在，请重新生成草稿", d.Mapping.Name)
 		}

@@ -150,11 +150,11 @@ func (v *View) headerApplyActions(c *ui.Context, t Tokens, engine string, busy b
 		// The check binds each port for a moment and resolves the
 		// upstreams: it answers "would applying work", without touching
 		// what is running.
-		if ui.Button(c, "预检").Disabled(busy).Height(ControlHeight).
+		if SecondaryAction(c, t, "预检", busy).Height(ControlHeight).
 			Tooltip("检查端口是否被占用、上游地址能否解析，不会改动正在跑的规则").Clicked() {
 			a.RunAction("check", a.TestConfig)
 		}
-		if ui.PrimaryButton(c, "应用配置").Disabled(busy).Height(ControlHeight).
+		if PrimaryAction(c, t, "应用配置", busy).Height(ControlHeight).
 			Tooltip("让改动生效（⌘R）").Clicked() {
 			a.RunAction("apply", a.Apply)
 		}

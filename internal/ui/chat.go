@@ -28,6 +28,12 @@ type chatItem struct {
 	turn  ai.ChatTurn
 	draft appt.AIDraft
 	index int // the draft's place in the waiting list
+	// group is where this turn sits in a run of turns from the same
+	// speaker: 0 alone, 1 first, 2 middle, 3 last. A run reads as one
+	// block — tight spacing inside it, a wider gap between runs — and the
+	// corners facing the block's interior pull in, so consecutive
+	// messages from one speaker stop looking like separate cards.
+	group int
 }
 
 // aiChatPage draws the conversation page.
@@ -147,7 +153,7 @@ func (v *View) chatDraftColumn(c *ui.Context, t Tokens, drafts []appt.AIDraft, n
 				ui.Column(c).Gap(6).Padding(10, 12).
 					BorderWidth(1, 0, 0, 0).BorderColor(t.Hair).Children(func() {
 					if note != "" {
-						ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+						ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap().Pretty()
 					}
 					ui.Textf(c, "导入到当前场景「%s」", v.App.ActiveWorkspaceName()).
 						FontSize(CaptionSize).TextColor(t.Muted)
@@ -196,6 +202,23 @@ func (v *View) chatList(c *ui.Context, t Tokens, turns []ai.ChatTurn, partial st
 	items := make([]chatItem, 0, len(turns)+len(drafts)+3)
 	for _, turn := range turns {
 		items = append(items, chatItem{kind: 0, turn: turn})
+	}
+	// Mark the runs: consecutive turns from the same speaker are one
+	// block, and the first/last of a run get the outer corners.
+	for i := range items {
+		if items[i].kind != 0 {
+			continue
+		}
+		samePrev := i > 0 && items[i-1].kind == 0 && items[i-1].turn.Role == items[i].turn.Role
+		sameNext := i+1 < len(items) && items[i+1].kind == 0 && items[i+1].turn.Role == items[i].turn.Role
+		switch {
+		case samePrev && sameNext:
+			items[i].group = 2
+		case samePrev:
+			items[i].group = 3
+		case sameNext:
+			items[i].group = 1
+		}
 	}
 	if busy && partial == "" {
 		items = append(items, chatItem{kind: 1})
@@ -291,8 +314,16 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 		if it.turn.Role == ai.RoleUser {
 			ui.Row(c).Children(func() {
 				ui.Spacer(c)
-				ui.Column(c).Gap(4).AlignItems(ui.End).Children(func() {
-					ui.Text(c, it.turn.Content).Selectable().Padding(8, 12).Radius(RadiusChip).
+				// A run of questions reads as one block: the gap inside it
+				// is tight, and the corner facing the run's interior pulls
+				// in, so two messages in a row stop looking like two cards.
+				gap := float32(12)
+				if it.group != 0 {
+					gap = 4
+				}
+				ui.Column(c).Gap(gap).AlignItems(ui.End).Children(func() {
+					ui.Text(c, it.turn.Content).Selectable().Padding(8, 12).
+						Radius(userBubbleRadius(it.group)).
 						Background(t.Accent.Alpha(0.10)).TextColor(t.FG).MaxWidth(520)
 					if ui.Text(c, "复制").FontSize(CaptionSize).TextColor(t.Muted).
 						Label("复制问题").Tooltip("复制这条原问题").Clicked() {
@@ -331,7 +362,7 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 		})
 	case 2:
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap().Grow(1)
+			ui.Text(c, errText).FontSize(NoteSize).TextColor(t.Danger).Selectable().Wrap().Pretty().Grow(1)
 			if ui.Button(c, "重试").Disabled(busy).Height(ControlHeight).
 				Tooltip("用原问题重试，不重复添加用户消息").Clicked() {
 				v.App.RetryChat()
@@ -364,7 +395,7 @@ func (v *View) chatRow(c *ui.Context, t Tokens, it chatItem, errText, note strin
 	case 6:
 		// The reply's note with no preview to carry it: what was dropped,
 		// or what the cap cut, said on the line the cards would have led.
-		ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap().MaxWidth(760)
+		ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap().Pretty().MaxWidth(760)
 	}
 }
 
@@ -405,12 +436,12 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 				Label("填入表单 " + m.Name).
 				Tooltip("把这条草稿填进映射表单，逐项修改后保存").Clicked() {
 				a.DropChatDraft(i)
-				a.OpenNewFormFrom(m)
+				a.OpenDraftForm(d)
 				a.Info("草稿已填入表单，确认后保存")
 			}
 		})
 		if d.Conflict != "" {
-			ui.Text(c, d.Conflict).FontSize(CaptionSize).TextColor(t.Danger).Wrap()
+			ui.Text(c, d.Conflict).FontSize(CaptionSize).TextColor(t.Danger).Wrap().Pretty()
 		}
 		// The forwarding relation: 监听 :端口 on the left, the upstream on
 		// the right, the connector mark and its arrow between — the row
@@ -434,7 +465,7 @@ func (v *View) chatDraftCard(c *ui.Context, t Tokens, d appt.AIDraft, i int, bus
 			})
 		}
 		if d.Explanation != "" {
-			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+			ui.Text(c, d.Explanation).FontSize(CaptionSize).TextColor(t.Muted).Wrap().Pretty()
 		}
 		if m.ExtraDirectives != "" {
 			ui.Text(c, m.ExtraDirectives).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
@@ -470,6 +501,12 @@ func (v *View) chatDraftDiff(c *ui.Context, t Tokens, d appt.AIDraft) {
 		{"域名", before.ServerNames, after.ServerNames},
 		{"路径", before.ListenPath, after.ListenPath},
 		{"上游地址", upstreamAddress(before), upstreamAddress(after)},
+		// The proxy mode decides whether the custom headers are sent at
+		// all, and the extra directives carry the timeouts: a draft that
+		// changes either would otherwise look unchanged on the card and
+		// silently drop the rule's authentication on import.
+		{"代理模式", before.ProxyMode.Label(), after.ProxyMode.Label()},
+		{"附加指令", before.ExtraDirectives, after.ExtraDirectives},
 	}
 	for _, field := range fields {
 		if field.old == field.new {
@@ -478,12 +515,21 @@ func (v *View) chatDraftDiff(c *ui.Context, t Tokens, d appt.AIDraft) {
 		ui.Column(c).Gap(2).Children(func() {
 			ui.Text(c, field.name).FontSize(CaptionSize).TextColor(t.Muted)
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, field.old).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
+				ui.Text(c, diffValue(field.old)).Font(FontMono).FontSize(CaptionSize).TextColor(t.Muted)
 				ui.Text(c, "→").FontSize(CaptionSize).TextColor(t.Meta)
-				ui.Text(c, field.new).Font(FontMono).FontSize(CaptionSize).TextColor(t.Accent)
+				ui.Text(c, diffValue(field.new)).Font(FontMono).FontSize(CaptionSize).TextColor(t.Accent)
 			})
 		})
 	}
+}
+
+// diffValue shows an empty side of a change as (空) so the arrow still
+// reads as "this became that" rather than pointing at nothing.
+func diffValue(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "(空)"
+	}
+	return s
 }
 
 func enabledLabel(on bool) string {
@@ -514,7 +560,7 @@ func (v *View) chatImportBar(c *ui.Context, t Tokens, drafts []appt.AIDraft, not
 	a := v.App
 	ui.Column(c).Gap(6).MaxWidth(760).Children(func() {
 		if note != "" {
-			ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap()
+			ui.Text(c, note).FontSize(CaptionSize).TextColor(t.Muted).Wrap().Pretty()
 		}
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Textf(c, "导入到当前场景「%s」", a.ActiveWorkspaceName()).FontSize(CaptionSize).TextColor(t.Muted).Grow(1)
@@ -564,4 +610,21 @@ func (v *View) chatComposer(c *ui.Context, t Tokens, busy bool) {
 			v.sendChat()
 		}
 	})
+}
+
+// userBubbleRadius is the question bubble's corner set for its place in a
+// run. The side facing the run's interior is squared off a little, which is
+// what makes consecutive messages read as one block instead of a stack of
+// separate cards.
+func userBubbleRadius(group int) float32 {
+	// The toolkit's Radius takes one value, so the interior corners are
+	// pulled in uniformly rather than per-corner: the bubble still reads as
+	// a bubble, just a tighter one inside a run.
+	switch group {
+	case 1, 3: // first or last of a run: a touch tighter than alone
+		return RadiusChip - 1
+	case 2: // interior: tightest
+		return RadiusChip - 2
+	}
+	return RadiusChip
 }
