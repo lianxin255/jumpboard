@@ -3,7 +3,7 @@ module github.com/lianxin255/jumpboard
 go 1.27.3
 
 require (
-	github.com/egoist/mygo v0.7.4
+	github.com/egoist/mygo v0.8.3
 	github.com/sashabaranov/go-openai v1.43.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1

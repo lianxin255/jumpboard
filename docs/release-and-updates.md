@@ -50,7 +50,7 @@ gh secret set MYGO_UPDATER_PRIVATE_KEY --repo lianxin255/jumpboard < mygo-update
 
 ## 补上代码签名需要什么
 
-仓库目前没有这些 secret，补齐后按 [mygo 的 github-actions 文档](https://github.com/egoist/mygo/blob/v0.7.4/docs/github-actions.md) 在 workflow 里加导入步骤即可：
+仓库目前没有这些 secret，补齐后按 [mygo 的 github-actions 文档](https://github.com/egoist/mygo/blob/v0.8.3/docs/github-actions.md) 在 workflow 里加导入步骤即可：
 
 | 平台 | 需要的 secret | 来源 |
 |---|---|---|
