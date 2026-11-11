@@ -181,14 +181,22 @@ func clickScrolled(t *testing.T, tt *ui.Tester, label string) {
 	t.Fatalf("clicking %q: %v", label, err)
 }
 
-// waitFor runs the frames until cond holds.
+// waitTimeout bounds waitFor. It is generous on purpose.
 //
 // The app changes its state in goroutines, so a test asks for frames until
-// the change lands rather than assuming one is enough. It fails after a
-// few seconds, which means a hang, never a slow machine.
+// the change lands rather than assuming one is enough. What that costs is
+// wildly platform-dependent: starting a shell on macOS takes a few
+// milliseconds, and on Windows a ConPTY spawn can take seconds — long enough
+// that a tight bound fails on the platform without anything being wrong.
+// A generous timeout still catches a real hang, because a hang never
+// resolves; it only stops a slow machine from being mistaken for one.
+const waitTimeout = 60 * time.Second
+
+// waitFor runs the frames until cond holds.
 func waitFor(t *testing.T, tt *ui.Tester, what string, cond func() bool) {
 	t.Helper()
-	for i := 0; i < 300; i++ {
+	deadline := time.Now().Add(waitTimeout)
+	for time.Now().Before(deadline) {
 		if cond() {
 			return
 		}

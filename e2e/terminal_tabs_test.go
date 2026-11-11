@@ -78,7 +78,9 @@ func TestTerminalTabsOpenAndClose(t *testing.T) {
 	}
 	tt.Type("echo jb-tab-ok")
 	tt.Key(0, ui.KeyEnter)
-	deadline := time.Now().Add(10 * time.Second)
+	// The shell has to be started and round-trip a line, which on Windows
+	// means a ConPTY spawn; see waitTimeout.
+	deadline := time.Now().Add(waitTimeout)
 	for time.Now().Before(deadline) {
 		tt.Frame()
 		if strings.Contains(v.ShellTextForTest(), "jb-tab-ok") {
