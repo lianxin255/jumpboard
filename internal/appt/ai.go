@@ -210,14 +210,35 @@ func (a *App) ProbeAI() error {
 	return a.aiClient().Probe(ctx)
 }
 
+// sameEndpoint reports whether two addresses name the same endpoint, so a
+// trailing slash or a /v1 suffix does not read as a different host. The
+// comparison is deliberately on the whole string rather than the parsed
+// host: a different scheme or port is a different place to send a key.
+func sameEndpoint(a, b string) bool {
+	norm := func(s string) string {
+		s = strings.TrimRight(strings.TrimSpace(s), "/")
+		for strings.HasSuffix(strings.ToLower(s), "/v1") {
+			s = strings.TrimRight(s[:len(s)-3], "/")
+		}
+		return s
+	}
+	a, b = norm(a), norm(b)
+	return a != "" && a == b
+}
+
 // FetchModels lists the models the endpoint offers, for the settings
 // picker. The caller passes what the fields hold, so an address typed but
-// not yet saved still works; an empty key falls back to the stored one.
+// not yet saved still works; an empty key falls back to the stored one
+// only when the address is the stored one.
 func (a *App) FetchModels(baseURL, apiKey string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	// The stored key belongs to the stored endpoint. Reusing it for an
+	// address the user just typed would hand the credential to whatever
+	// host that is, so a changed address without a new key sends none and
+	// the gateway answers 401 instead of being trusted with the secret.
 	key := apiKey
-	if key == "" {
+	if key == "" && sameEndpoint(baseURL, a.AIBaseURL()) {
 		key, _ = readSecret(aiSecretKey)
 	}
 	c := ai.New(ai.Settings{BaseURL: baseURL, APIKey: key, Timeout: 20 * time.Second})

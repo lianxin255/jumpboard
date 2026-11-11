@@ -167,9 +167,14 @@ func (a *App) sendChat(text string, retry bool) error {
 
 	// Each fragment extends the reply the page reads, under the same
 	// lock that guards the rest of the state.
+	//
+	// The client's own timeout is raised to the conversation's budget:
+	// http.Client.Timeout covers reading the whole streamed body, so the
+	// 30s one-shot default would cut a long answer short before the
+	// context deadline below could matter.
 	ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
 	defer cancel()
-	reply, err := a.aiClient().ChatStream(ctx, turns, func(frag string) {
+	reply, err := a.aiClient().WithTimeout(chatTimeout).ChatStream(ctx, turns, func(frag string) {
 		a.mu.Lock()
 		a.chatStreaming = true
 		a.chatPartial += frag

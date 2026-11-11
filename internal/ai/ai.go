@@ -8,6 +8,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -157,6 +158,11 @@ func (d Draft) Mapping() (model.Mapping, string, error) {
 	return m, explanation, nil
 }
 
+// isJSONNull reports whether a raw JSON value is literal null.
+func isJSONNull(raw json.RawMessage) bool {
+	return string(bytes.TrimSpace(raw)) == "null"
+}
+
 // Has reports whether the model explicitly supplied a field or one of its
 // aliases. It distinguishes "leave unchanged" from an intentional clear.
 func (d Draft) Has(name string) bool {
@@ -225,8 +231,16 @@ func (d *Draft) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
+	// A key whose value is null is a field the model left out, not one it
+	// cleared: Present drives "restore the original", so counting a null
+	// as supplied would silently wipe the setting it stood for — a null
+	// proxyMode would drop a rule's custom headers, a null enabled would
+	// disable it.
 	d.Present = make(map[string]bool, len(fields))
-	for name := range fields {
+	for name, raw := range fields {
+		if isJSONNull(raw) {
+			continue
+		}
 		d.Present[name] = true
 	}
 	str := func(aliases ...string) string {
@@ -251,7 +265,10 @@ func (d *Draft) UnmarshalJSON(data []byte) error {
 	}
 	d.Operation = str(fieldAliases["operation"]...)
 	d.TargetID = str(fieldAliases["targetId"]...)
-	if raw, ok := fields["enabled"]; ok {
+	if raw, ok := fields["enabled"]; ok && !isJSONNull(raw) {
+		// Only a real JSON bool sets it: a null means "unchanged", and a
+		// string like "false" is a shape the model got wrong, not an
+		// instruction to disable the rule.
 		var enabled bool
 		if json.Unmarshal(raw, &enabled) == nil {
 			d.Enabled = &enabled
@@ -397,6 +414,32 @@ func New(s Settings) *Client {
 		c.oa = openai.NewClientWithConfig(cfg)
 	}
 	return c
+}
+
+// WithTimeout returns a client whose requests may take up to d.
+//
+// The conversation streams a reply that can legitimately run longer than
+// one short request, and the http.Client's Timeout covers the whole body,
+// so a fixed 30s would cut a long answer mid-stream no matter what
+// deadline the caller set on its context. The caller that knows its own
+// budget hands it down here instead of racing it.
+func (c *Client) WithTimeout(d time.Duration) *Client {
+	if d <= 0 {
+		return c
+	}
+	twin := *c
+	twin.http = &http.Client{
+		Timeout:       d,
+		CheckRedirect: sameOriginOnly,
+		Transport:     plainCompletionTransport{base: http.DefaultTransport},
+	}
+	if c.oa != nil {
+		cfg := openai.DefaultConfig(c.settings.APIKey)
+		cfg.BaseURL = normalizeBase(c.settings.BaseURL) + "/v1"
+		cfg.HTTPClient = twin.http
+		twin.oa = openai.NewClientWithConfig(cfg)
+	}
+	return &twin
 }
 
 // sameOriginOnly keeps the API key from following a redirect off the
