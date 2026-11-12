@@ -83,8 +83,19 @@ func (v *View) windowHeader(c *ui.Context, t Tokens, trailing func(c *ui.Context
 	spec := v.pageSpecFor()
 	_, _, _, _, engine, _, busy, _ := a.Snapshot()
 
+	// The window's own controls sit in a band along one edge: the traffic
+	// lights on the left on macOS, the minimise/maximise/close set on the
+	// right on Windows. TitleBar says how wide each is, and this row has to
+	// stand clear of both — the trailing actions are the last thing in it,
+	// so on Windows they would otherwise sit underneath the close button.
+	// Only the padding grows: the bar keeps its height, and on a platform
+	// with nothing at that edge the extra is zero.
+	bar := c.TitleBar()
+	padLeft := PagePadX + bar.Left
+	padRight := PagePadX + bar.Right
+
 	ui.Row(c).Height(headerHeight).Shrink(0).AlignItems(ui.Center).
-		Padding(0, PagePadX).BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
+		Padding(0, padRight, 0, padLeft).BorderWidth(0, 0, 1, 0).BorderColor(t.Hair).Children(func() {
 		// The mark and the name are the window's own furniture: dragging
 		// them moves the window, as a title bar does.
 		head := ui.Row(c).Gap(12).AlignItems(ui.Center).DragWindow()

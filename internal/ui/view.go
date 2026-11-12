@@ -260,13 +260,20 @@ func (v *View) sidebar(c *ui.Context, t Tokens) {
 	side.BorderWidth(0, 1, 0, 0).BorderColor(t.Hair).Children(func() {
 		// Room for the traffic lights, then the brand. Dragging the brand
 		// moves the window; the nav items below do not.
+		//
+		// The spacer covers their height, and the brand's own left padding
+		// adds their width: with the bar 28 tall and the lights 72 wide, a
+		// brand at the rail's usual 16 would sit under them. On Windows the
+		// controls are on the right, so Left is zero there and the brand
+		// keeps its place.
 		top := bar.Height
 		if top < 16 {
 			top = 16
 		}
 		ui.Box(c).Height(top).Shrink(0).FillWidth().DragWindow()
 
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 14, 16).DragWindow().Children(func() {
+		brandLeft := float32(16) + bar.Left
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(4, 16, 14, brandLeft).DragWindow().Children(func() {
 			// The brand mark is the Relay itself — the two endpoints and
 			// the arrow between them — in the accent, on the accent's own
 			// quiet wash: the product's one symbol, in the one place it
