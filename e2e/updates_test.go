@@ -45,7 +45,7 @@ func TestSettingsUpdateCheckAndInstall(t *testing.T) {
 		progress(1)
 		return nil
 	}
-	a.RelaunchApp = func() { relaunched.Store(true) }
+	a.RelaunchApp = func(...string) { relaunched.Store(true) }
 
 	tt := tester(t, a, 1200, 760)
 	if err := tt.Click("设置"); err != nil {

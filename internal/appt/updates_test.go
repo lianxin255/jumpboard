@@ -23,7 +23,7 @@ func fakeUpdateHooks(a *App, version string, installErr error) (installed *bool,
 		*installed = true
 		return installErr
 	}
-	a.RelaunchApp = func() { *relaunched = true }
+	a.RelaunchApp = func(...string) { *relaunched = true }
 	return installed, relaunched
 }
 

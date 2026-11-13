@@ -129,7 +129,10 @@ type App struct {
 	// RelaunchApp restarts the app once it did. Wired beside CheckUpdate,
 	// and nil together with it.
 	InstallUpdate func(ctx context.Context, progress func(fraction float64)) error
-	RelaunchApp   func()
+	// RelaunchApp takes the arguments the new instance starts with. mygo
+	// 0.9.0 grew them; the app relaunches with none, so the variadic form
+	// is what the hook is typed as rather than something the caller needs.
+	RelaunchApp func(args ...string)
 	// AppVersion is the running version, for the settings page. Set once
 	// in main.go before the window exists.
 	AppVersion string
