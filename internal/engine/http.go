@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -551,6 +552,9 @@ func newProxy(m model.Mapping, spec Spec, traffic *ruleTraffic) (*httputil.Rever
 //
 // clientHost is the Host the client sent, which is what nginx's $host
 // expands to: by this point the request itself carries the upstream's.
+//
+// Go 客户端从 req.Host 序列化线上 Host（HTTP/2 为 :authority），
+// 不使用 req.Header 中的 Host；标准模式和自定义 Host 必须设置 req.Host。
 func applyHeaders(req *http.Request, m model.Mapping, clientHost string) {
 	switch m.ProxyMode {
 	case model.ProxyMinimal:
@@ -563,11 +567,19 @@ func applyHeaders(req *http.Request, m model.Mapping, clientHost string) {
 	case model.ProxyCustom:
 		// The custom lines are nginx directives; the ones that map onto a
 		// request header are honored, the rest is reported when applied.
+		// Host 是 Request 的专用字段，不能仅写入普通头部字典。
 		for name, value := range customHeaders(m.ProxyHeaders, req, clientHost) {
+			if strings.EqualFold(name, "Host") {
+				// 未支持的变量保留原上游 Host，不能把 nginx 表达式发到线上。
+				if !strings.Contains(value, "$") {
+					req.Host = value
+				}
+				continue
+			}
 			req.Header.Set(name, value)
 		}
 	default:
-		req.Header.Set("Host", clientHost)
+		req.Host = clientHost
 		req.Header.Set("X-Real-IP", clientIP(req.RemoteAddr))
 		req.Header.Set("X-Forwarded-For", appendForwarded(req))
 		proto := "http"
@@ -579,6 +591,9 @@ func applyHeaders(req *http.Request, m model.Mapping, clientHost string) {
 		// client's Upgrade and Connection headers are left alone.
 	}
 }
+
+// 按完整变量名匹配，避免将 $host_suffix 错当成 $host 加后缀。
+var proxyHeaderVariable = regexp.MustCompile(`\$[A-Za-z_][A-Za-z0-9_]*`)
 
 // customHeaders reads the proxy_set_header lines of a custom mode.
 func customHeaders(raw string, req *http.Request, clientHost string) map[string]string {
@@ -595,11 +610,22 @@ func customHeaders(raw string, req *http.Request, clientHost string) map[string]
 		}
 		name, value := fields[0], strings.TrimSpace(fields[1])
 		value = strings.Trim(value, `"`)
-		// The variables nginx would expand are the ones a mapping uses.
-		value = strings.ReplaceAll(value, "$host", clientHost)
-		value = strings.ReplaceAll(value, "$remote_addr", clientIP(req.RemoteAddr))
-		value = strings.ReplaceAll(value, "$http_upgrade", req.Header.Get("Upgrade"))
-		value = strings.ReplaceAll(value, "$connection_upgrade", connectionUpgrade(req))
+		value = proxyHeaderVariable.ReplaceAllStringFunc(value, func(variable string) string {
+			switch variable {
+			case "$host", "$http_host":
+				return clientHost
+			case "$proxy_host":
+				return req.URL.Host
+			case "$remote_addr":
+				return clientIP(req.RemoteAddr)
+			case "$http_upgrade":
+				return req.Header.Get("Upgrade")
+			case "$connection_upgrade":
+				return connectionUpgrade(req)
+			default:
+				return variable
+			}
+		})
 		out[name] = value
 	}
 	return out
