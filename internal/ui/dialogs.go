@@ -511,6 +511,13 @@ func (v *View) snapshotDialog(c *ui.Context, t Tokens, sn *model.Snapshot) {
 		Layout:       editor.DiffUnified,
 		Inline:       editor.DiffInlineWordAlt,
 		ContextLines: 3,
+		// The same long directives the config viewer wraps: a diff that
+		// made the reader scroll sideways would hide the one thing it is
+		// there to show, which is where in the line the change is.
+		Wrap: true,
+		// And the last hunk can come to the middle of the view rather
+		// than sticking to the bottom edge.
+		ScrollPastEnd: true,
 	}
 	added, deleted := diff.Stats()
 
@@ -662,6 +669,11 @@ func (v *View) confViewDialog(c *ui.Context, t Tokens) {
 			Buffer:   editor.NewBuffer(""),
 			ReadOnly: true,
 			Label:    "当前 nginx 配置",
+			// A generated nginx.conf is full of long lines — one
+			// proxy_set_header with several values runs past any window
+			// — and this view cannot be edited, so there is no reason to
+			// make the reader drag sideways to reach the end of a line.
+			SoftWrap: true,
 		}
 		v.confEditor.Buffer.SetLanguage(editor.LanguageNamed("shell"))
 	}
